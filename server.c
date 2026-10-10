@@ -1344,10 +1344,15 @@ static void server_print_bench_report(void) {
          "─────┘\n\n");
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
   signal(SIGINT, on_signal);
   signal(SIGTERM, on_signal);
   signal(SIGPIPE, SIG_IGN);
+
+  const char *bind_ip = "0.0.0.0";
+  int port = SERVER_PORT;
+  if (argc > 1) bind_ip = argv[1];
+  if (argc > 2) port = atoi(argv[2]);
 
   g_server_start_ns = now_ns();
   get_server_cpu_ticks(&g_server_cpu_start);
@@ -1362,7 +1367,7 @@ int main(void) {
   now_hms(ts, sizeof(ts));
   printf("[%s] High-Performance Asynchronous io_uring PQC Server\n", ts);
   printf("  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305\n");
-  printf("  Address  : 0.0.0.0:%d  |  Max clients: %d\n\n", SERVER_PORT,
+  printf("  Address  : %s:%d  |  Max clients: %d\n\n", bind_ip, port,
          MAX_CLIENTS);
 
   registry_init();
@@ -1450,7 +1455,7 @@ int main(void) {
   }
 
   /* Initialize io_uring */
-  g_listen_sock = make_server_sock();
+  g_listen_sock = make_server_sock(bind_ip, port);
   if (g_listen_sock < 0)
     return 1;
 

@@ -129,7 +129,7 @@ typedef struct {
 } metrics_t;
 
 /* ── Socket creation ─────────────────────────────────────────────── */
-int make_server_sock(void);
+int make_server_sock(const char *bind_ip, int port);
 int make_client_sock(void);
 
 /* ── Send / receive ──────────────────────────────────────────────── */

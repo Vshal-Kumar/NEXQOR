@@ -43,3 +43,7 @@ arm64_ref
 *.log
 core
 core.*
+
+# Large docs and test results
+Research_papers/
+metrics/
