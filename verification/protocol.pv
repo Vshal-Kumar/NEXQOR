@@ -1,0 +1,217 @@
+(* 
+   Formal Verification of the PQC Chat Handshake Protocol
+   Algorithms: ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
+*)
+
+(* --- Channels --- *)
+free ch: channel.
+
+(* --- Types --- *)
+type kem_pkey.
+type kem_skey.
+type dsa_pkey.
+type dsa_skey.
+
+(* --- Cryptographic Primitives --- *)
+
+(* 1. Post-Quantum KEM (ML-KEM-768) *)
+fun kem_pk(kem_skey): kem_pkey.
+fun kem_enc(kem_pkey, bitstring): bitstring.               (* Returns ciphertext *)
+fun kem_dec(bitstring, kem_skey): bitstring.               (* Returns shared secret *)
+fun kem_shared_secret(kem_pkey, bitstring): bitstring.      (* Returns shared secret from randomness *)
+
+equation forall sk: kem_skey, r: bitstring;
+    kem_dec(kem_enc(kem_pk(sk), r), sk) = kem_shared_secret(kem_pk(sk), r).
+
+(* 2. Post-Quantum DSA (ML-DSA-65) *)
+fun dsa_pk(dsa_skey): dsa_pkey.
+fun dsa_sign(bitstring, dsa_skey): bitstring.
+reduc forall m: bitstring, sk: dsa_skey;
+    dsa_verify(m, dsa_sign(m, sk), dsa_pk(sk)) = true.
+
+(* 3. Hash Function (SHAKE-256) *)
+fun shake256(bitstring): bitstring.
+
+(* 4. Key Derivation Function (KDF) *)
+(* Arguments: ss, c_nonce, s_nonce, session_id *)
+fun kem_derive_key(bitstring, bitstring, bitstring, bitstring): bitstring.
+
+(* 5. Symmetric Authenticated Encryption (ChaCha20-Poly1305) *)
+fun aead_encrypt(bitstring, bitstring, bitstring): bitstring. (* msg, key, nonce *)
+reduc forall m: bitstring, k: bitstring, n: bitstring;
+    aead_decrypt(aead_encrypt(m, k, n), k, n) = m.
+
+(* --- Transcript Concatenation --- *)
+(* Server Transcript: c_nonce, s_nonce, session_id, c_kem_pk, c_dsa_pk, s_dsa_pk, kem_ct *)
+fun concat7(bitstring, bitstring, bitstring, kem_pkey, dsa_pkey, dsa_pkey, bitstring): bitstring.
+(* Client Transcript: srv_transcript, srv_sig *)
+fun concat2(bitstring, bitstring): bitstring.
+
+(* --- Global Long-Term Signing Keys --- *)
+free c_dsa_sk: dsa_skey [private].
+free s_dsa_sk: dsa_skey [private].
+
+(* --- Authentication & Binding Events --- *)
+event client_initiates(dsa_pkey, dsa_pkey, bitstring, bitstring, bitstring, bitstring, bitstring).
+event client_accepts(dsa_pkey, dsa_pkey, bitstring, bitstring, bitstring, bitstring, bitstring).
+event server_initiates(dsa_pkey, dsa_pkey, bitstring, bitstring, bitstring, bitstring, bitstring).
+event server_accepts(dsa_pkey, dsa_pkey, bitstring, bitstring, bitstring, bitstring, bitstring).
+
+(* --- Security Queries --- *)
+
+(* 1. Session Key Secrecy *)
+free session_key_secret: bitstring [private].
+query attacker(session_key_secret).
+
+(* 2. Secrecy of Application Data *)
+free client_data: bitstring [private].
+free server_data: bitstring [private].
+query attacker(client_data).
+query attacker(server_data).
+
+(* 3. Authentication: Server authenticates Client (Injective Agreement + Nonce, Transcript & KEM binding) *)
+query s: dsa_pkey, cn: bitstring, sn: bitstring, sess_id: bitstring, k: bitstring, ct: bitstring;
+    inj-event(server_accepts(dsa_pk(c_dsa_sk), s, cn, sn, sess_id, k, ct)) ==> inj-event(client_initiates(dsa_pk(c_dsa_sk), s, cn, sn, sess_id, k, ct)).
+
+(* 4. Authentication: Client authenticates Server (Injective Agreement + Nonce, Transcript & KEM binding) *)
+query c: dsa_pkey, s: dsa_pkey, cn: bitstring, sn: bitstring, sess_id: bitstring, k: bitstring, ct: bitstring;
+    inj-event(client_accepts(c, s, cn, sn, sess_id, k, ct)) ==> inj-event(server_initiates(c, s, cn, sn, sess_id, k, ct)).
+
+(* --- Process Definitions --- *)
+
+(* Client Process *)
+let client(c_dsa_sk: dsa_skey, s_dsa_pk: dsa_pkey) =
+    let c_dsa_pk = dsa_pk(c_dsa_sk) in
+    (* 1. Generate Ephemeral Keypairs *)
+    new c_kem_sk: kem_skey;
+    let c_kem_pk = kem_pk(c_kem_sk) in
+    
+    (* 2. Generate Client Nonce *)
+    new c_nonce: bitstring;
+    
+    (* Phase 1: Send CLIENT_HELLO *)
+    out(ch, (c_kem_pk, c_dsa_pk, c_nonce));
+    
+    (* Phase 2: Receive SERVER_HELLO *)
+    in(ch, (=s_dsa_pk, kem_ct: bitstring, session_id: bitstring, s_nonce: bitstring, srv_sig: bitstring));
+    
+    (* Reconstruct and verify server signature *)
+    let tx = concat7(c_nonce, s_nonce, session_id, c_kem_pk, c_dsa_pk, s_dsa_pk, kem_ct) in
+    let tx_digest = shake256(tx) in
+    if dsa_verify(tx_digest, srv_sig, s_dsa_pk) = true then
+    
+    (* Decapsulate KEM Ciphertext *)
+    let ss = kem_dec(kem_ct, c_kem_sk) in
+    
+    (* Derive Session Key *)
+    let session_key = kem_derive_key(ss, c_nonce, s_nonce, session_id) in
+    
+    (* Record initiation event *)
+    event client_initiates(c_dsa_pk, s_dsa_pk, c_nonce, s_nonce, session_id, session_key, kem_ct);
+    
+    (* Phase 3: Send CLIENT_AUTH *)
+    let cl_tx = concat2(tx, srv_sig) in
+    let cl_tx_digest = shake256(cl_tx) in
+    let cl_sig = dsa_sign(cl_tx_digest, c_dsa_sk) in
+    out(ch, cl_sig);
+    
+    (* Connection established event *)
+    event client_accepts(c_dsa_pk, s_dsa_pk, c_nonce, s_nonce, session_id, session_key, kem_ct);
+    
+    (* Phase 4: Session Active - Exchange Application Data *)
+    new ae_nonce_c: bitstring;
+    let ct_client = aead_encrypt(client_data, session_key, ae_nonce_c) in
+    out(ch, (ae_nonce_c, ct_client));
+    
+    in(ch, (ae_nonce_s: bitstring, ct_server: bitstring));
+    let decrypted_server_data = aead_decrypt(ct_server, session_key, ae_nonce_s) in
+    
+    (* Export session key secret if the peer is the honest server *)
+    if s_dsa_pk = dsa_pk(s_dsa_sk) then (
+        new ae_nonce_sk: bitstring;
+        let ct_sk = aead_encrypt(session_key_secret, session_key, ae_nonce_sk) in
+        out(ch, (ae_nonce_sk, ct_sk))
+    ) else 0.
+
+(* Server Process *)
+let server(s_dsa_sk: dsa_skey) =
+    let s_dsa_pk = dsa_pk(s_dsa_sk) in
+    
+    (* Phase 1: Receive CLIENT_HELLO *)
+    in(ch, (c_kem_pk: kem_pkey, c_dsa_pk: dsa_pkey, c_nonce: bitstring));
+    
+    (* Generate Server Nonce and Session ID *)
+    new s_nonce: bitstring;
+    new session_id: bitstring;
+    
+    (* Ephemeral KEM Encapsulate *)
+    new r: bitstring;
+    let kem_ct = kem_enc(c_kem_pk, r) in
+    let ss = kem_shared_secret(c_kem_pk, r) in
+    
+    (* Derive Session Key *)
+    let session_key = kem_derive_key(ss, c_nonce, s_nonce, session_id) in
+    
+    (* Reconstruct Server Transcript *)
+    let tx = concat7(c_nonce, s_nonce, session_id, c_kem_pk, c_dsa_pk, s_dsa_pk, kem_ct) in
+    let tx_digest = shake256(tx) in
+    
+    (* Record initiation event *)
+    event server_initiates(c_dsa_pk, s_dsa_pk, c_nonce, s_nonce, session_id, session_key, kem_ct);
+    
+    (* Sign the transcript *)
+    let srv_sig = dsa_sign(tx_digest, s_dsa_sk) in
+    
+    (* Phase 2: Send SERVER_HELLO *)
+    out(ch, (s_dsa_pk, kem_ct, session_id, s_nonce, srv_sig));
+    
+    (* Phase 3: Receive CLIENT_AUTH *)
+    in(ch, cl_sig: bitstring);
+    
+    (* Reconstruct and verify client signature *)
+    let cl_tx = concat2(tx, srv_sig) in
+    let cl_tx_digest = shake256(cl_tx) in
+    if dsa_verify(cl_tx_digest, cl_sig, c_dsa_pk) = true then
+    
+    (* Connection established event *)
+    event server_accepts(c_dsa_pk, s_dsa_pk, c_nonce, s_nonce, session_id, session_key, kem_ct);
+    
+    (* Phase 4: Session Active - Exchange Application Data *)
+    in(ch, (ae_nonce_c: bitstring, ct_client: bitstring));
+    let decrypted_client_data = aead_decrypt(ct_client, session_key, ae_nonce_c) in
+    
+    if c_dsa_pk = dsa_pk(c_dsa_sk) then (
+        new ae_nonce_s: bitstring;
+        let ct_server = aead_encrypt(server_data, session_key, ae_nonce_s) in
+        out(ch, (ae_nonce_s, ct_server));
+        
+        new ae_nonce_sk: bitstring;
+        let ct_sk = aead_encrypt(session_key_secret, session_key, ae_nonce_sk) in
+        out(ch, (ae_nonce_sk, ct_sk));
+        0
+    ) else (
+        new dummy_data: bitstring;
+        new ae_nonce_s: bitstring;
+        let ct_server = aead_encrypt(dummy_data, session_key, ae_nonce_s) in
+        out(ch, (ae_nonce_s, ct_server));
+        0
+    ).
+
+(* --- Main Process --- *)
+process
+    (* Publish the server and client public keys to the public channel *)
+    out(ch, dsa_pk(s_dsa_sk));
+    out(ch, dsa_pk(c_dsa_sk));
+    
+    (
+        (* Replicated Client and Server sessions in Phase 0 *)
+        (!client(c_dsa_sk, dsa_pk(s_dsa_sk))) |
+        (!server(s_dsa_sk)) |
+        
+        (* Phase 1: Long-term signing key compromise (Forward Secrecy Verification) *)
+        (
+            phase 1;
+            out(ch, s_dsa_sk);
+            out(ch, c_dsa_sk)
+        )
+    )

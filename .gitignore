@@ -1,0 +1,45 @@
+# Compiled binaries
+/server
+/server_rx
+/server_tx
+/client
+/bench_pqc
+/bench_nclient
+/bench_aead
+/bench_pqc_arm
+/bench_nclient_arm
+/client_arm
+/bench_pqc_arm32
+/bench_nclient_arm32
+/client_arm32
+
+# Object and dependency files
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+
+# Build & temporary directories
+build/
+bin/
+out/
+liboqs/build*/
+liboqs/obuild/
+
+# Machine-specific symlinks and external references
+arm64_ref
+
+# IDE & Editor temporary files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs and system artifacts
+*.log
+core
+core.*

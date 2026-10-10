@@ -1,0 +1,44 @@
+vishal@raspberrypi:~ $ ./bench_nclient_arm 500
+
+╔══════════════════════════════════════════════════════════════╗
+║     N-Client Concurrent PQC Handshake Benchmark              ║
+║  ML-KEM-768  +  ML-DSA-65  +  ChaCha20-Poly1305             ║
+╚══════════════════════════════════════════════════════════════╝
+  Clients    : 500
+  Messages   : 5 per client 
+  Server     : 10.170.14.160:9877
+  Timer      : CLOCK_MONOTONIC (ns resolution)
+
+  Spawning 500 client threads...
+┌─ System-Wide & Communication Metrics ──────────────────────────────────────────────────┐
+│  Metric                             │    Value              │  Unit                    │
+│  ───────────────────────────────────┼───────────────────────┼──────────────────────────│
+│  Handshake Success Rate             │                  98.6   │  %                       │
+│  Handshake Throughput               │                  31.4   │  handshakes/sec          │
+│  Network Handshake RTT (Average)    │              3922.918   │  ms                      │
+│  Total Handshake (Serial Avg)       │                 5.083   │  ms                      │
+│  Total Handshake (Parallel Avg)     │                 4.753   │  ms                      │
+│  End-to-End Message RTT (Average)   │                70.276   │  ms                      │
+│  Message Throughput                 │                 153.8   │  messages/sec            │
+│  CPU Utilization                    │                  14.6   │  %                       │
+│  Peak RAM Usage                     │                  70.7   │  MB                      │
+│  Energy per Handshake (Estimated)   │     0.070 (0.019 mWh)   │  Joules (TDP assumed 15W)│
+│  CPU Temperature (End of Bench)     │                  49.4   │  °C                      │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ Cryptographic Operation Summary Metrics ──────────────────────────────────────────────────────────────┐
+│  Metric                        │    Mean (ms)  │  Stddev (ms)  │     Min (ms)  │     Max (ms)  │  Count  │
+│  ──────────────────────────────┼───────────────┼───────────────┼───────────────┼───────────────┼─────────│
+│  ML-KEM Keypair Gen (Client)   │         0.330  │        0.095  │        0.123  │        0.638  │    493  │
+│  ML-DSA Keypair Gen (Client)   │         1.015  │        0.238  │        0.439  │        1.543  │    493  │
+│  ML-KEM Decapsulate (Client)   │         0.316  │        0.077  │        0.149  │        0.569  │    493  │
+│  ML-DSA Sign (Client)          │         2.529  │        1.500  │        0.640  │       11.208  │    493  │
+│  ML-DSA Verify (Client)        │         0.893  │        0.210  │        0.431  │        1.312  │    493  │
+│  Network Handshake RTT (Net RTT)    │      3922.918  │     1503.484  │     1241.623  │     7987.760  │    493  │
+│  Total Handshake (Serial Est.)      │         5.083  │        1.638  │        2.631  │       13.920  │    493  │
+│  Total Handshake (Parallel Est.)    │         4.753  │        1.631  │        2.341  │       13.636  │    493  │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[bench_nclient] Done. 493/500 handshakes succeeded.
+
+vishal@raspberrypi:~ $ 
+

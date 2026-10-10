@@ -1,0 +1,160 @@
+server:
+vishal-kumar@vishal-kumar-Inspiron-15-3525:~/Desktop/PQC_codes/Day wise work/27 june/adaptive_benchmarking$ QC_DISABLE_RATE_LIMIT=1 ./server
+[11:28:36.215] High-Performance Asynchronous io_uring PQC Server
+  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
+  Address  : 0.0.0.0:9877  |  Max clients: 4096
+
+  DSA keygen : 2.069 ms (long-term identity)
+  Rate limiting: ENABLED (50 pkts/s, burst 20)
+  Crypto workers: 3 threads spawned (pinned to Cores 1-3)
+  IPC RX : /tmp/pqc_rx.sock
+  IPC TX : /tmp/pqc_tx.sock
+
+╔══════════════════════════════════════════╗
+║  PQC Server — Multi-Client Mode          ║
+║  Run: ./server_rx  (receiver terminal)   ║
+║  Run: ./server_tx  (sender terminal)     ║
+╚══════════════════════════════════════════╝
+
+[11:28:37.503] ✓ CLIENT-01  10.59.57.252:38424  SID=f437a8b5834620c5  HS=0.277ms  Active=1
+
+[11:28:37.503] ✓ CLIENT-02  10.59.57.252:40666  SID=b1339355c10984bd  HS=2.652ms  Active=2
+
+[11:28:37.503] ✓ CLIENT-03  10.59.57.252:56106  SID=5aba8d95c2a287db  HS=2.655ms  Active=3
+
+[11:28:37.503] ✓ CLIENT-04  10.59.57.252:56418  SID=8445258bd65393d9  HS=2.656ms  Active=4
+
+[11:28:37.503] ✓ CLIENT-05  10.59.57.252:34746  SID=90c1555cae3c69f6  HS=2.658ms  Active=5
+
+[11:28:37.503] ✓ CLIENT-06  10.59.57.252:57726  SID=00b1e40114a38da9  HS=2.699ms  Active=6
+
+[11:28:37.503] ✓ CLIENT-07  10.59.57.252:34325  SID=782176eb7b73b498  HS=2.671ms  Active=7
+
+[11:28:37.530] ✓ CLIENT-08  10.59.57.252:56390  SID=3c5ec4b80627a7b8  HS=1.746ms  Active=8
+
+[11:28:37.530] ✓ CLIENT-09  10.59.57.252:41967  SID=bc2fe1680c06f90d  HS=0.168ms  Active=9
+
+[11:28:37.535] ✓ CLIENT-10  10.59.57.252:37981  SID=dcfa5c53b0ff7560  HS=0.213ms  Active=10
+
+^C
+=========================================================================
+                  PQC SERVER BENCHMARK REPORT                            
+=========================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 12 — Queuing & Processing Latency Breakdown (20     samples)       │
+├──────────────────────┬─────────────────────────┬────────────────────────┤
+│ Metric               │ Queue Wait Time (µs)    │ Crypto Processing (µs) │
+├──────────────────────┼─────────────────────────┼────────────────────────┤
+│ Mean                 │                 398.591 │                389.377 │
+│ Median               │                 296.168 │                184.253 │
+│ Minimum              │                  17.829 │                 73.151 │
+│ Maximum              │                1355.149 │               1747.885 │
+│ 95th Percentile      │                1355.149 │               1747.885 │
+│ 99th Percentile      │                1355.149 │               1747.885 │
+│ Standard Deviation   │                 427.480 │                489.662 │
+└──────────────────────┴─────────────────────────┴────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 13 — Worker Thread Core Utilization                               │
+├──────────────────────┬─────────────────┬─────────────────┬──────────────┤
+│ Worker Thread        │ Busy Time (ms)  │ Total Time (ms) │ Util (%)     │
+├──────────────────────┼─────────────────┼─────────────────┼──────────────┤
+│ Worker 1 (Core 1)    │           2.607 │        6800.357 │        0.04% │
+│ Worker 2 (Core 2)    │           2.426 │        6800.357 │        0.04% │
+│ Worker 3 (Core 3)    │           2.754 │        6800.357 │        0.04% │
+└──────────────────────┴─────────────────┴─────────────────┴──────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 14 — Server CPU Temperature Profile                               │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Average Temperature                     │                      56.0 °C                     │
+│ Peak Temperature                        │                      56.0 °C                     │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 19 — Server CPU & Memory Utilization                              │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Server CPU Utilization                  │                        7.25%                    │
+│ Server Peak RSS Memory                  │                   106.121 MB                   │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 20 — Thread Core Mapping (Affinity)                               │
+├─────────────────────────────────────────┬──────────────┬────────────────┤
+│ Thread                                  │ Target Core  │ Role           │
+├─────────────────────────────────────────┼──────────────┼────────────────┤
+│ Main Event Thread                       │ Core 0       │ Network I/O    │
+│ Worker Thread 1                         │ Core 1       │ Cryptography   │
+│ Worker Thread 2                         │ Core 2       │ Cryptography   │
+│ Worker Thread 3                         │ Core 3       │ Cryptography   │
+└─────────────────────────────────────────┴──────────────┴────────────────┘
+
+
+[server] Shutdown complete.
+vishal-kumar@vishal-kumar-Inspiron-15-3525:~/Desktop/PQC_codes/Day wise work/27 june/adaptive_benchmarking$ 
+
+
+Client:
+pi@raspberrypi:~/Desktop/Vishal_/Bench_marking_PQC $ ./bench_nclient_arm 10 10.59.57.160
+
+╔══════════════════════════════════════════════════════════════╗
+║     N-Client Concurrent PQC Handshake Benchmark              ║
+║  ML-KEM-768  +  ML-DSA-65  +  ChaCha20-Poly1305             ║
+╚══════════════════════════════════════════════════════════════╝
+  Clients    : 10
+  Messages   : 5 per client 
+  Server     : 10.59.57.160:9877
+  Timer      : CLOCK_MONOTONIC (ns resolution)
+
+  Spawning 10 client threads...
+┌─ Per-Client Handshake & Secure Communication Metrics ────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  Client ID  │  Status  │  Total HS (ms)  │  Msgs Sent  │  Msgs Recv  │  Min Msg RTT (ms)  │  Max Msg RTT (ms)  │  Avg Msg RTT (ms)  │
+│  ───────────┼──────────┼─────────────────┼─────────────┼─────────────┼────────────────────┼────────────────────┼────────────────────│
+│  0          │  Active  │          379.677  │            5  │            2  │               7.659  │              20.590  │              14.125  │
+│  1          │  Active  │          385.705  │            5  │            2  │               6.448  │              16.153  │              11.301  │
+│  2          │  Active  │          401.825  │            5  │            1  │               7.230  │               7.230  │               7.230  │
+│  3          │  Active  │          379.509  │            5  │            2  │               9.152  │              18.681  │              13.917  │
+│  4          │  Active  │          403.248  │            5  │            1  │               5.906  │               5.906  │               5.906  │
+│  5          │  Active  │          379.526  │            5  │            2  │               7.891  │              20.500  │              14.196  │
+│  6          │  Active  │          408.406  │            5  │            0  │               0.000  │               0.000  │               0.000  │
+│  7          │  Active  │          379.062  │            5  │            2  │              10.001  │              17.974  │              13.988  │
+│  8          │  Active  │          379.708  │            5  │            2  │               7.312  │              20.935  │              14.123  │
+│  9          │  Active  │          379.651  │            5  │            2  │               7.643  │              20.845  │              14.244  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ System-Wide & Communication Metrics ──────────────────────────────────────────────────┐
+│  Metric                             │    Value              │  Unit                    │
+│  ───────────────────────────────────┼───────────────────────┼──────────────────────────│
+│  Handshake Success Rate             │                 100.0   │  %                       │
+│  Handshake Throughput               │                  13.8   │  handshakes/sec          │
+│  Network Handshake RTT (Average)    │               387.632   │  ms                      │
+│  Total Handshake (Serial Avg)       │               388.648   │  ms                      │
+│  Total Handshake (Parallel Avg)     │               388.408   │  ms                      │
+│  End-to-End Message RTT (Average)   │                12.114   │  ms                      │
+│  Message Throughput                 │                  22.1   │  messages/sec            │
+│  CPU Utilization                    │                   5.3   │  %                       │
+│  Peak RAM Usage                     │                   6.6   │  MB                      │
+│  Energy per Handshake (Estimated)   │     0.057 (0.016 mWh)   │  Joules (TDP assumed 15W)│
+│  CPU Temperature (End of Bench)     │                  38.5   │  °C                      │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ Cryptographic Operation Summary Metrics ──────────────────────────────────────────────────────────────┐
+│  Metric                        │    Mean (ms)  │  Stddev (ms)  │     Min (ms)  │     Max (ms)  │  Count  │
+│  ──────────────────────────────┼───────────────┼───────────────┼───────────────┼───────────────┼─────────│
+│  ML-KEM Keypair Gen (Client)   │         0.241  │        0.015  │        0.220  │        0.261  │     10  │
+│  ML-DSA Keypair Gen (Client)   │         0.776  │        0.024  │        0.754  │        0.838  │     10  │
+│  ML-KEM Decapsulate (Client)   │         0.263  │        0.017  │        0.245  │        0.308  │     10  │
+│  ML-DSA Sign (Client)          │         2.357  │        0.988  │        1.002  │        3.837  │     10  │
+│  ML-DSA Verify (Client)        │         0.757  │        0.024  │        0.733  │        0.803  │     10  │
+│  Network Handshake RTT (Net RTT)    │       387.632  │       11.294  │      379.062  │      408.406  │     10  │
+│  Total Handshake (Serial Est.)      │       388.648  │       11.282  │      380.095  │      409.383  │     10  │
+│  Total Handshake (Parallel Est.)    │       388.408  │       11.290  │      379.841  │      409.160  │     10  │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[bench_nclient] Done. 10/10 handshakes succeeded.
+
+pi@raspberrypi:~/Desktop/Vishal_/Bench_marking_PQC $ 

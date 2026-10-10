@@ -1,0 +1,79 @@
+vishal-kumar@vishal-kumar-Inspiron-15-3525:~/Desktop/PQC_codes/Day wise work/jul 15/adaptive_benchmarking$ ./server
+[15:19:53.348] High-Performance Asynchronous io_uring PQC Server
+  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
+  Address  : 0.0.0.0:9877  |  Max clients: 4096
+
+  DSA keygen : 1.827 ms (long-term identity)
+  Rate limiting: ENABLED (50 pkts/s, burst 20)
+  Crypto workers: 3 threads spawned (pinned to Cores 1-3)
+  IPC RX : /tmp/pqc_rx.sock
+  IPC TX : /tmp/pqc_tx.sock
+
+╔══════════════════════════════════════════╗
+║  PQC Server — Multi-Client Mode          ║
+║  Run: ./server_rx  (receiver terminal)   ║
+║  Run: ./server_tx  (sender terminal)     ║
+╚══════════════════════════════════════════╝
+
+[15:19:53.937] ✓ CLIENT-01  10.170.14.25:52859  SID=0528a7147383d732  HS=0.416ms  Active=1
+
+^C
+=========================================================================
+                  PQC SERVER BENCHMARK REPORT                            
+=========================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 12 — Queuing & Processing Latency Breakdown (2      samples)       │
+├──────────────────────┬─────────────────────────┬────────────────────────┤
+│ Metric               │ Queue Wait Time (µs)    │ Crypto Processing (µs) │
+├──────────────────────┼─────────────────────────┼────────────────────────┤
+│ Mean                 │                  43.409 │                454.209 │
+│ Median               │                  43.409 │                454.209 │
+│ Minimum              │                  33.670 │                360.634 │
+│ Maximum              │                  53.148 │                547.783 │
+│ 95th Percentile      │                  53.148 │                547.783 │
+│ 99th Percentile      │                  53.148 │                547.783 │
+│ Standard Deviation   │                   9.739 │                 93.575 │
+└──────────────────────┴─────────────────────────┴────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 13 — Worker Thread Core Utilization                               │
+├──────────────────────┬─────────────────┬─────────────────┬──────────────┤
+│ Worker Thread        │ Busy Time (ms)  │ Total Time (ms) │ Util (%)     │
+├──────────────────────┼─────────────────┼─────────────────┼──────────────┤
+│ Worker 1 (Core 1)    │           0.548 │        2819.153 │        0.02% │
+│ Worker 2 (Core 2)    │           0.361 │        2819.153 │        0.01% │
+│ Worker 3 (Core 3)    │           0.000 │        2819.153 │        0.00% │
+└──────────────────────┴─────────────────┴─────────────────┴──────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 14 — Server CPU Temperature Profile                               │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Average Temperature                     │                      45.0 °C                     │
+│ Peak Temperature                        │                      46.0 °C                     │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 19 — Server CPU & Memory Utilization                              │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Server CPU Utilization                  │                        3.01%                    │
+│ Server Peak RSS Memory                  │                   107.406 MB                   │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 20 — Thread Core Mapping (Affinity)                               │
+├─────────────────────────────────────────┬──────────────┬────────────────┤
+│ Thread                                  │ Target Core  │ Role           │
+├─────────────────────────────────────────┼──────────────┼────────────────┤
+│ Main Event Thread                       │ Core 0       │ Network I/O    │
+│ Worker Thread 1                         │ Core 1       │ Cryptography   │
+│ Worker Thread 2                         │ Core 2       │ Cryptography   │
+│ Worker Thread 3                         │ Core 3       │ Cryptography   │
+└─────────────────────────────────────────┴──────────────┴────────────────┘
+
+
+[server] Shutdown complete.

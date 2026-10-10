@@ -1,0 +1,55 @@
+╔══════════════════════════════════════════════════════════════╗
+║     N-Client Concurrent PQC Handshake Benchmark              ║
+║  ML-KEM-768  +  ML-DSA-65  +  ChaCha20-Poly1305             ║
+╚══════════════════════════════════════════════════════════════╝
+  Clients    : 10
+  Messages   : 5 per client 
+  Server     : 10.170.14.160:9877
+  Timer      : CLOCK_MONOTONIC (ns resolution)
+
+  Spawning 10 client threads...
+┌─ Per-Client Handshake & Secure Communication Metrics ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  Client ID  │  Status  │  Total HS (ms)  │  Msgs Sent  │  Msgs Recv  │  Min Msg RTT (ms)  │  Max Msg RTT (ms)  │  Avg Msg RTT (ms)  │
+│  ───────────┼──────────┼─────────────────┼─────────────┼─────────────┼────────────────────┼────────────────────┼────────────────────│
+│  0          │  Active  │        941.600  │           5 │           5 │             28.648 │             46.865 │             36.638 │
+│  1          │  Active  │        914.934  │           5 │           5 │             23.202 │             47.651 │             37.408 │
+│  2          │  Active  │        927.189  │           5 │           5 │             26.888 │             45.222 │             36.787 │
+│  3          │  Active  │        937.226  │           5 │           5 │             28.293 │             47.420 │             37.336 │
+│  4          │  Active  │        915.864  │           5 │           5 │             20.213 │             48.213 │             38.885 │
+│  5          │  Active  │        926.360  │           5 │           5 │             28.533 │             52.972 │             38.304 │
+│  6          │  Active  │        943.127  │           5 │           5 │             26.027 │             43.515 │             36.874 │
+│  7          │  Active  │        918.007  │           5 │           5 │             25.131 │             47.869 │             37.010 │
+│  8          │  Active  │        935.200  │           5 │           5 │             27.547 │             44.926 │             36.711 │
+│  9          │  Active  │        919.044  │           5 │           5 │             26.879 │             48.963 │             37.240 │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ System-Wide & Communication Metrics ──────────────────────────────────────────────────┐
+│  Metric                             │    Value              │  Unit                    │
+│  ───────────────────────────────────┼───────────────────────┼──────────────────────────│
+│  Handshake Success Rate             │                 100.0   │  %                       │
+│  Handshake Throughput               │                   8.4   │  handshakes/sec          │
+│  Network Handshake RTT (Average)    │               927.855   │  ms                      │
+│  Total Handshake (Serial Avg)       │                 3.107   │  ms                      │
+│  Total Handshake (Parallel Avg)     │                 2.780   │  ms                      │
+│  End-to-End Message RTT (Average)   │                37.319   │  ms                      │
+│  Message Throughput                 │                  42.1   │  messages/sec            │
+│  CPU Utilization                    │                   4.1   │  %                       │
+│  Peak RAM Usage                     │                   7.5   │  MB                      │
+│  Energy per Handshake (Estimated)   │     0.072 (0.020 mWh)   │  Joules (TDP assumed 15W)│
+│  CPU Temperature (End of Bench)     │                  47.8   │  °C                      │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ Cryptographic Operation Summary Metrics ──────────────────────────────────────────────────────────────┐
+│  Metric                        │    Mean (ms)  │  Stddev (ms)  │     Min (ms)  │     Max (ms)  │  Count  │
+│  ──────────────────────────────┼───────────────┼───────────────┼───────────────┼───────────────┼─────────│
+│  ML-KEM Keypair Gen (Client)   │         0.327  │        0.042  │        0.287  │        0.402  │     10  │
+│  ML-DSA Keypair Gen (Client)   │         1.062  │        0.024  │        1.042  │        1.114  │     10  │
+│  ML-KEM Decapsulate (Client)   │         0.167  │        0.006  │        0.164  │        0.186  │     10  │
+│  ML-DSA Sign (Client)          │         1.091  │        0.375  │        0.606  │        1.766  │     10  │
+│  ML-DSA Verify (Client)        │         0.460  │        0.008  │        0.447  │        0.479  │     10  │
+│  Network Handshake RTT (Net RTT)    │       927.855  │       10.257  │      914.934  │      943.127  │     10  │
+│  Total Handshake (Serial Est.)      │         3.107  │        0.401  │        2.573  │        3.862  │     10  │
+│  Total Handshake (Parallel Est.)    │         2.780  │        0.381  │        2.287  │        3.460  │     10  │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[bench_nclient] Done. 10/10 handshakes succeeded.
+

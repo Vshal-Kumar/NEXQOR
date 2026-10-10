@@ -1,0 +1,178 @@
+vishal-kumar@vishal-kumar-Inspiron-15-3525:~/Desktop/PQC_codes/Day wise work/jul 15/adaptive_benchmarking$ ./server
+[15:36:53.110] High-Performance Asynchronous io_uring PQC Server
+  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
+  Address  : 0.0.0.0:9877  |  Max clients: 4096
+
+  DSA keygen : 1.765 ms (long-term identity)
+  Rate limiting: ENABLED (50 pkts/s, burst 20)
+  Crypto workers: 3 threads spawned (pinned to Cores 1-3)
+  IPC RX : /tmp/pqc_rx.sock
+  IPC TX : /tmp/pqc_tx.sock
+
+╔══════════════════════════════════════════╗
+║  PQC Server — Multi-Client Mode          ║
+║  Run: ./server_rx  (receiver terminal)   ║
+║  Run: ./server_tx  (sender terminal)     ║
+╚══════════════════════════════════════════╝
+
+[15:36:55.599] ✓ CLIENT-01  10.170.14.106:58666  SID=d2d2a9d9641061fd  HS=0.243ms  Active=1
+
+[15:36:55.628] ✓ CLIENT-02  10.170.14.106:37365  SID=cd02beec0572a0c6  HS=0.345ms  Active=2
+
+[15:36:55.636] ✓ CLIENT-03  10.170.14.106:40198  SID=377eac3a6a91ad23  HS=0.265ms  Active=3
+
+[15:36:55.689] ✓ CLIENT-04  10.170.14.106:57007  SID=91d4c5786c4a9816  HS=0.168ms  Active=4
+
+[15:36:55.689] ✓ CLIENT-05  10.170.14.106:38866  SID=f6755d1d96747da7  HS=0.275ms  Active=5
+
+[15:36:55.689] ✓ CLIENT-06  10.170.14.106:59877  SID=52832121d3030579  HS=0.313ms  Active=6
+
+[15:36:55.689] ✓ CLIENT-07  10.170.14.106:57206  SID=c9ed250be55118ed  HS=0.347ms  Active=7
+
+[15:36:55.689] ✓ CLIENT-08  10.170.14.106:56226  SID=0d154fee1a4e090a  HS=0.358ms  Active=8
+
+[15:36:55.738] ✓ CLIENT-09  10.170.14.106:39307  SID=cc9888e5f4ae6b7b  HS=0.164ms  Active=9
+
+[15:36:55.738] ✓ CLIENT-10  10.170.14.106:59612  SID=30c2bb849a842eac  HS=0.269ms  Active=10
+
+[15:36:55.738] ✓ CLIENT-11  10.170.14.106:53080  SID=e5e4a54648cad4fd  HS=0.311ms  Active=11
+
+[15:36:55.738] ✓ CLIENT-12  10.170.14.106:50582  SID=272e8db1db084075  HS=0.336ms  Active=12
+
+[15:36:55.738] ✓ CLIENT-13  10.170.14.106:51185  SID=f4d8951fa1b9b541  HS=0.357ms  Active=13
+
+[15:36:55.738] ✓ CLIENT-14  10.170.14.106:36661  SID=25178657c2baffe9  HS=0.405ms  Active=14
+
+[15:36:55.746] ✓ CLIENT-15  10.170.14.106:55099  SID=15d657d44239641c  HS=0.160ms  Active=15
+
+[15:36:55.870] ✓ CLIENT-16  10.170.14.106:52956  SID=d5839069f6efef71  HS=0.269ms  Active=16
+
+[15:36:55.930] ✓ CLIENT-17  10.170.14.106:35419  SID=7056d15ca67c6f37  HS=0.254ms  Active=17
+
+[15:36:55.949] ✓ CLIENT-18  10.170.14.106:38432  SID=1589bbdc166a22ac  HS=0.169ms  Active=18
+
+[15:36:55.975] ✓ CLIENT-19  10.170.14.106:55659  SID=8d96ef282da7f684  HS=0.482ms  Active=19
+
+[15:36:55.975] ✓ CLIENT-20  10.170.14.106:35770  SID=8df958ba9a6214e2  HS=0.637ms  Active=20
+
+[15:36:56.008] ✓ CLIENT-21  10.170.14.106:58914  SID=28e0d9477fa54f0a  HS=0.163ms  Active=21
+
+[15:36:56.008] ✓ CLIENT-22  10.170.14.106:48855  SID=79a1a3dbc6c62430  HS=0.277ms  Active=22
+
+[15:36:56.033] ✓ CLIENT-23  10.170.14.106:39945  SID=e8532f6ef62b7595  HS=0.170ms  Active=23
+
+[15:36:56.033] ✓ CLIENT-24  10.170.14.106:43075  SID=5e8887a58b1d8478  HS=0.274ms  Active=24
+
+[15:36:56.033] ✓ CLIENT-25  10.170.14.106:43021  SID=694ffa9c6f0f58aa  HS=0.293ms  Active=25
+
+[15:36:56.066] ✓ CLIENT-26  10.170.14.106:40625  SID=426e0b7d13b876fb  HS=0.251ms  Active=26
+
+[15:36:56.103] ✓ CLIENT-27  10.170.14.106:34475  SID=5ba4f0ce06cf39ed  HS=0.169ms  Active=27
+
+[15:36:56.103] ✓ CLIENT-28  10.170.14.106:41953  SID=24608b5a4b6a54dc  HS=0.276ms  Active=28
+
+[15:36:56.103] ✓ CLIENT-29  10.170.14.106:39003  SID=af5e64715f33f1db  HS=0.314ms  Active=29
+
+[15:36:56.103] ✓ CLIENT-30  10.170.14.106:41628  SID=f41dd44d58dff7c6  HS=0.337ms  Active=30
+
+[15:36:56.103] ✓ CLIENT-31  10.170.14.106:49396  SID=bfa6b41de0d016df  HS=0.357ms  Active=31
+
+[15:36:56.126] ✓ CLIENT-32  10.170.14.106:58808  SID=0128fc65f8b5821f  HS=0.162ms  Active=32
+
+[15:36:56.137] ✓ CLIENT-33  10.170.14.106:42416  SID=93c35b596c15f3f4  HS=0.290ms  Active=33
+
+[15:36:56.150] ✓ CLIENT-34  10.170.14.106:57812  SID=ddc2f8f5b427abea  HS=0.250ms  Active=34
+
+[15:36:56.162] ✓ CLIENT-35  10.170.14.106:42633  SID=914056e0542ee636  HS=0.165ms  Active=35
+
+[15:36:56.171] ✓ CLIENT-36  10.170.14.106:53889  SID=f6a5114ce4b6d488  HS=0.255ms  Active=36
+
+[15:36:56.183] ✓ CLIENT-37  10.170.14.106:50637  SID=4557ddb48c6f58ba  HS=0.449ms  Active=37
+
+[15:36:56.193] ✓ CLIENT-38  10.170.14.106:39403  SID=3d0baeaa36f0917e  HS=0.158ms  Active=38
+
+[15:36:56.203] ✓ CLIENT-39  10.170.14.106:54720  SID=9e7346a451159aa3  HS=0.252ms  Active=39
+
+[15:36:56.212] ✓ CLIENT-40  10.170.14.106:42204  SID=bff90e9fce6dec4d  HS=0.286ms  Active=40
+
+[15:36:56.237] ✓ CLIENT-41  10.170.14.106:36148  SID=7d5d1f0203feccc2  HS=0.276ms  Active=41
+
+[15:36:56.255] ✓ CLIENT-42  10.170.14.106:48226  SID=05de542ac1c572b6  HS=0.252ms  Active=42
+
+[15:36:56.263] ✓ CLIENT-43  10.170.14.106:56066  SID=b3e30979e2b4f2d5  HS=0.268ms  Active=43
+
+[15:36:56.274] ✓ CLIENT-44  10.170.14.106:49432  SID=e40f71729eb76e00  HS=0.336ms  Active=44
+
+[15:36:56.281] ✓ CLIENT-45  10.170.14.106:41740  SID=f6ca7621def6dc94  HS=0.249ms  Active=45
+
+[15:36:56.320] ✓ CLIENT-46  10.170.14.106:38528  SID=b1e49d957e8c7fc9  HS=0.447ms  Active=46
+
+[15:36:56.320] ✓ CLIENT-47  10.170.14.106:58576  SID=56de2426e0f6c6e1  HS=0.534ms  Active=47
+
+[15:36:56.320] ✓ CLIENT-48  10.170.14.106:57527  SID=d1e5fdd0bb764a1d  HS=0.279ms  Active=48
+
+[15:36:56.335] ✓ CLIENT-49  10.170.14.106:43221  SID=19d25daf4369913f  HS=0.187ms  Active=49
+
+[15:36:56.380] ✓ CLIENT-50  10.170.14.106:34542  SID=cc27aff43015b7c6  HS=0.590ms  Active=50
+
+^C
+=========================================================================
+                  PQC SERVER BENCHMARK REPORT                            
+=========================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 12 — Queuing & Processing Latency Breakdown (100    samples)       │
+├──────────────────────┬─────────────────────────┬────────────────────────┤
+│ Metric               │ Queue Wait Time (µs)    │ Crypto Processing (µs) │
+├──────────────────────┼─────────────────────────┼────────────────────────┤
+│ Mean                 │                  71.604 │                309.201 │
+│ Median               │                  40.383 │                269.163 │
+│ Minimum              │                  14.306 │                 77.391 │
+│ Maximum              │                 613.181 │               1104.993 │
+│ 95th Percentile      │                 308.163 │                689.580 │
+│ 99th Percentile      │                 613.181 │               1104.993 │
+│ Standard Deviation   │                  94.411 │                197.104 │
+└──────────────────────┴─────────────────────────┴────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 13 — Worker Thread Core Utilization                               │
+├──────────────────────┬─────────────────┬─────────────────┬──────────────┤
+│ Worker Thread        │ Busy Time (ms)  │ Total Time (ms) │ Util (%)     │
+├──────────────────────┼─────────────────┼─────────────────┼──────────────┤
+│ Worker 1 (Core 1)    │           8.894 │        5370.911 │        0.17% │
+│ Worker 2 (Core 2)    │          12.332 │        5370.911 │        0.23% │
+│ Worker 3 (Core 3)    │           9.695 │        5370.911 │        0.18% │
+└──────────────────────┴─────────────────┴─────────────────┴──────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 14 — Server CPU Temperature Profile                               │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Average Temperature                     │                      50.7 °C                     │
+│ Peak Temperature                        │                      53.0 °C                     │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 19 — Server CPU & Memory Utilization                              │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Server CPU Utilization                  │                        7.14%                    │
+│ Server Peak RSS Memory                  │                   107.738 MB                   │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 20 — Thread Core Mapping (Affinity)                               │
+├─────────────────────────────────────────┬──────────────┬────────────────┤
+│ Thread                                  │ Target Core  │ Role           │
+├─────────────────────────────────────────┼──────────────┼────────────────┤
+│ Main Event Thread                       │ Core 0       │ Network I/O    │
+│ Worker Thread 1                         │ Core 1       │ Cryptography   │
+│ Worker Thread 2                         │ Core 2       │ Cryptography   │
+│ Worker Thread 3                         │ Core 3       │ Cryptography   │
+└─────────────────────────────────────────┴──────────────┴────────────────┘
+
+
+[server] Shutdown complete.
+vishal-kumar@vishal-kumar-Inspiron-15-3525:~/Desktop/PQC_codes/Day wise work/jul 15/adaptive_benchmarking$ 

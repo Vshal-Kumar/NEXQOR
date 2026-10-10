@@ -1,0 +1,64 @@
+# Makefile.arm64 — PQC Client Benchmarks Cross-Compilation [AArch64]
+#
+# Target architecture: ARM64 / AArch64 with NEON
+# Toolchain:           aarch64-linux-gnu-gcc
+
+HOST_ARCH := $(shell uname -m)
+
+ifeq ($(HOST_ARCH),aarch64)
+  # Native compilation on ARM64 Raspberry Pi
+  CC      = gcc
+  LIBOQS  = liboqs/build
+  INC     = -I. -I$(LIBOQS)/include
+  LIBS    = $(LIBOQS)/lib/liboqs.a -lssl -lcrypto -lpthread -lm
+else
+  # Cross-compilation on x86_64 host
+  CC      = aarch64-linux-gnu-gcc
+  LIBOQS  = arm64_ref/liboqs/build_aarch64_simd
+  OPENSSL_ARM = arm64_ref/openssl_arm64/usr/lib/aarch64-linux-gnu
+  INC     = -I. -I$(LIBOQS)/include -Iarm64_ref/openssl_arm64/usr/include -Iarm64_ref/openssl_arm64/usr/include/aarch64-linux-gnu
+  LIBS    = $(LIBOQS)/lib/liboqs.a $(OPENSSL_ARM)/libssl.a $(OPENSSL_ARM)/libcrypto.a -lpthread -lm
+endif
+
+OPT     = -O3 -funroll-loops -fomit-frame-pointer -fno-plt
+FAST    = $(OPT) -ffast-math
+LTO     = -flto=auto
+WARN    = -Wall -Wextra -Wno-unused-parameter
+DEFS    = -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
+
+CFLAGS  = $(OPT) $(LTO) $(WARN) $(DEFS) $(INC)
+LDFLAGS = $(LTO)
+
+SHARED_OBJS = transport_arm.o crypto/aead_arm.o \
+              wrappers/kem_wrapper_arm.o wrappers/dsa_wrapper_arm.o
+
+.PHONY: all clean
+
+all: bench_nclient_arm bench_pqc_arm client_arm
+
+transport_arm.o: transport.c transport.h
+	$(CC) $(FAST) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+crypto/aead_arm.o: crypto/aead.c crypto/aead.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+wrappers/kem_wrapper_arm.o: wrappers/kem_wrapper.c wrappers/kem_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+wrappers/dsa_wrapper_arm.o: wrappers/dsa_wrapper.c wrappers/dsa_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+client_arm: client.c $(SHARED_OBJS)
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
+	@echo "Built: client_arm  [aarch64 + NEON]"
+
+bench_pqc_arm: bench_pqc.c $(SHARED_OBJS)
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
+	@echo "Built: bench_pqc_arm  [aarch64 + NEON]"
+
+bench_nclient_arm: bench_nclient.c $(SHARED_OBJS)
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
+	@echo "Built: bench_nclient_arm  [aarch64 + NEON]"
+
+clean:
+	rm -f bench_pqc_arm bench_nclient_arm client_arm $(SHARED_OBJS)

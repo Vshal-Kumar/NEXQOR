@@ -1,0 +1,65 @@
+vishal@raspberrypi:~ $ ./client_arm 
+[15:31:18.396] PQC Chat Client
+  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
+  Server   : 10.170.14.160:9877
+
+  [warmup] KEM+DSA cold-start : 20.08 ms
+
+  kem_keygen (thread) : 1.066 ms
+  dsa_keygen (thread) : 1.821 ms
+  (ran in parallel — wall-clock = max of above)
+
+  CLIENT_HELLO sent (3152 bytes)
+  SERVER_HELLO received (6373 bytes)
+  dsa_verify (server) : 1.080 ms
+  kem_decaps          : 0.396 ms
+  dsa_sign            : 1.456 ms  (sig=3309 bytes)
+  CLIENT_AUTH sent
+
+  ┌── PQC Handshake Summary ──────────────────────┐
+  │  ML-KEM-768  keygen  :   1.066 ms              │
+  │  ML-DSA-65   keygen  :   1.821 ms              │
+  │  ML-KEM-768  decaps  :   0.396 ms              │
+  │  ML-DSA-65   sign    :   1.456 ms              │
+  │  Total handshake     :  23.860 ms  ⚠  >1ms           │
+  └───────────────────────────────────────────────┘
+
+[15:31:18.443] Session established  (ID: 1672216de1f2730f)
+  Handshake total     : 23.860 ms
+
+╔══════════════════════════════════════╗
+║  PQC Secure Chat — Client (Pi)       ║
+║  Type to chat  |  Ctrl-D to exit     ║
+╚══════════════════════════════════════╝
+
+Pi  > 
+╔══════════════════════════════════════════════╗
+║     SESSION METRICS  [15:31:20.485]          ║
+╠══════════════════════════════════════════════╣
+║  PQC HANDSHAKE BREAKDOWN                     ║
+║  ─────────────────────────────────────────── ║
+║  KEM keygen        :    1.066 ms             ║
+║  DSA keygen        :    1.821 ms             ║
+║  KEM Encap/Decap   :    0.396 ms             ║
+║  DSA Sign          :    1.456 ms             ║
+║  DSA Verify        :    0.000 ms             ║
+║  Handshake Total   :   23.860 ms  ⚠ >1ms        ║
+║                                              ║
+║  AEAD (ChaCha20-Poly1305)                    ║
+║  ─────────────────────────────────────────── ║
+║                                              ║
+║  NETWORK                                     ║
+║  ─────────────────────────────────────────── ║
+║  Messages sent     :        0                ║
+║  Bytes sent        :        0 B              ║
+║  Bytes received    :        0 B              ║
+║  TX bandwidth      :     0.00 kbps           ║
+║  RX bandwidth      :     0.00 kbps           ║
+║  Session duration  :    2.042 s              ║
+║  Retransmissions   :        0                ║
+║  Jitter            :   N/A (need 2+ msgs)  ║
+╚══════════════════════════════════════════════╝
+
+[client] Exit.
+vishal@raspberrypi:~ $ 
+

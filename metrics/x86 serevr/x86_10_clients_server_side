@@ -1,0 +1,98 @@
+vishal-kumar@vishal-kumar-Inspiron-15-3525:~/Desktop/PQC_codes/Day wise work/jul 15/adaptive_benchmarking$ ./server
+[14:23:36.184] High-Performance Asynchronous io_uring PQC Server
+  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
+  Address  : 0.0.0.0:9877  |  Max clients: 4096
+
+  DSA keygen : 1.818 ms (long-term identity)
+  Rate limiting: ENABLED (50 pkts/s, burst 20)
+  Crypto workers: 3 threads spawned (pinned to Cores 1-3)
+  IPC RX : /tmp/pqc_rx.sock
+  IPC TX : /tmp/pqc_tx.sock
+
+╔══════════════════════════════════════════╗
+║  PQC Server — Multi-Client Mode          ║
+║  Run: ./server_rx  (receiver terminal)   ║
+║  Run: ./server_tx  (sender terminal)     ║
+╚══════════════════════════════════════════╝
+
+[14:23:36.739] ✓ CLIENT-01  10.170.14.25:53235  SID=438c1ef873994661  HS=0.180ms  Active=1
+
+[14:23:36.739] ✓ CLIENT-02  10.170.14.25:55640  SID=fbfce44562afceb8  HS=0.635ms  Active=2
+
+[14:23:36.739] ✓ CLIENT-03  10.170.14.25:34949  SID=cacfee4d197b48ac  HS=0.656ms  Active=3
+
+[14:23:36.739] ✓ CLIENT-04  10.170.14.25:39669  SID=95e6b1de0a08f0f0  HS=0.669ms  Active=4
+
+[14:23:36.739] ✓ CLIENT-05  10.170.14.25:60285  SID=3b54b60d674c864c  HS=0.687ms  Active=5
+
+[14:23:36.739] ✓ CLIENT-06  10.170.14.25:60874  SID=8699e91712765c02  HS=0.701ms  Active=6
+
+[14:23:36.739] ✓ CLIENT-07  10.170.14.25:40112  SID=3f8de0513b0c120a  HS=0.730ms  Active=7
+
+[14:23:36.739] ✓ CLIENT-08  10.170.14.25:57002  SID=d935283de0f3406d  HS=0.736ms  Active=8
+
+[14:23:36.739] ✓ CLIENT-09  10.170.14.25:51800  SID=69a5d66ca3928146  HS=0.767ms  Active=9
+
+[14:23:36.739] ✓ CLIENT-10  10.170.14.25:57805  SID=8f77f7fe37a1c49e  HS=0.768ms  Active=10
+
+^C
+=========================================================================
+                  PQC SERVER BENCHMARK REPORT                            
+=========================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 12 — Queuing & Processing Latency Breakdown (20     samples)       │
+├──────────────────────┬─────────────────────────┬────────────────────────┤
+│ Metric               │ Queue Wait Time (µs)    │ Crypto Processing (µs) │
+├──────────────────────┼─────────────────────────┼────────────────────────┤
+│ Mean                 │                 184.286 │                265.357 │
+│ Median               │                 156.204 │                186.124 │
+│ Minimum              │                  16.000 │                 81.643 │
+│ Maximum              │                 513.398 │                694.750 │
+│ 95th Percentile      │                 513.398 │                694.750 │
+│ 99th Percentile      │                 513.398 │                694.750 │
+│ Standard Deviation   │                 159.338 │                206.705 │
+└──────────────────────┴─────────────────────────┴────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 13 — Worker Thread Core Utilization                               │
+├──────────────────────┬─────────────────┬─────────────────┬──────────────┤
+│ Worker Thread        │ Busy Time (ms)  │ Total Time (ms) │ Util (%)     │
+├──────────────────────┼─────────────────┼─────────────────┼──────────────┤
+│ Worker 1 (Core 1)    │           2.255 │        4176.148 │        0.05% │
+│ Worker 2 (Core 2)    │           1.270 │        4176.148 │        0.03% │
+│ Worker 3 (Core 3)    │           1.782 │        4176.148 │        0.04% │
+└──────────────────────┴─────────────────┴─────────────────┴──────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 14 — Server CPU Temperature Profile                               │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Average Temperature                     │                      52.8 °C                     │
+│ Peak Temperature                        │                      53.0 °C                     │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 19 — Server CPU & Memory Utilization                              │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Server CPU Utilization                  │                        2.78%                    │
+│ Server Peak RSS Memory                  │                   107.719 MB                   │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 20 — Thread Core Mapping (Affinity)                               │
+├─────────────────────────────────────────┬──────────────┬────────────────┤
+│ Thread                                  │ Target Core  │ Role           │
+├─────────────────────────────────────────┼──────────────┼────────────────┤
+│ Main Event Thread                       │ Core 0       │ Network I/O    │
+│ Worker Thread 1                         │ Core 1       │ Cryptography   │
+│ Worker Thread 2                         │ Core 2       │ Cryptography   │
+│ Worker Thread 3                         │ Core 3       │ Cryptography   │
+└─────────────────────────────────────────┴──────────────┴────────────────┘
+
+
+[server] Shutdown complete.
+vishal-kumar@vishal-kumar-Inspiron-15-352

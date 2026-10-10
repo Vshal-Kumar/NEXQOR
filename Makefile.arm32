@@ -1,0 +1,63 @@
+# Makefile.arm32 — PQC Client Benchmarks Cross-Compilation [ARM32 / ARMv7-A]
+#
+# Target architecture: ARM32 / ARMv7-A (armhf) with NEON / VFPv4
+# Toolchain:           arm-linux-gnueabihf-gcc
+
+HOST_ARCH := $(shell uname -m)
+
+ifeq ($(findstring arm,$(HOST_ARCH)),arm)
+  # Native compilation on 32-bit ARM Raspberry Pi
+  CC      = gcc
+  LIBOQS  = liboqs/build
+  INC     = -I. -I$(LIBOQS)/include
+  LIBS    = $(LIBOQS)/lib/liboqs.a -lssl -lcrypto -lpthread -lm
+else
+  # Cross-compilation on x86_64 host
+  CC      = arm-linux-gnueabihf-gcc
+  LIBOQS  = liboqs/build_arm32
+  INC     = -I. -I$(LIBOQS)/include
+  LIBS    = $(LIBOQS)/lib/liboqs.a -lssl -lcrypto -lpthread -lm
+endif
+
+OPT     = -O3 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -funroll-loops -fomit-frame-pointer -fno-plt
+FAST    = $(OPT) -ffast-math
+LTO     = -flto=auto
+WARN    = -Wall -Wextra -Wno-unused-parameter
+DEFS    = -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
+
+CFLAGS  = $(OPT) $(LTO) $(WARN) $(DEFS) $(INC)
+LDFLAGS = $(LTO)
+
+SHARED_OBJS = transport_arm32.o crypto/aead_arm32.o \
+              wrappers/kem_wrapper_arm32.o wrappers/dsa_wrapper_arm32.o
+
+.PHONY: all clean
+
+all: bench_nclient_arm32 bench_pqc_arm32 client_arm32
+
+transport_arm32.o: transport.c transport.h
+	$(CC) $(FAST) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+crypto/aead_arm32.o: crypto/aead.c crypto/aead.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+wrappers/kem_wrapper_arm32.o: wrappers/kem_wrapper.c wrappers/kem_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+wrappers/dsa_wrapper_arm32.o: wrappers/dsa_wrapper.c wrappers/dsa_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+client_arm32: client.c $(SHARED_OBJS)
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
+	@echo "Built: client_arm32  [armv7-a + NEON]"
+
+bench_pqc_arm32: bench_pqc.c $(SHARED_OBJS)
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
+	@echo "Built: bench_pqc_arm32  [armv7-a + NEON]"
+
+bench_nclient_arm32: bench_nclient.c $(SHARED_OBJS)
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
+	@echo "Built: bench_nclient_arm32  [armv7-a + NEON]"
+
+clean:
+	rm -f bench_pqc_arm32 bench_nclient_arm32 client_arm32 $(SHARED_OBJS)

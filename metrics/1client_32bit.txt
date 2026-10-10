@@ -1,0 +1,153 @@
+server:
+ishal-kumar@vishal-kumar-Inspiron-15-3525:~/Desktop/PQC_codes/Day wise work/27 june/adaptive_benchmarking$ ./server
+[11:17:55.642] High-Performance Asynchronous io_uring PQC Server
+  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
+  Address  : 0.0.0.0:9877  |  Max clients: 4096
+
+  DSA keygen : 1.916 ms (long-term identity)
+  Rate limiting: ENABLED (50 pkts/s, burst 20)
+  Crypto workers: 3 threads spawned (pinned to Cores 1-3)
+  IPC RX : /tmp/pqc_rx.sock
+  IPC TX : /tmp/pqc_tx.sock
+
+╔══════════════════════════════════════════╗
+║  PQC Server — Multi-Client Mode          ║
+║  Run: ./server_rx  (receiver terminal)   ║
+║  Run: ./server_tx  (sender terminal)     ║
+╚══════════════════════════════════════════╝
+
+[11:18:26.150] ✓ CLIENT-01  10.59.57.221:34869  SID=da5d4b69ee5076e5  HS=0.648ms  Active=1
+
+^C
+=========================================================================
+                  PQC SERVER BENCHMARK REPORT                            
+=========================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 12 — Queuing & Processing Latency Breakdown (2      samples)       │
+├──────────────────────┬─────────────────────────┬────────────────────────┤
+│ Metric               │ Queue Wait Time (µs)    │ Crypto Processing (µs) │
+├──────────────────────┼─────────────────────────┼────────────────────────┤
+│ Mean                 │                  48.646 │                766.125 │
+│ Median               │                  48.646 │                766.125 │
+│ Minimum              │                  40.015 │                470.872 │
+│ Maximum              │                  57.277 │               1061.377 │
+│ 95th Percentile      │                  57.277 │               1061.377 │
+│ 99th Percentile      │                  57.277 │               1061.377 │
+│ Standard Deviation   │                   8.631 │                295.252 │
+└──────────────────────┴─────────────────────────┴────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 13 — Worker Thread Core Utilization                               │
+├──────────────────────┬─────────────────┬─────────────────┬──────────────┤
+│ Worker Thread        │ Busy Time (ms)  │ Total Time (ms) │ Util (%)     │
+├──────────────────────┼─────────────────┼─────────────────┼──────────────┤
+│ Worker 1 (Core 1)    │           1.061 │       41884.001 │        0.00% │
+│ Worker 2 (Core 2)    │           0.471 │       41884.001 │        0.00% │
+│ Worker 3 (Core 3)    │           0.000 │       41884.001 │        0.00% │
+└──────────────────────┴─────────────────┴─────────────────┴──────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 14 — Server CPU Temperature Profile                               │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Average Temperature                     │                      50.5 °C                     │
+│ Peak Temperature                        │                      51.0 °C                     │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 19 — Server CPU & Memory Utilization                              │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│ Metric                                  │ Value                         │
+├─────────────────────────────────────────┼───────────────────────────────┤
+│ Server CPU Utilization                  │                        3.38%                    │
+│ Server Peak RSS Memory                  │                   106.121 MB                   │
+└─────────────────────────────────────────┴───────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TABLE 20 — Thread Core Mapping (Affinity)                               │
+├─────────────────────────────────────────┬──────────────┬────────────────┤
+│ Thread                                  │ Target Core  │ Role           │
+├─────────────────────────────────────────┼──────────────┼────────────────┤
+│ Main Event Thread                       │ Core 0       │ Network I/O    │
+│ Worker Thread 1                         │ Core 1       │ Cryptography   │
+│ Worker Thread 2                         │ Core 2       │ Cryptography   │
+│ Worker Thread 3                         │ Core 3       │ Cryptography   │
+└─────────────────────────────────────────┴──────────────┴────────────────┘
+
+
+[server] Shutdown complete.
+vishal-kumar@vishal-kumar-Inspiron-15-3525:~/Desktop/PQC_codes/Day wise work/27 june/adaptive_benchmarking$ 
+
+
+
+CLient:
+
+aspberry@pi-2:~/PQC/PQC $ ./client_arm32 10.59.57.160
+[11:18:26.675] PQC Chat Client
+  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
+  Server   : 10.59.57.160:9877
+
+  [warmup] KEM+DSA cold-start : 31.17 ms
+
+  kem_keygen (thread) : 2.579 ms
+  dsa_keygen (thread) : 7.840 ms
+  (ran in parallel — wall-clock = max of above)
+
+  CLIENT_HELLO sent (3152 bytes)
+  SERVER_HELLO received (6373 bytes)
+  dsa_verify (server) : 4.742 ms
+  kem_decaps          : 1.499 ms
+  dsa_sign            : 10.064 ms  (sig=3309 bytes)
+  CLIENT_AUTH sent
+
+  ┌── PQC Handshake Summary ──────────────────────┐
+  │  ML-KEM-768  keygen  :   2.579 ms              │
+  │  ML-DSA-65   keygen  :   7.840 ms              │
+  │  ML-KEM-768  decaps  :   1.499 ms              │
+  │  ML-DSA-65   sign    :  10.064 ms              │
+  │  Total handshake     :  44.246 ms  ⚠  >1ms           │
+  └───────────────────────────────────────────────┘
+
+[11:18:26.760] Session established  (ID: da5d4b69ee5076e5)
+  Handshake total     : 44.246 ms
+
+╔══════════════════════════════════════╗
+║  PQC Secure Chat — Client (Pi)       ║
+║  Type to chat  |  Ctrl-D to exit     ║
+╚══════════════════════════════════════╝
+
+Pi  > 
+[client] Server disconnected/shut down.
+
+╔══════════════════════════════════════════════╗
+║     SESSION METRICS  [11:18:38.324]          ║
+╠══════════════════════════════════════════════╣
+║  PQC HANDSHAKE BREAKDOWN                     ║
+║  ─────────────────────────────────────────── ║
+║  KEM keygen        :    2.579 ms             ║
+║  DSA keygen        :    7.840 ms             ║
+║  KEM Encap/Decap   :    1.499 ms             ║
+║  DSA Sign          :   10.064 ms             ║
+║  DSA Verify        :    0.000 ms             ║
+║  Handshake Total   :   44.246 ms  ⚠ >1ms        ║
+║                                              ║
+║  AEAD (ChaCha20-Poly1305)                    ║
+║  ─────────────────────────────────────────── ║
+║                                              ║
+║  NETWORK                                     ║
+║  ─────────────────────────────────────────── ║
+║  Messages sent     :        0                ║
+║  Bytes sent        :        0 B              ║
+║  Bytes received    :        0 B              ║
+║  TX bandwidth      :     0.00 kbps           ║
+║  RX bandwidth      :     0.00 kbps           ║
+║  Session duration  :   11.564 s              ║
+║  Retransmissions   :        0                ║
+║  Jitter            :   N/A (need 2+ msgs)  ║
+╚══════════════════════════════════════════════╝
+
+[client] Exit.
+^Craspberry@pi-2:~/PQC/PQC $ 
+
