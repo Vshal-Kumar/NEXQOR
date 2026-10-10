@@ -1,4 +1,4 @@
-# 🛡️ Cross-Platform Evaluation of Scalable Post-Quantum Secure Communication
+# NEXQOR — Next-Generation Quantum-Resilient Communication
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?logo=c&logoColor=white)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![Architecture: Heterogeneous](https://img.shields.io/badge/Architecture-x86__64%20%7C%20ARM64%20%7C%20ARM32-blue.svg)](https://arm.com)
@@ -12,6 +12,730 @@
 A production-grade, SIMD-vectorized **Post-Quantum Cryptographic (PQC) networking framework**, high-concurrency multi-client relay infrastructure, and formal verification suite in C11. 
 
 Designed for **heterogeneous distributed environments**, the framework connects high-throughput **x86_64 servers** (vectorized via **AVX2 / BMI2**) with resource-constrained **ARM edge devices** (Raspberry Pi 4/5 via **ARM64 NEON** and Raspberry Pi 3 via **ARM32 NEON / VFPv4**), achieving **sub-millisecond PQC handshakes** and authenticated symmetric messaging resistant to quantum cryptanalysis (Shor's and Grover's algorithms).
+
+### Detailed Project Explanation
+
+## 1. Project Overview
+
+**NEXQOR is a cross-platform, post-quantum secure UDP communication framework designed to connect distributed IoT devices to a central server and enable secure, continuous telemetry exchange across different networks.**
+
+IoT devices such as Raspberry Pi systems and remote sensors frequently communicate with centralized servers to transmit sensor readings, device status, and operational information. However, securing these communications becomes challenging when devices operate across different networks, face unreliable connectivity, and require protection against unauthorized access and data tampering.
+
+NEXQOR addresses these challenges by combining post-quantum cryptography, authenticated encryption, session management, concurrent server processing, and application-level reliability mechanisms.
+
+The project uses four principal cryptographic components:
+
+| Component | Standard | Purpose |
+|---|---|---|
+| **ML-KEM-768** | NIST FIPS 203 | Post-quantum key establishment |
+| **ML-DSA-65** | NIST FIPS 204 | Digital signatures and authentication |
+| **ChaCha20-Poly1305** | RFC 8439 | Authenticated encryption and data integrity |
+| **SHAKE256** | NIST FIPS 202 | Cryptographic support for session key derivation |
+
+The framework uses UDP for network communication and is designed to support multiple independent clients, including devices connected through Wi-Fi networks, mobile hotspots, and remote networks.
+
+Its main objective is to demonstrate how post-quantum cryptography can be integrated into a practical communication system while addressing security, reliability, scalability, and cross-platform performance.
+
+---
+
+## 2. Problem Statement
+
+Distributed IoT systems require secure communication between devices operating across different physical networks and a central server.
+
+Several challenges arise in these environments.
+
+### A. Quantum-related cryptographic threats
+
+Certain conventional public-key cryptographic systems, particularly RSA and elliptic-curve cryptography, could be vulnerable to sufficiently capable quantum computers.
+
+Long-lived IoT systems need to consider cryptographic mechanisms designed to resist known quantum-computing attacks.
+
+### B. Secure device authentication
+
+A central server must distinguish legitimate devices from unauthorized clients.
+
+Simply identifying a device through its IP address or port is insufficient because network addresses do not independently establish cryptographic identity.
+
+### C. Confidentiality and integrity of telemetry
+
+IoT devices frequently transmit sensitive readings and operational information.
+
+An attacker who intercepts or modifies these messages could compromise data confidentiality or integrity if appropriate cryptographic protections are absent.
+
+### D. UDP reliability
+
+UDP is connectionless and does not guarantee packet delivery, ordering, or duplicate suppression.
+
+Packet loss, network interruptions, delayed messages, and duplicated datagrams can disrupt telemetry processing.
+
+### E. Multi-client scalability
+
+A central server may need to handle many IoT devices simultaneously.
+
+The server must manage individual sessions and cryptographic operations without allowing one slow client to unnecessarily block other clients.
+
+### F. Cross-network communication
+
+Devices may operate behind different routers, NAT gateways, firewalls, and mobile-network infrastructure.
+
+Establishing communication across these environments requires a reachable server endpoint and appropriate network configuration.
+
+**NEXQOR addresses these challenges through a unified framework for post-quantum secure communication, authenticated telemetry, session management, and concurrent multi-client processing.**
+
+---
+
+## 3. Proposed Solution
+
+NEXQOR establishes authenticated communication sessions between IoT clients and a central server.
+
+After a client completes the required handshake and the session is established, it can transmit protected telemetry to the server.
+
+The server receives incoming UDP datagrams, identifies the associated session, validates the message structure, verifies the cryptographic authentication, decrypts valid messages, and processes the telemetry.
+
+The system also maintains session information and records relevant communication and security events.
+
+The proposed solution has six major components.
+
+### 3.1 Post-quantum key establishment
+
+NEXQOR uses **ML-KEM-768**, standardized in NIST FIPS 203.
+
+ML-KEM is a key-encapsulation mechanism based on the Module-Lattice framework. It allows two parties to establish shared secret material that can be used to derive cryptographic session keys.
+
+At a high level, the process involves:
+
+1. The client obtains the server's authentic ML-KEM public key.
+2. The client performs encapsulation using that public key.
+3. The client obtains a ciphertext and shared secret.
+4. The ciphertext is transmitted to the server.
+5. The server performs decapsulation using its corresponding private key.
+6. Both parties obtain the same shared secret, assuming the operations are performed correctly.
+
+Conceptually:
+
+\[
+\text{Server Public Key}
+\longrightarrow
+\text{Encapsulation}
+\longrightarrow
+\begin{cases}
+\text{Ciphertext}\\
+\text{Shared Secret}
+\end{cases}
+\]
+
+The server uses its private key to decapsulate the ciphertext and recover the corresponding shared secret.
+
+**Important:** ML-KEM establishes shared secret material, but it does not independently authenticate the server or client. Authentication and correct public-key provisioning must be handled by the surrounding protocol.
+
+### 3.2 Digital signatures and authentication
+
+NEXQOR uses **ML-DSA-65**, standardized in NIST FIPS 204.
+
+ML-DSA is a post-quantum digital-signature algorithm.
+
+Its purpose in the system is to support authentication and verification of protocol messages.
+
+A typical signature workflow is:
+
+1. An authorized party possesses an ML-DSA private signing key.
+2. The party signs the appropriate protocol data.
+3. The recipient obtains the signed message and signature.
+4. The recipient verifies the signature using the corresponding trusted public key.
+5. The recipient accepts the authentication result only if verification succeeds and the associated authorization checks pass.
+
+This helps prevent unauthorized parties from successfully impersonating a legitimate signing identity, assuming private keys remain protected and public keys are correctly associated with their owners.
+
+The protocol must define precisely which messages are signed and which identity is being authenticated.
+
+### 3.3 Session key derivation using SHAKE256
+
+After the key-establishment process, the shared secret must be converted into the cryptographic material required by the communication session.
+
+NEXQOR uses **SHAKE256**, standardized in NIST FIPS 202, as part of its session key-derivation design.
+
+A simplified representation is:
+
+\[
+\text{Shared Secret}
+\longrightarrow
+\text{SHAKE256-based KDF}
+\longrightarrow
+\text{Session Cryptographic Material}
+\]
+
+The resulting material can be used to derive the key required by ChaCha20-Poly1305 and other protocol-specific values.
+
+The actual derivation design should specify:
+
+- How the shared secret is processed.
+- How session-specific context is incorporated.
+- How client and server derive matching keys.
+- How different cryptographic purposes receive separate key material.
+- How session nonces or nonce prefixes are constructed.
+- How keys are refreshed or replaced when a session expires.
+
+SHAKE256 is an extendable-output function, not a complete key-management protocol by itself. The surrounding protocol must define the derivation procedure correctly.
+
+### 3.4 Authenticated encryption using ChaCha20-Poly1305
+
+NEXQOR uses **ChaCha20-Poly1305**, specified in RFC 8439, to protect telemetry data.
+
+It combines two cryptographic mechanisms:
+
+- **ChaCha20:** Encrypts plaintext to provide confidentiality.
+- **Poly1305:** Generates an authentication tag that enables the receiver to detect unauthorized modifications.
+
+Together, they provide authenticated encryption with associated data, commonly abbreviated as AEAD.
+
+Suppose an IoT device generates this telemetry:
+
+```json
+{
+  "device_id": "sensor_01",
+  "temperature": 27.5,
+  "humidity": 62.0,
+  "sequence": 105
+}
+```
+
+The client constructs the telemetry message, associates it with the appropriate session and sequence information, and encrypts it using ChaCha20-Poly1305.
+
+Conceptually:
+
+\[
+(C,T)=\operatorname{AEAD\_Encrypt}(K,N,P,A)
+\]
+
+Where:
+
+- \(K\) is the session encryption key.
+- \(N\) is the nonce.
+- \(P\) is the plaintext telemetry.
+- \(A\) is the associated authenticated data, if used.
+- \(C\) is the ciphertext.
+- \(T\) is the authentication tag.
+
+The ciphertext and tag are transmitted to the server, together with the necessary protocol metadata.
+
+On reception, the server verifies the authentication tag before accepting the decrypted plaintext.
+
+If verification fails, the protected message must be rejected.
+
+**Nonce safety is essential:** A nonce must never be reused with the same ChaCha20-Poly1305 key for different encryption operations.
+
+Authenticated encryption also does not independently prevent replay attacks. Sequence validation and session-state checks are needed for that purpose.
+
+---
+
+## 4. System Architecture
+
+NEXQOR consists of three major layers.
+
+### Layer 1: IoT clients
+
+The clients may be Raspberry Pi devices or other supported Linux-based IoT systems.
+
+Their responsibilities include:
+
+- Generating telemetry.
+- Initiating UDP communication.
+- Participating in the cryptographic handshake.
+- Performing the required ML-KEM and ML-DSA operations.
+- Deriving session cryptographic material.
+- Encrypting telemetry using ChaCha20-Poly1305.
+- Maintaining message sequence information.
+- Processing acknowledgements and retransmissions where implemented.
+- Reconnecting when sessions expire or communication is interrupted.
+
+### Layer 2: UDP transport
+
+UDP carries handshake messages and protected telemetry between clients and the server.
+
+It is suitable for applications that benefit from lightweight datagram transport, but it does not provide built-in reliable delivery.
+
+NEXQOR therefore needs application-level mechanisms for message tracking and recovery.
+
+For communication across physically separate networks, the server must be reachable through an appropriate network path. Firewall configuration, NAT behavior, mobile-network restrictions, and address changes must be considered.
+
+### Layer 3: Central server
+
+The central server receives packets from clients and processes their sessions.
+
+Its responsibilities include:
+
+- Receiving UDP datagrams.
+- Validating packet framing and lengths.
+- Identifying the relevant client session.
+- Processing handshake messages in the required order.
+- Scheduling cryptographic operations.
+- Verifying digital signatures and authentication requirements.
+- Establishing secure sessions.
+- Authenticating and decrypting telemetry.
+- Checking sequence and duplicate status.
+- Processing valid application data.
+- Recording security and communication events.
+- Enforcing client limits and resource constraints.
+
+The intended implementation uses C11 and Linux networking, with `io_uring` where supported and a bounded worker pool for cryptographic processing.
+
+The exact implementation must ensure that concurrent operations cannot corrupt session state or mix information between clients.
+
+---
+
+## 5. Four-Phase Handshake
+
+NEXQOR uses a multi-phase UDP handshake to establish a secure communication session.
+
+The exact message names, fields, and cryptographic operations depend on the protocol implementation. The following describes the general responsibilities of the four phases.
+
+### Phase 1: Client initiation
+
+The client sends the initial handshake message to the server.
+
+The server validates the message structure and determines whether the request can be processed.
+
+### Phase 2: Server response
+
+The server processes the initial request and sends the appropriate handshake response.
+
+This may involve the information required for key establishment or the next protocol step.
+
+### Phase 3: Client cryptographic processing
+
+The client processes the server's response and performs the next required cryptographic operations.
+
+Depending on the protocol, this can include key encapsulation, signature generation, or transmission of the next handshake message.
+
+### Phase 4: Server verification and session establishment
+
+The server processes the final handshake message and performs the remaining required cryptographic and authentication checks.
+
+The session becomes established only after the required conditions have been satisfied.
+
+The overall objective is to ensure that both endpoints possess the appropriate session cryptographic material and that the required authentication checks have succeeded.
+
+### Why per-session ordering matters
+
+Each client must execute its handshake phases in the correct order.
+
+However, **the handshake of one client should not unnecessarily block the handshakes of other clients**.
+
+For example, suppose three devices connect simultaneously:
+
+- Client A is waiting for a handshake response.
+- Client B is performing signature verification.
+- Client C has just initiated a handshake.
+
+The server should be able to make progress on all three independent sessions while preserving the required order of operations within each session.
+
+This is an important design requirement for multi-client scalability.
+
+---
+
+## 6. Continuous Telemetry Communication
+
+After successful session establishment, an IoT device can continuously transmit telemetry.
+
+A telemetry message may contain:
+
+| Field | Purpose |
+|---|---|
+| Device identifier | Identifies the device within the application protocol |
+| Sequence number | Helps identify message order and duplicates |
+| Timestamp | Records when the measurement was generated |
+| Sensor readings | Contains application data |
+| Device status | Reports operational state |
+| Session metadata | Associates the message with the appropriate communication session |
+
+The actual wire format should use a well-defined, bounded representation rather than assuming that a JSON document is transmitted directly.
+
+### Telemetry processing workflow
+
+**Step 1: Data generation**
+
+The IoT device obtains sensor measurements or operational status.
+
+**Step 2: Message construction**
+
+The client creates a telemetry message and associates it with the authenticated session and appropriate sequence information.
+
+**Step 3: Encryption**
+
+The client encrypts and authenticates the telemetry using ChaCha20-Poly1305.
+
+**Step 4: UDP transmission**
+
+The client sends the protected datagram to the server.
+
+**Step 5: Server reception**
+
+The server receives the datagram and validates its framing, length, and session association.
+
+**Step 6: Authentication and decryption**
+
+The server verifies the authentication tag. Only successfully authenticated messages proceed to application processing.
+
+**Step 7: Sequence validation**
+
+The server checks the message's sequence number and duplicate status.
+
+**Step 8: Telemetry processing**
+
+Valid messages are passed to the application layer for processing, display, or storage.
+
+**Step 9: Reliability handling**
+
+Where implemented, the server sends an acknowledgement and updates its delivery-tracking state.
+
+This workflow allows NEXQOR to serve as a foundation for applications that require continuous, authenticated telemetry from distributed devices.
+
+---
+
+## 7. UDP Reliability and Message Delivery
+
+UDP does not guarantee that a transmitted datagram will reach its destination.
+
+A message may be lost, delayed, duplicated, or delivered out of order.
+
+NEXQOR can address these limitations through application-level reliability mechanisms.
+
+### Acknowledgements
+
+The receiver sends an acknowledgement indicating that a message has been received according to the protocol's defined acknowledgement semantics.
+
+The sender can use this information to determine whether further action is necessary.
+
+### Bounded retransmissions
+
+If an acknowledgement is not received within the configured timeout, the sender can retransmit the message.
+
+Retry limits prevent a disconnected client from retransmitting indefinitely.
+
+### Sequence tracking
+
+Each message carries sequence information so the receiver can track message progression.
+
+Sequence gaps can indicate missing messages, while repeated sequence numbers may indicate duplicate delivery.
+
+### Duplicate detection
+
+The server tracks recently processed messages and rejects duplicates when the protocol requires them to be processed only once.
+
+### Timeouts and reconnection
+
+Sessions should expire when their validity conditions are no longer satisfied.
+
+Clients can establish new sessions after disconnection or expiration.
+
+### Backpressure
+
+When the server cannot process incoming traffic fast enough, bounded queues and appropriate overload handling prevent unbounded resource consumption.
+
+**Important distinction:** Retransmission does not automatically guarantee exactly-once processing. If a sender retransmits a message because its acknowledgement was lost, the server must distinguish that duplicate from a new message. Stronger delivery guarantees may require persistent message state and transactional application processing.
+
+---
+
+## 8. Security Monitoring
+
+NEXQOR is intended to provide visibility into security failures and communication problems.
+
+Relevant events include:
+
+| Event | Meaning | Expected handling |
+|---|---|---|
+| Invalid authentication tag | The protected message failed cryptographic authentication | Reject the message and record the event |
+| Invalid signature | A required signature could not be verified | Reject the affected handshake or message |
+| Malformed packet | The datagram does not follow the expected format | Reject it safely |
+| Unauthorized client | The client does not satisfy authentication or authorization requirements | Deny the requested operation |
+| Duplicate message | A message has already been processed or received | Apply the protocol's duplicate-handling rules |
+| Replay attempt | A previously valid message is presented again outside the permitted protocol state | Reject according to replay-protection rules |
+| Unexpected session identifier | The message does not match the expected session | Reject the message |
+| Sequence gap | One or more expected messages may be missing | Record the gap and apply the defined recovery policy |
+| Handshake timeout | The expected handshake progression did not complete | Expire or clean up the pending session |
+| Repeated retransmissions | Communication may be unreliable or the receiver may be unavailable | Apply retry limits and record the event |
+
+Security monitoring does not mean that every attack can be detected.
+
+For example, a validly authenticated message can still contain incorrect sensor data, and an authenticated-encryption algorithm does not independently detect every form of denial-of-service attack.
+
+The system therefore needs both cryptographic verification and application-level validation.
+
+---
+
+## 9. Multi-Client Scalability and Concurrent Processing
+
+NEXQOR is designed to support multiple independent clients rather than relying on a fixed number of devices.
+
+The server must maintain separate session information for each client and enforce resource limits.
+
+### Per-client session state
+
+Each client has its own session context, including the information needed to track handshake progression, cryptographic state, sequence information, and session expiration.
+
+### Concurrent cryptographic processing
+
+Expensive cryptographic operations can be scheduled through a bounded worker pool.
+
+Independent sessions can progress concurrently, provided the implementation preserves the required ordering and synchronization rules.
+
+### Bounded resources
+
+The server should apply limits to:
+
+- Maximum active clients.
+- Pending handshake sessions.
+- Cryptographic work queues.
+- Per-client buffered messages.
+- Retransmission state.
+- Session lifetime and expiration.
+- Memory allocation.
+
+These controls help prevent a large number of pending or malicious requests from exhausting server resources.
+
+### Fairness
+
+One client generating excessive traffic should not monopolize all available processing capacity.
+
+Per-client limits, bounded queues, and scheduling policies can help distribute resources more fairly.
+
+### Runtime-configurable capacity
+
+If the server supports a configurable client limit, the setting must control actual session capacity and associated resources.
+
+A configuration value that only changes the displayed client count is not sufficient.
+
+---
+
+## 10. Cross-Platform Implementation
+
+NEXQOR targets both server-class systems and resource-constrained IoT devices.
+
+### x86-64 Linux
+
+A server can use an x86-64 processor to perform networking, cryptographic operations, session management, and concurrent telemetry processing.
+
+The exact performance depends on the processor, cryptographic library, compiler, operating system, and workload.
+
+### ARM64 Raspberry Pi
+
+ARM64 devices can serve as IoT clients or, where resources permit, server nodes.
+
+The implementation must be built and tested against the actual target architecture and available library support.
+
+### ARM32
+
+ARM32 support depends on the compatibility of the required libraries, toolchain, cryptographic implementations, and available resources.
+
+It should be demonstrated through actual builds and tests rather than assumed.
+
+### Technology stack
+
+| Area | Technology |
+|---|---|
+| Programming language | C11 |
+| Operating system | Linux |
+| Network transport | UDP |
+| Key establishment | ML-KEM-768 |
+| Digital signatures | ML-DSA-65 |
+| Authenticated encryption | ChaCha20-Poly1305 |
+| Key derivation | SHAKE256-based design |
+| Post-quantum library | liboqs, where applicable |
+| Networking | Linux UDP sockets and `io_uring`, where supported |
+| Concurrency | Bounded worker pool and session management |
+| Hardware targets | x86-64 Linux and supported ARM devices |
+
+The exact library roles and supported algorithms should be confirmed against the actual build configuration.
+
+---
+
+## 11. Performance Evaluation
+
+A key part of NEXQOR is evaluating how the cryptographic and networking components behave under different workloads.
+
+The project should separate cryptographic microbenchmarks from end-to-end communication measurements.
+
+### A. Cryptographic performance
+
+Measure:
+
+- ML-KEM key generation.
+- ML-KEM encapsulation.
+- ML-KEM decapsulation.
+- ML-DSA signing.
+- ML-DSA verification.
+- ChaCha20-Poly1305 encryption.
+- ChaCha20-Poly1305 decryption.
+
+These measurements help identify the computational cost of individual cryptographic operations.
+
+### B. Handshake performance
+
+Measure:
+
+- Total handshake completion time.
+- Successful handshakes per second.
+- Median handshake latency.
+- 95th-percentile handshake latency.
+- Time spent waiting for network responses.
+- Time spent waiting in cryptographic work queues.
+
+### C. Multi-client performance
+
+Evaluate the server under increasing client loads.
+
+Measure:
+
+- Number of successful client sessions.
+- Concurrent handshake behavior.
+- Telemetry throughput.
+- CPU utilization.
+- Memory consumption.
+- Queue occupancy.
+- Queue delay.
+- End-to-end latency.
+
+### D. Network reliability
+
+Test the communication framework under:
+
+- Increased network latency.
+- Packet loss.
+- Duplicated messages.
+- Delayed acknowledgements.
+- Client disconnections.
+- Session expiration.
+- Reconnection attempts.
+
+### E. Cross-platform performance
+
+Compare results across supported x86-64 and ARM devices.
+
+Record the hardware, operating system, compiler settings, cryptographic-library versions, payload sizes, and client counts.
+
+Performance results should be based on reproducible experiments rather than assumptions.
+
+---
+
+## 12. Security Considerations
+
+NEXQOR combines multiple cryptographic components, but the overall security depends on their correct integration.
+
+Important requirements include:
+
+**Key authenticity:** The system must establish trust in the public keys used for authentication and key establishment.
+
+**Private-key protection:** Client and server private keys must be protected against unauthorized access.
+
+**Nonce uniqueness:** ChaCha20-Poly1305 must never reuse a nonce with the same key for different encryption operations.
+
+**Session separation:** Cryptographic material must be associated with the appropriate session and separated according to its intended use.
+
+**Replay prevention:** Sequence tracking and session-state validation must prevent unauthorized reuse of previously valid messages.
+
+**Authentication before processing:** The server must not process unauthenticated telemetry as trusted application data.
+
+**Input validation:** Incoming packet lengths, message types, session identifiers, and other fields must be validated before they are used.
+
+**Resource protection:** Pending sessions, cryptographic work, and retransmission state must be bounded to reduce resource-exhaustion risks.
+
+**Concurrency safety:** Session state and cryptographic material must not be corrupted by concurrent operations.
+
+**Secure error handling:** Authentication failures should result in message rejection without exposing sensitive internal state.
+
+These requirements must be verified through implementation review and security testing.
+
+---
+
+## 13. Expected Impact and Applications
+
+NEXQOR provides a foundation for exploring post-quantum secure communication in distributed IoT environments.
+
+Potential application areas include:
+
+### Industrial monitoring
+
+Distributed sensors can report equipment readings and operational status to a central server.
+
+### Environmental monitoring
+
+Remote devices can transmit temperature, humidity, and other environmental measurements.
+
+### Smart infrastructure
+
+Connected devices can exchange protected operational telemetry with centralized monitoring systems.
+
+### Edge computing
+
+ARM-based devices can participate in a distributed communication architecture while a central server performs more resource-intensive processing.
+
+### Post-quantum security research
+
+The framework can be used to evaluate the practical performance and integration challenges of post-quantum cryptography on different hardware platforms.
+
+These are potential application areas, not claims that NEXQOR has already been deployed in every environment.
+
+---
+
+## 14. Development Roadmap
+
+The project can be developed and validated in the following stages.
+
+**Stage 1: Cryptographic integration**
+- Validate ML-KEM-768 and ML-DSA-65 operations.
+- Verify SHAKE256-based key derivation.
+- Validate ChaCha20-Poly1305 encryption and decryption.
+- Confirm key and nonce management.
+
+**Stage 2: Session management**
+- Validate the handshake state machine.
+- Preserve ordering within each client session.
+- Enable concurrent processing across independent sessions.
+- Verify client identity and session separation.
+
+**Stage 3: Telemetry processing**
+- Define the telemetry message format.
+- Validate authenticated telemetry.
+- Implement sequence tracking and duplicate detection.
+- Add acknowledgements and bounded retransmissions where required.
+
+**Stage 4: Scalability**
+- Implement or validate runtime-configurable client capacity.
+- Bound queues and resource allocation.
+- Test increasing client populations.
+- Evaluate concurrency and overload handling.
+
+**Stage 5: Real-network deployment**
+- Deploy the server on a reachable Linux host.
+- Configure the required UDP endpoint.
+- Test clients across different networks.
+- Evaluate NAT, firewall, and disconnection behavior.
+
+**Stage 6: Performance and security validation**
+- Conduct cryptographic benchmarks.
+- Evaluate end-to-end latency and throughput.
+- Test malformed packets and invalid authentication.
+- Evaluate replay prevention and duplicate handling.
+- Test supported ARM and x86-64 platforms.
+
+**Stage 7: Documentation and demonstration**
+- Document the architecture.
+- Provide reproducible build and test procedures.
+- Publish verified measurements.
+- Demonstrate authenticated telemetry communication.
+- Document limitations and deployment requirements.
+
+---
+
+## 15. Final Project Summary
+
+**NEXQOR is a cross-platform, post-quantum secure UDP communication framework for distributed IoT devices.** It combines ML-KEM-768 for post-quantum key establishment, ML-DSA-65 for digital signatures and authentication, ChaCha20-Poly1305 for authenticated encryption, and SHAKE256-based session key derivation.
+
+Its architecture supports independent client sessions, concurrent server-side processing, continuous telemetry exchange, and application-level reliability mechanisms. It also incorporates security-event monitoring and is designed for deployment across supported x86-64 and ARM-based systems.
+
+The project's central goal is to demonstrate a practical approach to integrating post-quantum cryptography with secure IoT networking while evaluating its security, reliability, scalability, and performance under realistic operating conditions.
+
+**In one sentence:** NEXQOR aims to make communication between distributed IoT devices and a central server secure against known quantum-computing threats, authenticated against unauthorized access, and more reliable under real-world network conditions.
 
 ---
 
