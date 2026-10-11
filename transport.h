@@ -41,7 +41,7 @@
 
 /* ── Endpoint ────────────────────────────────────────────────────── */
 #define SERVER_PORT 9877
-#define SERVER_ADDR "10.170.14.160"
+#define SERVER_ADDR "10.231.121.160"
 
 /* ── Packet types ────────────────────────────────────────────────── */
 #define PKT_CLIENT_HELLO 0x01

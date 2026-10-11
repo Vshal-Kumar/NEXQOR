@@ -158,7 +158,7 @@ static void render_client_menu(int current_target)
 
     printf(CLR_CYAN
            "╔══════════════════════════════════════════════════════════╗\n"
-           "║        PQC Secure Chat  ─  SENDER TERMINAL              ║\n"
+           "║       QRYPTONEX Secure Chat  ─  SENDER TERMINAL          ║\n"
            "╚══════════════════════════════════════════════════════════╝\n"
            CLR_RESET "\n");
 
@@ -303,7 +303,7 @@ int main(void)
     printf("\033[2J\033[H");
     printf(CLR_MAGENTA
            "╔══════════════════════════════════════════════════════════╗\n"
-           "║        PQC Secure Chat  ─  SENDER TERMINAL              ║\n"
+           "║       QRYPTONEX Secure Chat  ─  SENDER TERMINAL          ║\n"
            "╚══════════════════════════════════════════════════════════╝\n"
            CLR_RESET "\n");
 

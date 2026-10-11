@@ -1360,7 +1360,7 @@ int main(void) {
 
   char ts[16];
   now_hms(ts, sizeof(ts));
-  printf("[%s] High-Performance Asynchronous io_uring PQC Server\n", ts);
+  printf("[%s] QRYPTONEX — Post-Quantum Secure Server\n", ts);
   printf("  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305\n");
   printf("  Address  : 0.0.0.0:%d  |  Max clients: %d\n\n", SERVER_PORT,
          MAX_CLIENTS);
@@ -1475,7 +1475,7 @@ int main(void) {
   io_uring_submit(&g_ring);
 
   printf("\033[1;32m╔══════════════════════════════════════════╗\033[0m\n");
-  printf("\033[1;32m║  PQC Server — Multi-Client Mode          ║\033[0m\n");
+  printf("\033[1;32m║  QRYPTONEX Server — Multi-Client Mode    ║\033[0m\n");
   printf("\033[1;32m║  Run: ./server_rx  (receiver terminal)   ║\033[0m\n");
   printf("\033[1;32m║  Run: ./server_tx  (sender terminal)     ║\033[0m\n");
   printf("\033[1;32m╚══════════════════════════════════════════╝\033[0m\n\n");

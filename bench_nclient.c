@@ -602,7 +602,7 @@ int main(int argc, char *argv[]) {
 
   printf("\n");
   printf("╔══════════════════════════════════════════════════════════════╗\n");
-  printf("║     N-Client Concurrent PQC Handshake Benchmark              ║\n");
+  printf("║       QRYPTONEX — Concurrent Client Benchmark                ║\n");
   printf("║  ML-KEM-768  +  ML-DSA-65  +  ChaCha20-Poly1305             ║\n");
   printf("╚══════════════════════════════════════════════════════════════╝\n");
   printf("  Clients    : %d\n", g_num_clients);

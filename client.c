@@ -371,7 +371,7 @@ int main(int argc, char *argv[])
     const char *server_ip = (argc > 1) ? argv[1] : SERVER_ADDR;
 
     char ts[16]; now_hms(ts, sizeof(ts));
-    printf("[%s] PQC Chat Client\n", ts);
+    printf("[%s] QRYPTONEX — Post-Quantum Secure Client\n", ts);
     printf("  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305\n");
     printf("  Server   : %s:%d\n\n", server_ip, SERVER_PORT);
 
@@ -380,7 +380,7 @@ int main(int argc, char *argv[])
         double wu_t0 = now_ms();
         kem_warmup();
         dsa_warmup();
-        printf("  [warmup] KEM+DSA cold-start : %.2f ms\n\n", now_ms() - wu_t0);
+        printf("  Warmup (KEM + DSA) : %.2f ms\n", now_ms() - wu_t0);
     }
 
     /* Parallel KEM + DSA keygen */
@@ -405,9 +405,8 @@ int main(int argc, char *argv[])
     pthread_join(kem_tid, NULL);
     pthread_join(dsa_tid, NULL);
 
-    printf("  kem_keygen (thread) : %.3f ms\n", g_keys.kem_keygen_ms);
-    printf("  dsa_keygen (thread) : %.3f ms\n", g_keys.dsa_keygen_ms);
-    printf("  (ran in parallel — wall-clock = max of above)\n\n");
+    printf("  KEM KeyGen         : %.3f ms\n", g_keys.kem_keygen_ms);
+    printf("  DSA KeyGen         : %.3f ms\n\n", g_keys.dsa_keygen_ms);
 
     /* Handshake */
     metrics_t metrics = {0};
@@ -429,8 +428,8 @@ int main(int argc, char *argv[])
     metrics.session_start_ns = now_ns();
 
     printf("\033[1;35m╔══════════════════════════════════════╗\033[0m\n");
-    printf("\033[1;35m║  PQC Secure Chat — Client (Pi)       ║\033[0m\n");
-    printf("\033[1;35m║  Type to chat  |  Ctrl-D to exit     ║\033[0m\n");
+    printf("\033[1;35m║  QRYPTONEX Secure Chat — Client      ║\033[0m\n");
+    printf("\033[1;35m║  Type to chat  |  Ctrl-C to exit     ║\033[0m\n");
     printf("\033[1;35m╚══════════════════════════════════════╝\033[0m\n\n");
 
     /* Start RX thread */
@@ -439,14 +438,14 @@ int main(int argc, char *argv[])
     pthread_create(&rx_tid, NULL, rx_thread, &rx_args);
 
     /* TX loop */
-    printf("\033[1;35mPi  >\033[0m ");
+    printf("\033[1;35mClient >\033[0m ");
     fflush(stdout);
 
     char line[DATA_CHUNK_MAX];
     while (!g_stop && fgets(line, sizeof(line), stdin)) {
         size_t len = strlen(line);
         if (len == 0) {
-            printf("\033[1;35mPi  >\033[0m ");
+            printf("\033[1;35mClient >\033[0m ");
             fflush(stdout);
             continue;
         }
@@ -461,7 +460,7 @@ int main(int argc, char *argv[])
                (unsigned long long)metrics.msg_count,
                (unsigned long long)metrics.bytes_sent);
 
-        printf("\033[1;35mPi  >\033[0m ");
+        printf("\033[1;35mClient >\033[0m ");
         fflush(stdout);
     }
 

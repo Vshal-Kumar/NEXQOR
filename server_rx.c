@@ -224,7 +224,7 @@ int main(void) {
   printf("\033[2J\033[H"); /* clear screen */
   printf("\033[1;36m");
   printf("╔══════════════════════════════════════════════════════════╗\n");
-  printf("║        PQC Secure Chat  ─  RECEIVER TERMINAL            ║\n");
+  printf("║      QRYPTONEX Secure Chat  ─  RECEIVER TERMINAL         ║\n");
   printf("║  Displays all inbound messages from all clients          ║\n");
   printf("║  Metrics: local timestamps only — zero wire overhead     ║\n");
   printf("╚══════════════════════════════════════════════════════════╝\n");
