@@ -369,12 +369,11 @@ int main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
 
     const char *server_ip = (argc > 1) ? argv[1] : SERVER_ADDR;
-    int port = (argc > 2) ? atoi(argv[2]) : SERVER_PORT;
 
     char ts[16]; now_hms(ts, sizeof(ts));
     printf("[%s] PQC Chat Client\n", ts);
     printf("  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305\n");
-    printf("  Server   : %s:%d\n\n", server_ip, port);
+    printf("  Server   : %s:%d\n\n", server_ip, SERVER_PORT);
 
     /* Warmup */
     {
@@ -397,7 +396,7 @@ int main(int argc, char *argv[])
     c.sock     = sock;
     c.peer_len = sizeof(c.peer);
     c.peer.sin_family = AF_INET;
-    c.peer.sin_port   = htons(port);
+    c.peer.sin_port   = htons(SERVER_PORT);
     if (inet_pton(AF_INET, server_ip, &c.peer.sin_addr) != 1) {
         fprintf(stderr, "Invalid server address: %s\n", server_ip); return 1;
     }

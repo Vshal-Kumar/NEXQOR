@@ -78,7 +78,7 @@ static int configure_sock(int s) {
   return 0;
 }
 
-int make_server_sock(const char *bind_ip, int port) {
+int make_server_sock(void) {
   int s = socket(AF_INET, SOCK_DGRAM, 0);
   if (s < 0) {
     perror("socket");
@@ -88,15 +88,8 @@ int make_server_sock(const char *bind_ip, int port) {
 
   struct sockaddr_in addr = {0};
   addr.sin_family = AF_INET;
-  addr.sin_port = htons(port);
-  if (bind_ip && bind_ip[0] != '\0' && strcmp(bind_ip, "0.0.0.0") != 0) {
-    if (inet_pton(AF_INET, bind_ip, &addr.sin_addr) != 1) {
-      fprintf(stderr, "Invalid bind IP\n");
-      return -1;
-    }
-  } else {
-    addr.sin_addr.s_addr = INADDR_ANY;
-  }
+  addr.sin_port = htons(SERVER_PORT);
+  addr.sin_addr.s_addr = INADDR_ANY;
 
   if (bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
     perror("bind");

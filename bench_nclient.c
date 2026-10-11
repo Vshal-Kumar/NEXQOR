@@ -304,7 +304,7 @@ static void *client_thread(void *arg) {
   c.sock = sock;
   c.peer_len = sizeof(c.peer);
   c.peer.sin_family = AF_INET;
-  c.peer.sin_port = htons(g_server_port);
+  c.peer.sin_port = htons(SERVER_PORT);
   inet_pton(AF_INET, g_server_ip, &c.peer.sin_addr);
   c.tx_seq = 1;
 
@@ -556,8 +556,6 @@ fail:
   return NULL;
 }
 
-int g_server_port = SERVER_PORT;
-
 /* ═══════════════════════════════════════════════════════════════════
  * main()
  * ═══════════════════════════════════════════════════════════════════ */
@@ -576,9 +574,9 @@ int main(int argc, char *argv[]) {
   }
 
   g_num_msgs = 5; /* Handshake + 5 data messages for metrics by default */
-  if (argc > 5) {
+  if (argc > 4) {
     fprintf(stderr,
-            "Usage: %s [num_clients 1-4096] [num_messages >= 0] [server_ip] [server_port]\n",
+            "Usage: %s [num_clients 1-4096] [num_messages >= 0] [server_ip]\n",
             argv[0]);
     return 1;
   }
@@ -591,12 +589,9 @@ int main(int argc, char *argv[]) {
   if (argc > 3) {
     g_server_ip = argv[3];
   }
-  if (argc > 4) {
-    g_server_port = atoi(argv[4]);
-  }
   if (g_num_clients < 1 || g_num_clients > 4096) {
     fprintf(stderr,
-            "Usage: %s [num_clients 1-4096] [num_messages >= 0] [server_ip] [server_port]\n",
+            "Usage: %s [num_clients 1-4096] [num_messages >= 0] [server_ip]\n",
             argv[0]);
     return 1;
   }
@@ -613,7 +608,7 @@ int main(int argc, char *argv[]) {
   printf("  Clients    : %d\n", g_num_clients);
   printf("  Messages   : %d per client %s\n", g_num_msgs,
          g_num_msgs == 0 ? "(handshake only)" : "");
-  printf("  Server     : %s:%d\n", g_server_ip, g_server_port);
+  printf("  Server     : %s:%d\n", g_server_ip, SERVER_PORT);
   printf("  Timer      : CLOCK_MONOTONIC (ns resolution)\n\n");
 
   /* Allocate results */
