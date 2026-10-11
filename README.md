@@ -1,4 +1,4 @@
-# NEXQOR — Next-Generation Quantum-Resilient Communication
+# QRYPTONEX — Next-Generation Quantum-Resilient Communication
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?logo=c&logoColor=white)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![Architecture: Heterogeneous](https://img.shields.io/badge/Architecture-x86__64%20%7C%20ARM64%20%7C%20ARM32-blue.svg)](https://arm.com)
@@ -17,11 +17,11 @@ Designed for **heterogeneous distributed environments**, the framework connects 
 
 ## 1. Project Overview
 
-**NEXQOR is a cross-platform, post-quantum secure UDP communication framework designed to connect distributed IoT devices to a central server and enable secure, continuous telemetry exchange across different networks.**
+**QRYPTONEX is a cross-platform, post-quantum secure UDP communication framework designed to connect distributed IoT devices to a central server and enable secure, continuous telemetry exchange across different networks.**
 
 IoT devices such as Raspberry Pi systems and remote sensors frequently communicate with centralized servers to transmit sensor readings, device status, and operational information. However, securing these communications becomes challenging when devices operate across different networks, face unreliable connectivity, and require protection against unauthorized access and data tampering.
 
-NEXQOR addresses these challenges by combining post-quantum cryptography, authenticated encryption, session management, concurrent server processing, and application-level reliability mechanisms.
+QRYPTONEX addresses these challenges by combining post-quantum cryptography, authenticated encryption, session management, concurrent server processing, and application-level reliability mechanisms.
 
 The project uses four principal cryptographic components:
 
@@ -80,13 +80,13 @@ Devices may operate behind different routers, NAT gateways, firewalls, and mobil
 
 Establishing communication across these environments requires a reachable server endpoint and appropriate network configuration.
 
-**NEXQOR addresses these challenges through a unified framework for post-quantum secure communication, authenticated telemetry, session management, and concurrent multi-client processing.**
+**QRYPTONEX addresses these challenges through a unified framework for post-quantum secure communication, authenticated telemetry, session management, and concurrent multi-client processing.**
 
 ---
 
 ## 3. Proposed Solution
 
-NEXQOR establishes authenticated communication sessions between IoT clients and a central server.
+QRYPTONEX establishes authenticated communication sessions between IoT clients and a central server.
 
 After a client completes the required handshake and the session is established, it can transmit protected telemetry to the server.
 
@@ -98,7 +98,7 @@ The proposed solution has six major components.
 
 ### 3.1 Post-quantum key establishment
 
-NEXQOR uses **ML-KEM-768**, standardized in NIST FIPS 203.
+QRYPTONEX uses **ML-KEM-768**, standardized in NIST FIPS 203.
 
 ML-KEM is a key-encapsulation mechanism based on the Module-Lattice framework. It allows two parties to establish shared secret material that can be used to derive cryptographic session keys.
 
@@ -130,7 +130,7 @@ The server uses its private key to decapsulate the ciphertext and recover the co
 
 ### 3.2 Digital signatures and authentication
 
-NEXQOR uses **ML-DSA-65**, standardized in NIST FIPS 204.
+QRYPTONEX uses **ML-DSA-65**, standardized in NIST FIPS 204.
 
 ML-DSA is a post-quantum digital-signature algorithm.
 
@@ -152,7 +152,7 @@ The protocol must define precisely which messages are signed and which identity 
 
 After the key-establishment process, the shared secret must be converted into the cryptographic material required by the communication session.
 
-NEXQOR uses **SHAKE256**, standardized in NIST FIPS 202, as part of its session key-derivation design.
+QRYPTONEX uses **SHAKE256**, standardized in NIST FIPS 202, as part of its session key-derivation design.
 
 A simplified representation is:
 
@@ -179,7 +179,7 @@ SHAKE256 is an extendable-output function, not a complete key-management protoco
 
 ### 3.4 Authenticated encryption using ChaCha20-Poly1305
 
-NEXQOR uses **ChaCha20-Poly1305**, specified in RFC 8439, to protect telemetry data.
+QRYPTONEX uses **ChaCha20-Poly1305**, specified in RFC 8439, to protect telemetry data.
 
 It combines two cryptographic mechanisms:
 
@@ -230,7 +230,7 @@ Authenticated encryption also does not independently prevent replay attacks. Seq
 
 ## 4. System Architecture
 
-NEXQOR consists of three major layers.
+QRYPTONEX consists of three major layers.
 
 ### Layer 1: IoT clients
 
@@ -254,7 +254,7 @@ UDP carries handshake messages and protected telemetry between clients and the s
 
 It is suitable for applications that benefit from lightweight datagram transport, but it does not provide built-in reliable delivery.
 
-NEXQOR therefore needs application-level mechanisms for message tracking and recovery.
+QRYPTONEX therefore needs application-level mechanisms for message tracking and recovery.
 
 For communication across physically separate networks, the server must be reachable through an appropriate network path. Firewall configuration, NAT behavior, mobile-network restrictions, and address changes must be considered.
 
@@ -285,7 +285,7 @@ The exact implementation must ensure that concurrent operations cannot corrupt s
 
 ## 5. Four-Phase Handshake
 
-NEXQOR uses a multi-phase UDP handshake to establish a secure communication session.
+QRYPTONEX uses a multi-phase UDP handshake to establish a secure communication session.
 
 The exact message names, fields, and cryptographic operations depend on the protocol implementation. The following describes the general responsibilities of the four phases.
 
@@ -388,7 +388,7 @@ Valid messages are passed to the application layer for processing, display, or s
 
 Where implemented, the server sends an acknowledgement and updates its delivery-tracking state.
 
-This workflow allows NEXQOR to serve as a foundation for applications that require continuous, authenticated telemetry from distributed devices.
+This workflow allows QRYPTONEX to serve as a foundation for applications that require continuous, authenticated telemetry from distributed devices.
 
 ---
 
@@ -398,7 +398,7 @@ UDP does not guarantee that a transmitted datagram will reach its destination.
 
 A message may be lost, delayed, duplicated, or delivered out of order.
 
-NEXQOR can address these limitations through application-level reliability mechanisms.
+QRYPTONEX can address these limitations through application-level reliability mechanisms.
 
 ### Acknowledgements
 
@@ -438,7 +438,7 @@ When the server cannot process incoming traffic fast enough, bounded queues and 
 
 ## 8. Security Monitoring
 
-NEXQOR is intended to provide visibility into security failures and communication problems.
+QRYPTONEX is intended to provide visibility into security failures and communication problems.
 
 Relevant events include:
 
@@ -465,7 +465,7 @@ The system therefore needs both cryptographic verification and application-level
 
 ## 9. Multi-Client Scalability and Concurrent Processing
 
-NEXQOR is designed to support multiple independent clients rather than relying on a fixed number of devices.
+QRYPTONEX is designed to support multiple independent clients rather than relying on a fixed number of devices.
 
 The server must maintain separate session information for each client and enforce resource limits.
 
@@ -509,7 +509,7 @@ A configuration value that only changes the displayed client count is not suffic
 
 ## 10. Cross-Platform Implementation
 
-NEXQOR targets both server-class systems and resource-constrained IoT devices.
+QRYPTONEX targets both server-class systems and resource-constrained IoT devices.
 
 ### x86-64 Linux
 
@@ -551,7 +551,7 @@ The exact library roles and supported algorithms should be confirmed against the
 
 ## 11. Performance Evaluation
 
-A key part of NEXQOR is evaluating how the cryptographic and networking components behave under different workloads.
+A key part of QRYPTONEX is evaluating how the cryptographic and networking components behave under different workloads.
 
 The project should separate cryptographic microbenchmarks from end-to-end communication measurements.
 
@@ -619,7 +619,7 @@ Performance results should be based on reproducible experiments rather than assu
 
 ## 12. Security Considerations
 
-NEXQOR combines multiple cryptographic components, but the overall security depends on their correct integration.
+QRYPTONEX combines multiple cryptographic components, but the overall security depends on their correct integration.
 
 Important requirements include:
 
@@ -649,7 +649,7 @@ These requirements must be verified through implementation review and security t
 
 ## 13. Expected Impact and Applications
 
-NEXQOR provides a foundation for exploring post-quantum secure communication in distributed IoT environments.
+QRYPTONEX provides a foundation for exploring post-quantum secure communication in distributed IoT environments.
 
 Potential application areas include:
 
@@ -673,7 +673,7 @@ ARM-based devices can participate in a distributed communication architecture wh
 
 The framework can be used to evaluate the practical performance and integration challenges of post-quantum cryptography on different hardware platforms.
 
-These are potential application areas, not claims that NEXQOR has already been deployed in every environment.
+These are potential application areas, not claims that QRYPTONEX has already been deployed in every environment.
 
 ---
 
@@ -729,13 +729,13 @@ The project can be developed and validated in the following stages.
 
 ## 15. Final Project Summary
 
-**NEXQOR is a cross-platform, post-quantum secure UDP communication framework for distributed IoT devices.** It combines ML-KEM-768 for post-quantum key establishment, ML-DSA-65 for digital signatures and authentication, ChaCha20-Poly1305 for authenticated encryption, and SHAKE256-based session key derivation.
+**QRYPTONEX is a cross-platform, post-quantum secure UDP communication framework for distributed IoT devices.** It combines ML-KEM-768 for post-quantum key establishment, ML-DSA-65 for digital signatures and authentication, ChaCha20-Poly1305 for authenticated encryption, and SHAKE256-based session key derivation.
 
 Its architecture supports independent client sessions, concurrent server-side processing, continuous telemetry exchange, and application-level reliability mechanisms. It also incorporates security-event monitoring and is designed for deployment across supported x86-64 and ARM-based systems.
 
 The project's central goal is to demonstrate a practical approach to integrating post-quantum cryptography with secure IoT networking while evaluating its security, reliability, scalability, and performance under realistic operating conditions.
 
-**In one sentence:** NEXQOR aims to make communication between distributed IoT devices and a central server secure against known quantum-computing threats, authenticated against unauthorized access, and more reliable under real-world network conditions.
+**In one sentence:** QRYPTONEX aims to make communication between distributed IoT devices and a central server secure against known quantum-computing threats, authenticated against unauthorized access, and more reliable under real-world network conditions.
 
 ---
 
@@ -837,8 +837,8 @@ The communication protocol operates over **UDP port 9877**, establishing mutual 
                                           ▼
                 +───────────────────────────────────────────────────+
                 │       Cores 2-7: Worker Thread Pool (x3+)         │
-                │  - Parallel ML-KEM-768 Encapsulation              │
-                │  - Parallel ML-DSA-65 Verification & Signing      │
+                │  - Asynchronous ML-KEM-768 Encapsulation          │
+                │  - Asynchronous ML-DSA-65 Verification & Signing  │
                 │  - SHAKE-256 Transcript Hashing & Key Derivation  │
                 +─────────────────────────┬─────────────────────────+
                                           │
