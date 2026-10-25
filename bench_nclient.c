@@ -64,7 +64,8 @@ static int shake256_hash(uint8_t out[64], const uint8_t *in, size_t in_len) {
 
 #define AUTH_CTX_LEN (SESSION_ID_BYTES + DSA_PK_BYTES + KEM_SS_BYTES)
 
-static const char *g_server_ip = SERVER_ADDR;
+static char g_server_ip[64] = "";
+static struct sockaddr_in g_server_peer;
 
 #include <sys/resource.h>
 
@@ -303,10 +304,8 @@ static void *client_thread(void *arg) {
 
   conn_t c;
   conn_init(&c, sock);
+  c.peer = g_server_peer;
   c.peer_len = sizeof(c.peer);
-  c.peer.sin_family = AF_INET;
-  c.peer.sin_port = htons(SERVER_PORT);
-  inet_pton(AF_INET, g_server_ip, &c.peer.sin_addr);
 
   /* fcntl(sock, F_SETFL, O_NONBLOCK); */
 
@@ -595,8 +594,10 @@ int main(int argc, char *argv[]) {
   if (argc > 2) {
     g_num_msgs = atoi(argv[2]);
   }
-  if (argc > 3) {
-    g_server_ip = argv[3];
+  const char *target = (argc > 3 && strcmp(argv[3], "auto") != 0) ? argv[3] : NULL;
+  if (resolve_server_address(target, &g_server_peer, g_server_ip, sizeof(g_server_ip)) != 0) {
+    fprintf(stderr, "Error: Unable to resolve server address '%s'\n", target ? target : "auto");
+    return 1;
   }
   if (g_num_clients < 1 || g_num_clients > 4096) {
     fprintf(stderr,

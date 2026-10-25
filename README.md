@@ -56,6 +56,7 @@ QRYPTONEX combines post-quantum key establishment (**ML-KEM-768** / NIST FIPS 20
 - **High-Concurrency Kernel Engine**: Core server implements the Linux **`io_uring`** asynchronous event ring for zero-copy packet batching, multi-worker thread pool dispatching (SPMC/MPSC lock-free queues), and adaptive rate-limiting.
 - **Formally Verified Security**: Modeled in Applied Pi-Calculus with **ProVerif** — mathematically proving 21 distinct properties including **Mutual Authentication**, **Perfect Forward Secrecy (PFS)** under long-term key compromise, **Replay Resistance**, and **Transcript Binding**.
 - **Decoupled Architecture**: Separation of concerns using POSIX Unix Domain Sockets (`/tmp/pqc_rx.sock`, `/tmp/pqc_tx.sock`) to decouple real-time packet processing from terminal UI rendering.
+- **Dynamic Server Auto-Discovery & Tailscale Ready**: Zero hardcoded IP addresses. Clients auto-discover local servers via UDP broadcast probes or connect cross-network over Tailscale VPN Mesh without port forwarding. (See [NETWORKING_GUIDE.md](NETWORKING_GUIDE.md)).
 - **Zero Heavy Runtime Dependencies**: Statically linkable against optimized `liboqs`, `libcrypto`, and `liburing`.
 
 ---
@@ -468,24 +469,29 @@ chmod +x run.sh
 
 ### 2. Running the Interactive Secure Chat Client
 
-Connect to the server from an x86_64 PC or embedded Raspberry Pi with a clean, focused terminal interface:
+Connect to the server from an x86_64 PC or embedded Raspberry Pi with a clean, focused terminal interface. **No IP address is needed for local/LAN connections** — the client discovers the server dynamically!
 
 ```bash
 # On x86_64 Host:
-./client <SERVER_IP>
+./client                  # Auto-discovers server (Localhost or LAN via UDP probe)
+./client <SERVER_IP>      # Explicit IP, hostname, or Tailscale address
 
 # On ARM64 (Raspberry Pi 4/5):
-./client_arm <SERVER_IP>
+./client_arm              # Auto-discovers server
+./client_arm <SERVER_IP>  # Explicit IP or Tailscale IP
 
 # On ARM32 (Raspberry Pi 3):
+./client_arm32            # Auto-discovers server
 ./client_arm32 <SERVER_IP>
 ```
 
-*Example*: `./client 192.168.137.168`
+*Example (Auto-Discovery)*: `./client`
+*Example (Cross-Network via Tailscale)*: `./client 100.104.77.63`
 
 Terminal output displays only essential session events:
 ```text
-[17:42:10] Connected to 192.168.137.168:9877 (Session ID: 3a7f8b01c4569e21)
+  Server target : 10.58.3.114:9877
+[17:42:10] Connected to 10.58.3.114:9877 (Session ID: 3a7f8b01c4569e21)
 [17:42:10] Ready to chat. Type a message and press Enter (Ctrl-C to exit).
 > Hello Server
 [17:42:15] Server: Acknowledged, quantum channel secure.
@@ -500,33 +506,39 @@ Simulates an autonomous embedded sensor node (e.g., ESP32, Raspberry Pi) that co
 
 ```bash
 # On x86_64:
+./client_broadcast                          # Auto-discovers server
 ./client_broadcast [SERVER_IP] [INTERVAL_MS] [DEVICE_ID]
 
 # On ARM64 (Raspberry Pi 4/5):
+./client_broadcast_arm                      # Auto-discovers server
 ./client_broadcast_arm [SERVER_IP] [INTERVAL_MS] [DEVICE_ID]
 
 # On ARM32 (Raspberry Pi 3):
+./client_broadcast_arm32                    # Auto-discovers server
 ./client_broadcast_arm32 [SERVER_IP] [INTERVAL_MS] [DEVICE_ID]
 ```
 
 *Examples*:
-- Broadcast telemetry every 500ms to local server:
+- Broadcast telemetry with auto-discovery (defaults to 500ms, ESP32-NODE-01):
   ```bash
-  ./client_broadcast 127.0.0.1 500 "ESP32-NODE-01"
+  ./client_broadcast
   ```
-- Broadcast high-rate sensor readings every 100ms from Raspberry Pi:
+- Broadcast high-rate sensor readings every 100ms from Raspberry Pi across Tailscale:
   ```bash
-  ./client_broadcast_arm 192.168.137.168 100 "PI-SENSOR-NODE"
+  ./client_broadcast_arm 100.104.77.63 100 "PI-SENSOR-NODE"
   ```
 
 Terminal output streams clean, single-line telemetry updates:
 ```text
-[17:42:10] Connected to 192.168.137.168:9877 (Session ID: 7c2a1e04b988f012)
+  Server target : 10.58.3.114:9877
+[17:42:10] Connected to 10.58.3.114:9877 (Session ID: 7c2a1e04b988f012)
 [17:42:10] Broadcasting telemetry from device 'PI-SENSOR-NODE' (interval: 100ms)...
 [17:42:11] #1     | Temp: 25.5°C | Hum: 55.0% | Press: 1013.2hPa | Vbat: 4.12V | Status: OK
 [17:42:11] #2     | Temp: 25.6°C | Hum: 54.9% | Press: 1013.3hPa | Vbat: 4.12V | Status: OK
 [17:42:11] #3     | Temp: 25.5°C | Hum: 55.1% | Press: 1013.1hPa | Vbat: 4.11V | Status: OK
 ```
+
+*(For detailed cross-network configuration, environment variables, and auto-discovery internals, see [NETWORKING_GUIDE.md](NETWORKING_GUIDE.md)).*
 
 ---
 

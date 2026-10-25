@@ -19,6 +19,9 @@
 #include <arpa/inet.h>
 #include <endian.h>
 #include <errno.h>
+#include <ifaddrs.h>
+#include <netdb.h>
+#include <net/if.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -615,4 +618,257 @@ void metrics_print(const metrics_t *m) {
     printf("║  Jitter            :   N/A (need 2+ msgs)  ║\n");
   }
   printf("╚══════════════════════════════════════════════╝\n\n");
+}
+
+/* ── Dynamic Server Resolution & Auto-Discovery ──────────────────── */
+int server_publish_endpoints(char *lan_ip, size_t lan_len,
+                             char *vpn_ip, size_t vpn_len) {
+  if (lan_ip && lan_len > 0)
+    snprintf(lan_ip, lan_len, "None");
+  if (vpn_ip && vpn_len > 0)
+    snprintf(vpn_ip, vpn_len, "None");
+
+  struct ifaddrs *ifaddr = NULL;
+  if (getifaddrs(&ifaddr) == -1) {
+    return -1;
+  }
+
+  char best_lan[INET_ADDRSTRLEN] = "";
+  char best_vpn[INET_ADDRSTRLEN] = "";
+
+  for (struct ifaddrs *ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+    if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
+      continue;
+
+    /* Check if interface is UP */
+    if (!(ifa->ifa_flags & IFF_UP))
+      continue;
+
+    /* Skip loopback */
+    if (ifa->ifa_flags & IFF_LOOPBACK)
+      continue;
+
+    struct sockaddr_in *sin = (struct sockaddr_in *)ifa->ifa_addr;
+    char ip_str[INET_ADDRSTRLEN];
+    if (!inet_ntop(AF_INET, &sin->sin_addr, ip_str, sizeof(ip_str)))
+      continue;
+
+    /* Detect Tailscale / Wireguard / VPN interfaces or CGNAT 100.64.0.0/10 */
+    int is_vpn = 0;
+    if (strncmp(ifa->ifa_name, "tailscale", 9) == 0 ||
+        strncmp(ifa->ifa_name, "ts", 2) == 0 ||
+        strncmp(ifa->ifa_name, "wg", 2) == 0 ||
+        strncmp(ifa->ifa_name, "tun", 3) == 0 ||
+        strncmp(ip_str, "100.", 4) == 0) {
+      is_vpn = 1;
+    }
+
+    if (is_vpn) {
+      if (best_vpn[0] == '\0') {
+        strncpy(best_vpn, ip_str, sizeof(best_vpn) - 1);
+      }
+    } else {
+      /* Prioritize Ethernet/Wi-Fi or standard private subnets */
+      if (best_lan[0] == '\0' || strncmp(ifa->ifa_name, "wl", 2) == 0 ||
+          strncmp(ifa->ifa_name, "eth", 3) == 0 || strncmp(ifa->ifa_name, "en", 2) == 0) {
+        strncpy(best_lan, ip_str, sizeof(best_lan) - 1);
+      }
+    }
+  }
+
+  freeifaddrs(ifaddr);
+
+  if (lan_ip && lan_len > 0 && best_lan[0] != '\0') {
+    snprintf(lan_ip, lan_len, "%s", best_lan);
+  }
+  if (vpn_ip && vpn_len > 0 && best_vpn[0] != '\0') {
+    snprintf(vpn_ip, vpn_len, "%s", best_vpn);
+  }
+
+  /* Publish to local discovery file */
+  FILE *f = fopen(SERVER_DISCOVERY_FILE, "w");
+  if (f) {
+    fprintf(f, "# NEXQOR / QRYPTONEX Active Server Endpoints\n");
+    fprintf(f, "PORT=%d\n", SERVER_PORT);
+    fprintf(f, "LOCAL=127.0.0.1\n");
+    if (best_lan[0] != '\0')
+      fprintf(f, "LAN=%s\n", best_lan);
+    if (best_vpn[0] != '\0')
+      fprintf(f, "VPN=%s\n", best_vpn);
+    fclose(f);
+  }
+
+  /* Publish preferred IP to system temporary discovery file */
+  const char *primary_ip = (best_lan[0] != '\0') ? best_lan :
+                           (best_vpn[0] != '\0') ? best_vpn : DEFAULT_SERVER_ADDR;
+  FILE *ftmp = fopen(SERVER_DISCOVERY_SYS_FILE, "w");
+  if (ftmp) {
+    fprintf(ftmp, "%s\n", primary_ip);
+    fclose(ftmp);
+  }
+
+  return 0;
+}
+
+int resolve_server_address(const char *input_target, struct sockaddr_in *out_peer,
+                           char *resolved_ip_str, size_t str_len) {
+  char candidate[128] = "";
+
+  /* Priority 1: User explicitly supplied argument (IP, hostname, Tailscale MagicDNS) */
+  if (input_target && input_target[0] != '\0') {
+    snprintf(candidate, sizeof(candidate), "%s", input_target);
+  }
+
+  /* Priority 2: Environment variables (PQC_SERVER_IP, SERVER_IP, NEXQOR_SERVER) */
+  if (candidate[0] == '\0') {
+    const char *env_ip = getenv(ENV_SERVER_IP);
+    if (!env_ip || env_ip[0] == '\0') env_ip = getenv("SERVER_IP");
+    if (!env_ip || env_ip[0] == '\0') env_ip = getenv("NEXQOR_SERVER");
+    if (env_ip && env_ip[0] != '\0') {
+      snprintf(candidate, sizeof(candidate), "%s", env_ip);
+    }
+  }
+
+  /* Priority 3: Local system discovery file (/tmp/nexqor_server.ip or ./server_endpoint.info) */
+  if (candidate[0] == '\0') {
+    FILE *f = fopen(SERVER_DISCOVERY_SYS_FILE, "r");
+    if (f) {
+      char line[128];
+      if (fgets(line, sizeof(line), f)) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
+        char *cr = strchr(line, '\r');
+        if (cr) *cr = '\0';
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (strlen(p) > 0) {
+          snprintf(candidate, sizeof(candidate), "%s", p);
+        }
+      }
+      fclose(f);
+    }
+  }
+
+  if (candidate[0] == '\0') {
+    FILE *f = fopen(SERVER_DISCOVERY_FILE, "r");
+    if (f) {
+      char line[256];
+      while (fgets(line, sizeof(line), f)) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
+        if (strncmp(line, "LAN=", 4) == 0 && strlen(line + 4) > 0) {
+          snprintf(candidate, sizeof(candidate), "%s", line + 4);
+          break;
+        } else if (strncmp(line, "VPN=", 4) == 0 && strlen(line + 4) > 0) {
+          snprintf(candidate, sizeof(candidate), "%s", line + 4);
+        }
+      }
+      fclose(f);
+    }
+  }
+
+  /* Priority 4: Dynamic LAN Broadcast Discovery Probe (UDP broadcast to port 9877) */
+  if (candidate[0] == '\0') {
+    int bsock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (bsock >= 0) {
+      int bcast_enable = 1;
+      setsockopt(bsock, SOL_SOCKET, SO_BROADCAST, &bcast_enable, sizeof(bcast_enable));
+
+      /* Fast probe timeout: 200 ms */
+      struct timeval tv;
+      tv.tv_sec = 0;
+      tv.tv_usec = 200000;
+      setsockopt(bsock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+      struct sockaddr_in baddr;
+      memset(&baddr, 0, sizeof(baddr));
+      baddr.sin_family = AF_INET;
+      baddr.sin_port = htons(SERVER_PORT);
+      baddr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+
+      pkt_hdr_t probe;
+      memset(&probe, 0, sizeof(probe));
+      probe.type = PKT_DISCOVERY_PROBE;
+      probe.seq = htonl(1);
+      probe.len = 0;
+      probe.session_id = 0;
+
+      sendto(bsock, &probe, sizeof(probe), 0, (struct sockaddr *)&baddr, sizeof(baddr));
+
+      /* Also broadcast on specific subnet broadcast addresses if found */
+      struct ifaddrs *iflist = NULL;
+      if (getifaddrs(&iflist) == 0) {
+        for (struct ifaddrs *ifa = iflist; ifa; ifa = ifa->ifa_next) {
+          if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET &&
+              (ifa->ifa_flags & IFF_UP) && !(ifa->ifa_flags & IFF_LOOPBACK) &&
+              (ifa->ifa_flags & IFF_BROADCAST) && ifa->ifa_broadaddr) {
+            struct sockaddr_in *sin_b = (struct sockaddr_in *)ifa->ifa_broadaddr;
+            sin_b->sin_port = htons(SERVER_PORT);
+            sendto(bsock, &probe, sizeof(probe), 0, (struct sockaddr *)sin_b, sizeof(*sin_b));
+          }
+        }
+        freeifaddrs(iflist);
+      }
+
+      uint8_t rbuf[128];
+      struct sockaddr_in from;
+      socklen_t fromlen = sizeof(from);
+      ssize_t n = recvfrom(bsock, rbuf, sizeof(rbuf), 0, (struct sockaddr *)&from, &fromlen);
+      if (n >= (ssize_t)PKT_HDR_BYTES) {
+        pkt_hdr_t rhdr;
+        memcpy(&rhdr, rbuf, sizeof(rhdr));
+        if (rhdr.type == PKT_DISCOVERY_OFFER) {
+          char discovered_ip[INET_ADDRSTRLEN];
+          if (inet_ntop(AF_INET, &from.sin_addr, discovered_ip, sizeof(discovered_ip))) {
+            snprintf(candidate, sizeof(candidate), "%s", discovered_ip);
+          }
+        }
+      }
+      close(bsock);
+    }
+  }
+
+  /* Priority 5: Default Fallback to Loopback (127.0.0.1) */
+  if (candidate[0] == '\0') {
+    snprintf(candidate, sizeof(candidate), "%s", DEFAULT_SERVER_ADDR);
+  }
+
+  /* Resolve candidate string via getaddrinfo (handles IPv4 numeric, hostname, and Tailscale DNS) */
+  struct addrinfo hints, *res = NULL;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_DGRAM;
+
+  int ret = getaddrinfo(candidate, NULL, &hints, &res);
+  if (ret != 0 || res == NULL) {
+    /* Fallback direct inet_pton check */
+    struct in_addr direct_addr;
+    if (inet_pton(AF_INET, candidate, &direct_addr) != 1) {
+      return -1;
+    }
+    if (out_peer) {
+      memset(out_peer, 0, sizeof(*out_peer));
+      out_peer->sin_family = AF_INET;
+      out_peer->sin_port = htons(SERVER_PORT);
+      out_peer->sin_addr = direct_addr;
+    }
+    if (resolved_ip_str && str_len > 0) {
+      snprintf(resolved_ip_str, str_len, "%s", candidate);
+    }
+    return 0;
+  }
+
+  struct sockaddr_in *sin_res = (struct sockaddr_in *)res->ai_addr;
+  if (out_peer) {
+    memset(out_peer, 0, sizeof(*out_peer));
+    out_peer->sin_family = AF_INET;
+    out_peer->sin_port = htons(SERVER_PORT);
+    out_peer->sin_addr = sin_res->sin_addr;
+  }
+  if (resolved_ip_str && str_len > 0) {
+    inet_ntop(AF_INET, &sin_res->sin_addr, resolved_ip_str, (socklen_t)str_len);
+  }
+
+  freeaddrinfo(res);
+  return 0;
 }

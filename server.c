@@ -1383,8 +1383,19 @@ int main(void) {
   now_hms(ts, sizeof(ts));
   printf("[%s] QRYPTONEX — Post-Quantum Secure Server\n", ts);
   printf("  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305\n");
-  printf("  Address  : 0.0.0.0:%d  |  Max clients: %d\n\n", SERVER_PORT,
+  printf("  Address  : 0.0.0.0:%d  |  Max clients: %d\n", SERVER_PORT,
          MAX_CLIENTS);
+
+  char lan_ip[64] = "None", vpn_ip[64] = "None";
+  server_publish_endpoints(lan_ip, sizeof(lan_ip), vpn_ip, sizeof(vpn_ip));
+
+  printf("  Active Endpoints (Auto-Discovered & Published):\n");
+  printf("    • Localhost (Same Device) : 127.0.0.1:%d\n", SERVER_PORT);
+  if (strcmp(lan_ip, "None") != 0)
+    printf("    • LAN / Wi-Fi Subnet      : %s:%d\n", lan_ip, SERVER_PORT);
+  if (strcmp(vpn_ip, "None") != 0)
+    printf("    • Tailscale / VPN Overlay : %s:%d\n", vpn_ip, SERVER_PORT);
+  printf("    • Auto-Discovery Service  : UDP Broadcast Probe on port %d\n\n", SERVER_PORT);
 
   registry_init();
 
@@ -1540,7 +1551,10 @@ int main(void) {
 
         int s_idx = session_hash_lookup(ip, port);
         if (s_idx < 0) {
-          if (hdr.type == PKT_CLIENT_HELLO) {
+          if (hdr.type == PKT_DISCOVERY_PROBE || hdr.type == PKT_PING) {
+            uint8_t offer[32] = "NEXQOR_OFFER";
+            server_send_packet(g_listen_sock, peer, 0, PKT_DISCOVERY_OFFER, hdr.seq, offer, 12);
+          } else if (hdr.type == PKT_CLIENT_HELLO) {
             if (rate_limit_check(ip, port)) {
               unsigned long queue_load =
                   g_job_queue.tail - g_job_queue.head;

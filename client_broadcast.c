@@ -383,10 +383,24 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, on_signal);
   signal(SIGPIPE, SIG_IGN);
 
-  const char *server_ip = (argc > 1) ? argv[1] : SERVER_ADDR;
+  char server_ip[64] = "";
+  const char *target = (argc > 1 && strcmp(argv[1], "auto") != 0) ? argv[1] : NULL;
   int interval_ms = (argc > 2) ? atoi(argv[2]) : 500;
   if (interval_ms < 10) interval_ms = 10;
   const char *device_id = (argc > 3) ? argv[3] : "ESP32-NODE-01";
+
+  int sock = make_client_sock();
+  if (sock < 0) return 1;
+
+  conn_t c;
+  conn_init(&c, sock);
+  c.peer_len = sizeof(c.peer);
+  if (resolve_server_address(target, &c.peer, server_ip, sizeof(server_ip)) != 0) {
+    fprintf(stderr, "[broadcast] Error: Unable to resolve server address '%s'\n", target ? target : "auto");
+    close(sock);
+    return 1;
+  }
+  printf("  Server target : %s:%d\n", server_ip, SERVER_PORT);
 
   /* Serial KEM + DSA Key Generation */
   kem_warmup();
@@ -396,6 +410,7 @@ int main(int argc, char *argv[]) {
   double t0 = now_ms();
   if (kem_keypair(g_keys.kem_pk, g_keys.kem_sk) != 0) {
     fprintf(stderr, "[broadcast] KEM keygen failed\n");
+    close(sock);
     return 1;
   }
   g_keys.kem_keygen_ms = now_ms() - t0;
@@ -403,22 +418,10 @@ int main(int argc, char *argv[]) {
   t0 = now_ms();
   if (dsa_keypair(g_keys.dsa_pk, g_keys.dsa_sk) != 0) {
     fprintf(stderr, "[broadcast] DSA keygen failed\n");
+    close(sock);
     return 1;
   }
   g_keys.dsa_keygen_ms = now_ms() - t0;
-
-  int sock = make_client_sock();
-  if (sock < 0) return 1;
-
-  conn_t c;
-  conn_init(&c, sock);
-  c.peer_len = sizeof(c.peer);
-  c.peer.sin_family = AF_INET;
-  c.peer.sin_port   = htons(SERVER_PORT);
-  if (inet_pton(AF_INET, server_ip, &c.peer.sin_addr) != 1) {
-    fprintf(stderr, "Invalid server address: %s\n", server_ip);
-    return 1;
-  }
 
   /* Serial Handshake */
   metrics_t metrics = {0};

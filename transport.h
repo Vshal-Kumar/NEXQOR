@@ -41,21 +41,31 @@
 
 #include "crypto/replay_window.h"
 
-/* ── Endpoint ────────────────────────────────────────────────────── */
+/* ── Timing ──────────────────────────────────────────────────────── */
+double   now_ms(void);
+uint64_t now_ns(void);
+void     now_hms(char *buf, int sz);
+
+/* ── Endpoint & Dynamic Discovery ───────────────────────────────── */
 #define SERVER_PORT 9877
-#define SERVER_ADDR "192.168.137.168"
+#define DEFAULT_SERVER_ADDR "127.0.0.1"
+#define SERVER_DISCOVERY_FILE "server_endpoint.info"
+#define SERVER_DISCOVERY_SYS_FILE "/tmp/nexqor_server.ip"
+#define ENV_SERVER_IP "PQC_SERVER_IP"
 
 /* ── Packet types ────────────────────────────────────────────────── */
-#define PKT_CLIENT_HELLO 0x01
-#define PKT_SERVER_HELLO 0x02
-#define PKT_CLIENT_AUTH  0x03
-#define PKT_FRAG         0x05
-#define PKT_DATA         0x10
-#define PKT_ACK          0x11
-#define PKT_PING         0x12
-#define PKT_PONG         0x13
-#define PKT_BUSY         0x14
-#define PKT_DISCONNECT   0x15
+#define PKT_CLIENT_HELLO     0x01
+#define PKT_SERVER_HELLO     0x02
+#define PKT_CLIENT_AUTH      0x03
+#define PKT_FRAG             0x05
+#define PKT_DATA             0x10
+#define PKT_ACK              0x11
+#define PKT_PING             0x12
+#define PKT_PONG             0x13
+#define PKT_BUSY             0x14
+#define PKT_DISCONNECT       0x15
+#define PKT_DISCOVERY_PROBE  0x16
+#define PKT_DISCOVERY_OFFER  0x17
 
 /* ── Sizing ──────────────────────────────────────────────────────── */
 #define DATA_CHUNK_MAX 16384
@@ -207,9 +217,11 @@ ssize_t data_recv(conn_t *c, uint8_t *out, size_t out_max);
 void metrics_print(const metrics_t *m);
 void metrics_update_rtt(metrics_t *m, uint64_t recv_ns);
 
-/* ── Timing ──────────────────────────────────────────────────────── */
-double now_ms(void);
-uint64_t now_ns(void);
-void now_hms(char *buf, int sz);
+/* ── Dynamic Server Resolution & Discovery API ──────────────────── */
+int resolve_server_address(const char *input_target, struct sockaddr_in *out_peer,
+                           char *resolved_ip_str, size_t str_len);
+
+int server_publish_endpoints(char *lan_ip, size_t lan_len,
+                             char *vpn_ip, size_t vpn_len);
 
 #endif /* TRANSPORT_H */
