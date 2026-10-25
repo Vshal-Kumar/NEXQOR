@@ -39,40 +39,60 @@
   } while (0)
 #endif
 
+#include "crypto/replay_window.h"
+
 /* ── Endpoint ────────────────────────────────────────────────────── */
 #define SERVER_PORT 9877
-#define SERVER_ADDR "10.231.121.160"
+#define SERVER_ADDR "127.0.0.1"
 
 /* ── Packet types ────────────────────────────────────────────────── */
 #define PKT_CLIENT_HELLO 0x01
 #define PKT_SERVER_HELLO 0x02
-#define PKT_CLIENT_AUTH 0x03
-#define PKT_DATA 0x10
-#define PKT_ACK 0x11
-#define PKT_PING 0x12
-#define PKT_PONG 0x13
-#define PKT_BUSY 0x14
-#define PKT_DISCONNECT 0x15
+#define PKT_CLIENT_AUTH  0x03
+#define PKT_FRAG         0x05
+#define PKT_DATA         0x10
+#define PKT_ACK          0x11
+#define PKT_PING         0x12
+#define PKT_PONG         0x13
+#define PKT_BUSY         0x14
+#define PKT_DISCONNECT   0x15
 
 /* ── Sizing ──────────────────────────────────────────────────────── */
-#define PKT_HDR_BYTES 7
 #define DATA_CHUNK_MAX 16384
 #define PKT_BUF_MAX 16512
+#define FRAG_PAYLOAD_MAX 1024
 
 /* ── Reliability ─────────────────────────────────────────────────── */
 #define ACK_TIMEOUT_US 1000000
+#define DATA_ACK_TIMEOUT_US 200000 /* 200 ms */
 #define RETX_MAX 10
+#define DATA_RETX_MAX 5
 #define RX_POLL_TIMEOUT_US 10000 /* 10 ms */
 
 /* ── Session ID ──────────────────────────────────────────────────── */
 #define SESSION_ID_BYTES 8
 
-/* ── On-wire header ──────────────────────────────────────────────── */
+/* ── On-wire header (15 bytes canonical) ─────────────────────────── */
 typedef struct __attribute__((packed)) {
   uint32_t seq;
-  uint8_t type;
+  uint8_t  type;
   uint16_t len;
+  uint64_t session_id;
 } pkt_hdr_t;
+
+#define PKT_HDR_BYTES sizeof(pkt_hdr_t)
+
+/* ── Fragmentation header (11 bytes) ─────────────────────────────── */
+typedef struct __attribute__((packed)) {
+  uint16_t msg_id;
+  uint8_t  orig_type;
+  uint8_t  frag_idx;
+  uint8_t  frag_total;
+  uint16_t frag_len;
+  uint32_t total_len;
+} frag_hdr_t;
+
+#define FRAG_HDR_BYTES sizeof(frag_hdr_t)
 
 /* ── Connection state ────────────────────────────────────────────── */
 typedef struct {
@@ -80,13 +100,18 @@ typedef struct {
   struct sockaddr_in peer;
   socklen_t peer_len;
 
-  uint8_t session_key[32];
+  uint8_t tx_key[32];          /* Directional encryption key */
+  uint8_t rx_key[32];          /* Directional decryption key */
   uint32_t tx_seq;
   uint64_t tx_nonce_ctr;
   uint64_t session_id;
 
   int established;
+  replay_window_t replay_win;  /* Sliding replay protection window */
 } conn_t;
+
+void conn_init(conn_t *c, int sock);
+void conn_destroy(conn_t *c);
 
 /* ── Metrics ─────────────────────────────────────────────────────── */
 /*
@@ -143,6 +168,29 @@ int pkt_send_reliable(conn_t *c, uint8_t type, const uint8_t *payload,
                       uint16_t payload_len);
 
 void send_ack(conn_t *c, uint32_t ack_seq);
+
+/* ── Fragmentation & Reassembly API ─────────────────────────────── */
+typedef struct {
+  uint16_t msg_id;
+  uint8_t  orig_type;
+  uint8_t  frag_count;
+  uint8_t  frag_received;
+  uint32_t total_len;
+  uint32_t received_bytes;
+  uint8_t  bitmap[32]; /* Up to 256 fragments */
+  uint8_t *buf;
+  uint64_t start_time_ns;
+  int active;
+} reassembly_ctx_t;
+
+void reassembly_init(reassembly_ctx_t *ctx);
+void reassembly_cleanup(reassembly_ctx_t *ctx);
+int reassembly_feed_frag(reassembly_ctx_t *ctx, const frag_hdr_t *fhdr,
+                         const uint8_t *frag_data);
+
+int pkt_send_fragmented(conn_t *c, uint8_t orig_type, const uint8_t *payload,
+                        uint32_t payload_len, uint16_t max_frag_sz);
+
 
 /* ── Data send / receive ─────────────────────────────────────────── */
 /*

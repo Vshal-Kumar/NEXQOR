@@ -148,83 +148,73 @@ This helps prevent unauthorized parties from successfully impersonating a legiti
 
 The protocol must define precisely which messages are signed and which identity is being authenticated.
 
-### 3.3 Session key derivation using SHAKE256
+### 3.3 Directional Session Key Derivation using SHAKE256
 
-After the key-establishment process, the shared secret must be converted into the cryptographic material required by the communication session.
+After the post-quantum key encapsulation mechanism establishes a 32-byte shared secret, the endpoints derive cryptographically independent traffic keys for each communication direction using **SHAKE256** (NIST FIPS 202).
 
-QRYPTONEX uses **SHAKE256**, standardized in NIST FIPS 202, as part of its session key-derivation design.
+To eliminate the critical vulnerability of bidirectional nonce reuse under ChaCha20-Poly1305, NEXQOR implements strict domain-separated directional key derivation:
 
-A simplified representation is:
-
-\[
-\text{Shared Secret}
-\longrightarrow
-\text{SHAKE256-based KDF}
-\longrightarrow
-\text{Session Cryptographic Material}
-\]
-
-The resulting material can be used to derive the key required by ChaCha20-Poly1305 and other protocol-specific values.
-
-The actual derivation design should specify:
-
-- How the shared secret is processed.
-- How session-specific context is incorporated.
-- How client and server derive matching keys.
-- How different cryptographic purposes receive separate key material.
-- How session nonces or nonce prefixes are constructed.
-- How keys are refreshed or replaced when a session expires.
-
-SHAKE256 is an extendable-output function, not a complete key-management protocol by itself. The surrounding protocol must define the derivation procedure correctly.
-
-### 3.4 Authenticated encryption using ChaCha20-Poly1305
-
-QRYPTONEX uses **ChaCha20-Poly1305**, specified in RFC 8439, to protect telemetry data.
-
-It combines two cryptographic mechanisms:
-
-- **ChaCha20:** Encrypts plaintext to provide confidentiality.
-- **Poly1305:** Generates an authentication tag that enables the receiver to detect unauthorized modifications.
-
-Together, they provide authenticated encryption with associated data, commonly abbreviated as AEAD.
-
-Suppose an IoT device generates this telemetry:
-
-```json
-{
-  "device_id": "sensor_01",
-  "temperature": 27.5,
-  "humidity": 62.0,
-  "sequence": 105
-}
+```
+Shared Secret (ss) || Nonce_c || Nonce_s || Session_ID
+                   │
+                   ├── + "NEXQOR-KDF-C2S" ──> SHAKE256 ──> client_write_key (32 bytes)
+                   └── + "NEXQOR-KDF-S2C" ──> SHAKE256 ──> server_write_key (32 bytes)
 ```
 
-The client constructs the telemetry message, associates it with the appropriate session and sequence information, and encrypts it using ChaCha20-Poly1305.
+- **Client-to-Server Traffic Key (`client_write_key`)**: Used exclusively by the client to encrypt outbound datagrams and by the server to decrypt inbound client datagrams.
+- **Server-to-Client Traffic Key (`server_write_key`)**: Used exclusively by the server to encrypt outbound datagrams and by the client to decrypt inbound server datagrams.
 
-Conceptually:
+Even if transmission counters on both client and server start at zero, encryption keys in opposing directions are completely independent, mathematically guaranteeing that the same (key, nonce) pair is never reused.
+
+### 3.4 Authenticated Encryption using ChaCha20-Poly1305 with Header AAD
+
+QRYPTONEX uses **ChaCha20-Poly1305** (RFC 8439) for authenticated symmetric encryption of all payload data (`PKT_DATA`, `PKT_ACK`).
+
+#### Cryptographic Binding via Associated Authenticated Data (AAD)
+To ensure that packet routing metadata and sequence numbers cannot be forged, manipulated, or spliced by an active adversary, the canonical 15-byte wire header (`pkt_hdr_t`) is passed directly as Associated Authenticated Data (AAD) into ChaCha20-Poly1305:
+
+- Sequence Number (`seq`, 4 bytes, Big-Endian)
+- Packet Type (`type`, 1 byte)
+- Payload Length (`len`, 2 bytes, Big-Endian)
+- Session Identifier (`session_id`, 8 bytes, Big-Endian)
 
 \[
-(C,T)=\operatorname{AEAD\_Encrypt}(K,N,P,A)
+(C,T)=\operatorname{AEAD\_Encrypt}(K_{\text{dir}}, N, P, A)
 \]
 
-Where:
+If an attacker alters the sequence number, packet type, or session ID in transit, the Poly1305 tag verification will fail, and the packet is immediately discarded before decryption or application processing.
 
-- \(K\) is the session encryption key.
-- \(N\) is the nonce.
-- \(P\) is the plaintext telemetry.
-- \(A\) is the associated authenticated data, if used.
-- \(C\) is the ciphertext.
-- \(T\) is the authentication tag.
+#### Nonce Construction & Counter Exhaustion
+The 12-byte ChaCha20 nonce is constructed systematically:
+- Bytes 0–3: Fixed protocol prefix `0x4E585152` (`"NXQR"`)
+- Bytes 4–11: 64-bit monotonically increasing transmission counter (Big-Endian)
 
-The ciphertext and tag are transmitted to the server, together with the necessary protocol metadata.
+Nonce counters are initialized to 1 upon session establishment. To prevent counter wraparound and subsequent nonce reuse under the same traffic key, the system enforces a strict exhaustion boundary: transmission is halted if the counter reaches `0xFFFFFFFFFFFFFF00ULL`.
 
-On reception, the server verifies the authentication tag before accepting the decrypted plaintext.
+### 3.5 Sliding Replay Window Protection (RFC 6479)
 
-If verification fails, the protected message must be rejected.
+To protect against packet replay attacks while tolerating real-world UDP packet reordering, each session maintains a thread-safe 64-packet bitmap sliding replay window:
 
-**Nonce safety is essential:** A nonce must never be reused with the same ChaCha20-Poly1305 key for different encryption operations.
+- **Sequence 0 Prohibition**: Sequence number 0 is strictly forbidden and rejected.
+- **Pre-Authentication Freshness Check**: When a packet arrives, its sequence number is checked against the replay window without modifying state. If it is stale or a duplicate, it is discarded immediately.
+- **Post-Authentication State Commit**: Only after the Poly1305 AEAD tag and header AAD are cryptographically verified is the replay window updated. This prevents unauthenticated attackers from poisoning or advancing the replay window.
+- **Replay Window Update**: If a packet is newer than the highest seen sequence number, the bitmap shifts. If it falls within the current 64-packet window, the corresponding bit is marked.
 
-Authenticated encryption also does not independently prevent replay attacks. Sequence validation and session-state checks are needed for that purpose.
+### 3.6 Pinned Peer Trust Store & Authentication
+
+To prevent Man-in-the-Middle (MitM) attacks and public-key substitution:
+
+- **Server Identity Keypair**: The server maintains a persistent ML-DSA-65 identity keypair (`server_identity.pub` and `server_identity.key`, secured with `0600` POSIX permissions).
+- **Client Server-Key Pinning**: The client verifies the server's public key against a provisioned local trust store (`server_identity.pub`). If the key does not match the pinned server identity, the handshake aborts immediately.
+- **Server Client Verification**: The server verifies that client public keys are syntactically valid (rejecting degenerate all-zero keys) and enrolls authorized clients.
+
+### 3.7 Application-Level UDP Framing & Fragmentation
+
+Post-quantum cryptographic keys and signatures exceed the standard Internet Path MTU (e.g., ML-DSA-65 signature is 3,309 bytes; public key is 1,952 bytes). To prevent IP-level fragmentation drops:
+
+- Handshake messages exceeding the configured datagram threshold (1,200 bytes) are framed using an 11-byte fragmentation header (`frag_hdr_t`).
+- Fragments include message ID, total fragments, fragment index, and payload length.
+- The receiver maintains bounded, timed reassembly contexts that handle duplicate, missing, and out-of-order fragments safely.
 
 ---
 
@@ -902,13 +892,21 @@ The server process decouples core packet processing from operator interaction vi
 ```
 .
 ├── crypto/
-│   ├── aead.c                      # ChaCha20-Poly1305 AEAD implementation (OpenSSL EVP)
-│   └── aead.h                      # AEAD interface definitions and buffer limits
+│   ├── aead.c                      # ChaCha20-Poly1305 AEAD with AAD header binding (RFC 8439)
+│   ├── aead.h                      # AEAD interface definitions and buffer limits
+│   ├── replay_window.c             # Thread-safe 64-packet bitmap sliding replay window (RFC 6479)
+│   ├── replay_window.h             # Replay window definitions and prototypes
+│   ├── trust_store.c               # Pinned peer identity key store and verification
+│   └── trust_store.h               # Trust store definitions and prototypes
 ├── wrappers/
-│   ├── kem_wrapper.c               # ML-KEM-768 C API wrappers over liboqs
+│   ├── kem_wrapper.c               # ML-KEM-768 wrappers & directional SHAKE256 KDF
 │   ├── kem_wrapper.h               # KEM constant definitions and prototypes
 │   ├── dsa_wrapper.c               # ML-DSA-65 C API wrappers over liboqs
 │   └── dsa_wrapper.h               # DSA constant definitions and prototypes
+├── tests/
+│   └── test_suite.c                # 8-suite automated cryptographic and protocol regression test
+├── .github/
+│   └── workflows/ci.yml            # Automated CI workflow for build, test, and cross-checks
 ├── verification/
 │   ├── protocol.pv                 # Formal security model in Applied Pi-Calculus
 │   └── README.md                   # ProVerif execution guide and proof breakdown
@@ -926,13 +924,13 @@ The server process decouples core packet processing from operator interaction vi
 ├── server.c                        # High-throughput asynchronous io_uring multi-client server
 ├── server_rx.c                     # Decoupled server receiver console interface
 ├── server_tx.c                     # Decoupled server transmitter console interface
-├── transport.c / .h                # Reliable packet framing, CRC, and telemetry transport
+├── transport.c / .h                # Reliable packet framing, AAD AEAD, ACKs, reassembly
 ├── ipc.h                           # IPC frame headers and command codes
 ├── bench_pqc.c                     # Standalone cryptographic primitives microbenchmark
 ├── bench_nclient.c                 # Multi-threaded concurrent client stress-test harness
 ├── bench_aead.c                    # AEAD buffer benchmark & file encryption/decryption tool
-├── Makefile                        # Build system for x86_64 host
-├── Makefile.arm64                  # Build system for ARM64 (Native & Cross)
+├── Makefile                        # Build system for x86_64 host (includes `make test`)
+├── Makefile.arm64                  # Build system for ARM64 (Native & Cross with configurable sysroot)
 ├── Makefile.arm32                  # Build system for ARM32 (Native & Cross)
 ├── run.sh                          # Automated 3-window terminal launcher for server
 ├── commands.md                     # Detailed command reference and execution cheatsheet
@@ -1103,6 +1101,7 @@ make all -j$(nproc)
 
 #### B. Build for ARM64 / AArch64 (Raspberry Pi 4/5 64-bit)
 - **Native Build on Pi**: `make -f Makefile.arm64 all -j2`
+- **Verify Cross-Dependencies on x86_64**: `make -f Makefile.arm64 check-cross-deps`
 - **Cross-Compilation from x86_64**: `make -f Makefile.arm64 all -j$(nproc)`
 *Binaries generated*: `client_arm`, `bench_pqc_arm`, `bench_nclient_arm`.
 
@@ -1110,6 +1109,35 @@ make all -j$(nproc)
 - **Native Build on Pi**: `make -f Makefile.arm32 all -j2`
 - **Cross-Compilation from x86_64**: `make -f Makefile.arm32 all -j$(nproc)`
 *Binaries generated*: `client_arm32`, `bench_pqc_arm32`, `bench_nclient_arm32`.
+
+---
+
+### Step 4: Running the Automated Security Test Suite
+
+The repository includes a comprehensive 8-suite regression and security-negative test harness verifying the post-quantum cryptographic primitives, directional KDF, sliding replay window, AEAD AAD header tamper rejection, peer identity trust store, packet fragmentation reassembly, and multi-session isolation:
+
+```bash
+make test
+```
+
+Expected output:
+```text
+========================================================================
+             NEXQOR / QRYPTONEX AUTOMATED TEST SUITE                    
+========================================================================
+[TEST 01] test_kem_agreement_and_negative ...       ✓ PASSED
+[TEST 02] test_dsa_signature_and_tampering ...      ✓ PASSED
+[TEST 03] test_kdf_directional_separation ...       ✓ PASSED
+[TEST 04] test_aead_aad_header_authentication ...   ✓ PASSED
+[TEST 05] test_sliding_replay_window ...            ✓ PASSED
+[TEST 06] test_trust_store_peer_authentication ...  ✓ PASSED
+[TEST 07] test_packet_framing_and_reassembly ...    ✓ PASSED
+[TEST 08] test_session_isolation_and_keys ...       ✓ PASSED
+========================================================================
+Test Summary: 8 passed, 0 failed (Total: 8)
+ALL SUITES PASSED!
+========================================================================
+```
 
 ---
 

@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include "crypto/aead.h"
+#include "crypto/trust_store.h"
 #include "transport.h"
 #include "wrappers/dsa_wrapper.h"
 #include "wrappers/kem_wrapper.h"
@@ -300,13 +301,12 @@ static void *client_thread(void *arg) {
     return NULL;
   }
 
-  conn_t c = {0};
-  c.sock = sock;
+  conn_t c;
+  conn_init(&c, sock);
   c.peer_len = sizeof(c.peer);
   c.peer.sin_family = AF_INET;
   c.peer.sin_port = htons(SERVER_PORT);
   inet_pton(AF_INET, g_server_ip, &c.peer.sin_addr);
-  c.tx_seq = 1;
 
   /* fcntl(sock, F_SETFL, O_NONBLOCK); */
 
@@ -368,6 +368,10 @@ static void *client_thread(void *arg) {
     size_t off = 0;
     memcpy(srv_dsa_pk, srv_hello + off, DSA_PK_BYTES);
     off += DSA_PK_BYTES;
+
+    if (trust_store_client_verify_server(srv_dsa_pk, "server_identity.pub") != 0) {
+      goto fail;
+    }
     memcpy(kem_ct, srv_hello + off, KEM_CT_BYTES);
     off += KEM_CT_BYTES;
     memcpy(session_id, srv_hello + off, SESSION_ID_BYTES);
@@ -427,11 +431,8 @@ static void *client_thread(void *arg) {
     }
     c.session_id = sid64;
 
-    /* Derive key using KDF bound to nonces and session ID */
-    uint8_t derived_key[DERIVED_KEY_BYTES];
-    kem_derive_key(derived_key, shared_secret, c_nonce, s_nonce, sid64);
-    memcpy(c.session_key, derived_key, 32);
-    explicit_bzero(derived_key, sizeof(derived_key));
+    /* Derive distinct directional keys: client_write_key (tx_key) and server_write_key (rx_key) */
+    kem_derive_directional_keys(c.tx_key, c.rx_key, shared_secret, c_nonce, s_nonce, sid64);
     explicit_bzero(shared_secret, sizeof(shared_secret));
 
     /* Construct Client Handshake Transcript */
@@ -509,8 +510,15 @@ static void *client_thread(void *arg) {
           int ct_len = (int)rx_n - 28;
           if (ct_len > 0 && ct_len <= DATA_CHUNK_MAX) {
             uint8_t rx_pt[DATA_CHUNK_MAX];
+            pkt_hdr_t wire_hdr;
+            wire_hdr.seq = htonl(rx_hdr.seq);
+            wire_hdr.type = rx_hdr.type;
+            wire_hdr.len = htons(rx_hdr.len);
+            wire_hdr.session_id = htobe64(rx_hdr.session_id);
+
             int rx_pt_len =
-                aead_decrypt(ct, ct_len, c.session_key, nonce, tag, rx_pt);
+                aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                             c.rx_key, nonce, tag, rx_pt);
             if (rx_pt_len >= 0) {
               uint64_t t_recv = ns_now();
               double rtt_ms = (double)(t_recv - t_send) / 1e6;
@@ -541,9 +549,9 @@ static void *client_thread(void *arg) {
 
   pkt_send(&c, PKT_DISCONNECT, NULL, 0);
   close(sock);
+  conn_destroy(&c);
   explicit_bzero(kem_sk, sizeof(kem_sk));
   explicit_bzero(dsa_sk, sizeof(dsa_sk));
-  explicit_bzero(c.session_key, sizeof(c.session_key));
   return NULL;
 
 fail:
@@ -551,6 +559,7 @@ fail:
   r->hs_total_us = (double)(r->end_ns - r->start_ns) / 1000.0;
   pkt_send(&c, PKT_DISCONNECT, NULL, 0);
   close(sock);
+  conn_destroy(&c);
   explicit_bzero(kem_sk, sizeof(kem_sk));
   explicit_bzero(dsa_sk, sizeof(dsa_sk));
   return NULL;

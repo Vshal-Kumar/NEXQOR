@@ -38,12 +38,13 @@
 
 /*
  * aead_encrypt()
- *   Encrypts plaintext[0..plaintext_len) with key/nonce.
+ *   Encrypts plaintext[0..plaintext_len) with key/nonce and authenticates aad[0..aad_len).
  *   Writes ciphertext to *ciphertext (caller allocates >= plaintext_len).
  *   Writes 16-byte tag to *tag.
  *   Returns ciphertext length (== plaintext_len) or -1 on error.
  */
 int aead_encrypt(const uint8_t *plaintext,   int plaintext_len,
+                 const uint8_t *aad,         int aad_len,
                  const uint8_t *key,
                  const uint8_t *nonce,
                  uint8_t       *ciphertext,
@@ -51,9 +52,11 @@ int aead_encrypt(const uint8_t *plaintext,   int plaintext_len,
 
 /*
  * aead_decrypt()
- *   Returns plaintext length or -1 on authentication failure.
+ *   Verifies tag and aad[0..aad_len), decrypts ciphertext to *plaintext.
+ *   Returns plaintext length or -1 on authentication failure / bad input.
  */
 int aead_decrypt(const uint8_t *ciphertext,  int ciphertext_len,
+                 const uint8_t *aad,         int aad_len,
                  const uint8_t *key,
                  const uint8_t *nonce,
                  const uint8_t *tag,

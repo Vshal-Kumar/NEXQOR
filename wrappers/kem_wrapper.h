@@ -29,9 +29,10 @@
 
 /*
  * Derived key: SHAKE-256 stretch of the 32-byte shared secret.
- * Both sides call kem_derive_key() → same output.
+ * Both sides call kem_derive_key() or kem_derive_directional_keys().
  */
 #define DERIVED_KEY_BYTES 64
+#define TRAFFIC_KEY_BYTES 32
 
 /*
  * kem_keypair() — generate a ML-KEM-768 key pair.
@@ -59,13 +60,26 @@ int kem_dec(uint8_t ss[KEM_SS_BYTES],
             const uint8_t sk[KEM_SK_BYTES]);
 
 /*
- * kem_derive_key() — SHAKE-256("KEM-DERIVE" || ss) → DERIVED_KEY_BYTES.
+ * kem_derive_key() — SHAKE-256 stretch producing 64 bytes.
  */
 void kem_derive_key(uint8_t out[DERIVED_KEY_BYTES],
                     const uint8_t ss[KEM_SS_BYTES],
                     const uint8_t c_nonce[16],
                     const uint8_t s_nonce[16],
                     uint64_t session_id);
+
+/*
+ * kem_derive_directional_keys() — Domain-separated SHAKE-256 KDF:
+ * Derives distinct 32-byte client_write_key and server_write_key:
+ *   client_write_key: used for Client -> Server encrypted traffic
+ *   server_write_key: used for Server -> Client encrypted traffic
+ */
+void kem_derive_directional_keys(uint8_t client_write_key[TRAFFIC_KEY_BYTES],
+                                uint8_t server_write_key[TRAFFIC_KEY_BYTES],
+                                const uint8_t ss[KEM_SS_BYTES],
+                                const uint8_t c_nonce[16],
+                                const uint8_t s_nonce[16],
+                                uint64_t session_id);
 
 /*
  * kem_warmup() — one-time process startup call.

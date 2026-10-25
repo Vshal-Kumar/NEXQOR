@@ -72,12 +72,16 @@ The model in `protocol.pv` represents the exact cryptographic construction imple
     Modelled using signature generation `dsa_sign(msg, sk)` and verification `dsa_verify(msg, sig, pk)` which reduces to `true` when the signature is valid.
 *   **Transcript Binding & Hash (SHAKE-256)**:
     Modelled using a one-way function `shake256(bitstring)`. We use two constructor-based concatenation helper functions (`concat7` and `concat2`) to represent the exact layout of the server transcript and client transcript respectively.
-*   **ChaCha20-Poly1305 (AEAD)**:
-    Symmetric encryption is modelled as `aead_encrypt(msg, key, nonce)`. Integrity protection is captured by the destructor `aead_decrypt(ct, key, nonce)` which only reduces to the plaintext if the correct key and nonce are supplied.
+*   **Directional Session Keys**:
+    Modelled using domain-separated KDF functions: `kem_derive_c2s_key` and `kem_derive_s2c_key`, proving independent traffic secrecy for each communication direction.
+*   **ChaCha20-Poly1305 with Associated Data (AEAD + AAD)**:
+    Symmetric encryption is modelled as `aead_encrypt(msg, key, nonce, aad)`. Integrity and header binding protection are captured by the destructor `aead_decrypt(ct, key, nonce, aad)` which only reduces to the plaintext if the correct directional key, nonce, and wire header AAD (`make_aad(seq, type, session_id)`) match.
+*   **Peer Identity Pinning (Trust Store)**:
+    The client pins the genuine server identity `dsa_pk(s_dsa_sk)`, preventing untrusted public-key substitution and man-in-the-middle attacks.
 *   **Perfect Forward Secrecy (PFS)**:
     We use **ProVerif Phases** to prove PFS:
     - **Phase 0**: The client and server run multiple honest sessions, exchanging ephemeral keys, completing the handshake, deriving keys, and exchanging encrypted payloads (`client_data` and `server_data`).
-    - **Phase 1**: The long-term signing key `s_dsa_sk` is compromised and outputted to the public network.
+    - **Phase 1**: The long-term signing keys `s_dsa_sk` and `c_dsa_sk` are compromised and outputted to the public network.
     - ProVerif verifies if the attacker can retrieve `client_data` or `server_data` from Phase 0. Ephemeral keys are not leaked, verifying that key derivation holds forward secrecy.
 
 ---

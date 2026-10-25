@@ -222,7 +222,7 @@ static void bench_aead_size(int size, int rounds, double *enc_us_out,
 
   for (int i = 0; i < rounds; i++) {
     uint64_t t0 = ns_now();
-    int ct_len = aead_encrypt(pt, size, key, nonce, ct, tag);
+    int ct_len = aead_encrypt(pt, size, NULL, 0, key, nonce, ct, tag);
     enc_sum += (ns_now() - t0);
 
     if (ct_len < 0) {
@@ -231,7 +231,7 @@ static void bench_aead_size(int size, int rounds, double *enc_us_out,
     }
 
     t0 = ns_now();
-    int pt_len = aead_decrypt(ct, ct_len, key, nonce, tag, rt);
+    int pt_len = aead_decrypt(ct, ct_len, NULL, 0, key, nonce, tag, rt);
     dec_sum += (ns_now() - t0);
 
     if (pt_len < 0) {

@@ -102,8 +102,9 @@ static void sha3_256_hex(const char *label, const uint8_t *data, size_t len)
 #  define sha3_256_hex(l, d, n)  ((void)0)
 #endif
 
-/* ── Standard (copy-based) encrypt ─────────────────────────────── */
+/* ── Standard (copy-based) encrypt with AAD ─────────────────────── */
 int aead_encrypt(const uint8_t *plaintext,   int plaintext_len,
+                 const uint8_t *aad,         int aad_len,
                  const uint8_t *key,
                  const uint8_t *nonce,
                  uint8_t       *ciphertext,
@@ -123,21 +124,28 @@ int aead_encrypt(const uint8_t *plaintext,   int plaintext_len,
      *         re-fetching the cipher object.
      */
     const EVP_CIPHER *cipher = *init_flag ? NULL : EVP_chacha20_poly1305();
-    EVP_EncryptInit_ex(ctx, cipher, NULL, key, nonce);
+    if (EVP_EncryptInit_ex(ctx, cipher, NULL, key, nonce) != 1) return -1;
     *init_flag = 1;
 
-    EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len);
+    /* Pass Associated Data (AAD) if present */
+    if (aad && aad_len > 0) {
+        int dummy_len = 0;
+        if (EVP_EncryptUpdate(ctx, NULL, &dummy_len, aad, aad_len) != 1) return -1;
+    }
+
+    if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len) != 1) return -1;
     ct_len = len;
-    EVP_EncryptFinal_ex(ctx, ciphertext + len, &len);
+    if (EVP_EncryptFinal_ex(ctx, ciphertext + len, &len) != 1) return -1;
     ct_len += len;
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, AEAD_TAG_BYTES, tag);
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, AEAD_TAG_BYTES, tag) != 1) return -1;
 
     sha3_256_hex("ct", ciphertext, (size_t)ct_len);
     return ct_len;
 }
 
-/* ── Standard (copy-based) decrypt ─────────────────────────────── */
+/* ── Standard (copy-based) decrypt with AAD ─────────────────────── */
 int aead_decrypt(const uint8_t *ciphertext,  int ciphertext_len,
+                 const uint8_t *aad,         int aad_len,
                  const uint8_t *key,
                  const uint8_t *nonce,
                  const uint8_t *tag,
@@ -153,13 +161,18 @@ int aead_decrypt(const uint8_t *ciphertext,  int ciphertext_len,
 
     /* [OPT-2] Same pattern as encrypt — NULL cipher on reuse */
     const EVP_CIPHER *cipher = *init_flag ? NULL : EVP_chacha20_poly1305();
-    EVP_DecryptInit_ex(ctx, cipher, NULL, key, nonce);
+    if (EVP_DecryptInit_ex(ctx, cipher, NULL, key, nonce) != 1) return -1;
     *init_flag = 1;
 
-    EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len);
+    /* Pass Associated Data (AAD) if present */
+    if (aad && aad_len > 0) {
+        int dummy_len = 0;
+        if (EVP_DecryptUpdate(ctx, NULL, &dummy_len, aad, aad_len) != 1) return -1;
+    }
+
+    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len) != 1) return -1;
     pt_len = len;
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG,
-                         AEAD_TAG_BYTES, (void *)tag);
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, AEAD_TAG_BYTES, (void *)tag) != 1) return -1;
 
     if (EVP_DecryptFinal_ex(ctx, plaintext + len, &len) <= 0)
         return -1;
@@ -186,14 +199,14 @@ int aead_encrypt_packet(const uint8_t *key,
 
     int len = 0, ct_len = 0;
     const EVP_CIPHER *cipher = *init_flag ? NULL : EVP_chacha20_poly1305();
-    EVP_EncryptInit_ex(ctx, cipher, NULL, key, nonce);
+    if (EVP_EncryptInit_ex(ctx, cipher, NULL, key, nonce) != 1) return -1;
     *init_flag = 1;
 
-    EVP_EncryptUpdate(ctx, ct, &len, pt, pt_len);
+    if (EVP_EncryptUpdate(ctx, ct, &len, pt, pt_len) != 1) return -1;
     ct_len = len;
-    EVP_EncryptFinal_ex(ctx, ct + len, &len);
+    if (EVP_EncryptFinal_ex(ctx, ct + len, &len) != 1) return -1;
     ct_len += len;
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, AEAD_TAG_BYTES, tag);
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, AEAD_TAG_BYTES, tag) != 1) return -1;
 
     return AEAD_PACKET_OVERHEAD + ct_len;
 }
@@ -210,5 +223,5 @@ int aead_decrypt_packet(const uint8_t *key,
     const uint8_t *ct    = pkt + AEAD_NONCE_BYTES + AEAD_TAG_BYTES;
     int ct_len = pkt_len - AEAD_PACKET_OVERHEAD;
 
-    return aead_decrypt(ct, ct_len, key, nonce, tag, pt);
+    return aead_decrypt(ct, ct_len, NULL, 0, key, nonce, tag, pt);
 }

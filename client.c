@@ -36,6 +36,7 @@
 
 #include "transport.h"
 #include "crypto/aead.h"
+#include "crypto/trust_store.h"
 #include "wrappers/kem_wrapper.h"
 #include "wrappers/dsa_wrapper.h"
 
@@ -145,12 +146,17 @@ static void *rx_thread(void *arg)
             printf("\n\033[1;31m[client] Server disconnected/shut down.\033[0m\n");
             metrics_print(a->metrics);
             close(a->conn->sock);
-            explicit_bzero(a->conn->session_key, sizeof(a->conn->session_key));
+            conn_destroy(a->conn);
             printf("[client] Exit.\n");
             exit(0);
         }
         if (hdr.type != PKT_DATA) continue;
         if (n < 28) continue;    /* need at least NONCE+TAG */
+
+        /* Replay window pre-auth check */
+        if (replay_window_check(&a->conn->replay_win, hdr.seq) != 0) {
+            continue;
+        }
 
         uint64_t recv_ns = now_ns();
 
@@ -160,16 +166,27 @@ static void *rx_thread(void *arg)
         int ct_len = (int)n - 28;
         if (ct_len <= 0) continue;
 
+        /* Construct canonical wire header as AAD */
+        pkt_hdr_t wire_hdr;
+        wire_hdr.seq = htonl(hdr.seq);
+        wire_hdr.type = hdr.type;
+        wire_hdr.len = htons(hdr.len);
+        wire_hdr.session_id = htobe64(hdr.session_id);
+
         /* Measure decrypt cost locally */
         double dec_t0  = now_ms();
-        int pt_len = aead_decrypt(ct, ct_len, a->conn->session_key,
-                                  nonce, tag, pt);
+        int pt_len = aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                                  a->conn->rx_key, nonce, tag, pt);
         double dec_us  = (now_ms() - dec_t0) * 1000.0;
 
         if (pt_len <= 0) {
-            fprintf(stderr, "\r[rx] AEAD auth failure\n");
+            fprintf(stderr, "\r[rx] AEAD auth failure (tampered ciphertext or header AAD)\n");
             continue;
         }
+
+        /* Post-auth replay commit and ACK */
+        replay_window_update(&a->conn->replay_win, hdr.seq);
+        send_ack(a->conn, hdr.seq);
 
         if (pt_len < (int)sizeof(pt)) pt[pt_len] = '\0';
         while (pt_len > 0 && (pt[pt_len-1] == '\n' || pt[pt_len-1] == '\r'))
@@ -254,6 +271,12 @@ static int do_handshake(conn_t *c, metrics_t *m,
     }
     printf("  SERVER_HELLO received (%zu bytes)\n", (size_t)srv_len);
 
+    /* Verify server identity against trust store (pins server DSA public key) */
+    if (trust_store_client_verify_server(srv_dsa_pk, "server_identity.pub") != 0) {
+        fprintf(stderr, "\033[1;31m[client] CRITICAL: Server public key NOT trusted! Possible MITM attack.\033[0m\n");
+        return -1;
+    }
+
     /* Reconstruct and verify server signature */
     size_t tx_len = 16 + 16 + SESSION_ID_BYTES + KEM_PK_BYTES + DSA_PK_BYTES + DSA_PK_BYTES + KEM_CT_BYTES;
     uint8_t *tx = malloc(tx_len);
@@ -294,11 +317,8 @@ static int do_handshake(conn_t *c, metrics_t *m,
     uint64_t sid64 = 0;
     for (int i = 0; i < SESSION_ID_BYTES; i++) sid64 = (sid64 << 8) | session_id[i];
 
-    /* Derive key using KDF bound to nonces and session ID */
-    uint8_t derived_key[DERIVED_KEY_BYTES];
-    kem_derive_key(derived_key, shared_secret, c_nonce, s_nonce, sid64);
-    memcpy(shared_secret, derived_key, KEM_SS_BYTES);
-    explicit_bzero(derived_key, sizeof(derived_key));
+    /* Derive distinct directional keys: client_write_key (tx_key) and server_write_key (rx_key) */
+    kem_derive_directional_keys(c->tx_key, c->rx_key, shared_secret, c_nonce, s_nonce, sid64);
 
     /* DSA sign client transcript */
     size_t cl_tx_len = tx_len + DSA_SIG_BYTES;
@@ -338,7 +358,6 @@ static int do_handshake(conn_t *c, metrics_t *m,
     printf("  CLIENT_AUTH sent\n");
 
     /* Phase 4: session active */
-    memcpy(c->session_key, shared_secret, KEM_SS_BYTES);
     c->established = 1;
     explicit_bzero(shared_secret, sizeof(shared_secret));
     explicit_bzero(sig, sizeof(sig));
@@ -392,15 +411,14 @@ int main(int argc, char *argv[])
     int sock = make_client_sock();
     if (sock < 0) return 1;
 
-    conn_t c = {0};
-    c.sock     = sock;
+    conn_t c;
+    conn_init(&c, sock);
     c.peer_len = sizeof(c.peer);
     c.peer.sin_family = AF_INET;
     c.peer.sin_port   = htons(SERVER_PORT);
     if (inet_pton(AF_INET, server_ip, &c.peer.sin_addr) != 1) {
         fprintf(stderr, "Invalid server address: %s\n", server_ip); return 1;
     }
-    c.tx_seq = 1;
 
     pthread_join(kem_tid, NULL);
     pthread_join(dsa_tid, NULL);
@@ -471,7 +489,7 @@ int main(int argc, char *argv[])
 
     pkt_send(&c, PKT_DISCONNECT, NULL, 0);
     close(sock);
-    explicit_bzero(c.session_key, sizeof(c.session_key));
+    conn_destroy(&c);
     printf("[client] Exit.\n");
     return 0;
 }

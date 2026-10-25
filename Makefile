@@ -37,8 +37,25 @@ LIBOQS  = liboqs/build
 
 LIBURING_LOCAL = liburing_local
 
-INC     = -I. -I$(LIBOQS)/include -I$(LIBURING_LOCAL)/include
-LIBS    = $(LIBOQS)/lib/liboqs.a $(LIBURING_LOCAL)/lib/liburing.a -lssl -lcrypto -lpthread -lm
+# Auto-detect local static libs or system installed libraries
+ifneq ($(wildcard $(LIBOQS)/lib/liboqs.a),)
+  INC_OQS = -I$(LIBOQS)/include
+  LIB_OQS = $(LIBOQS)/lib/liboqs.a
+else
+  INC_OQS = -I/usr/local/include
+  LIB_OQS = -loqs
+endif
+
+ifneq ($(wildcard $(LIBURING_LOCAL)/lib/liburing.a),)
+  INC_URING = -I$(LIBURING_LOCAL)/include
+  LIB_URING = $(LIBURING_LOCAL)/lib/liburing.a
+else
+  INC_URING = -I$(LIBURING_LOCAL)/include
+  LIB_URING = /usr/lib/x86_64-linux-gnu/liburing.so.2
+endif
+
+INC     = -I. $(INC_OQS) $(INC_URING)
+LIBS    = $(LIB_OQS) $(LIB_URING) -lssl -lcrypto -lpthread -lm
 
 # ── Compiler flags ───────────────────────────────────────────────
 OPT     = -O3 -march=native -mtune=native -funroll-loops \
@@ -64,16 +81,22 @@ wrappers/kem_wrapper.o: wrappers/kem_wrapper.c wrappers/kem_wrapper.h
 wrappers/dsa_wrapper.o: wrappers/dsa_wrapper.c wrappers/dsa_wrapper.h
 	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
 
+crypto/replay_window.o: crypto/replay_window.c crypto/replay_window.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
+crypto/trust_store.o: crypto/trust_store.c crypto/trust_store.h wrappers/dsa_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+
 client_registry.o: client_registry.c client_registry.h transport.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # ── Object groups ────────────────────────────────────────────────
-SHARED_OBJS = transport.o crypto/aead.o \
+SHARED_OBJS = transport.o crypto/aead.o crypto/replay_window.o crypto/trust_store.o \
               wrappers/kem_wrapper.o wrappers/dsa_wrapper.o
 
 SERVER_OBJS = $(SHARED_OBJS) client_registry.o
 
-.PHONY: all server server_rx server_tx client bench_pqc bench_nclient bench_aead clean \
+.PHONY: all server server_rx server_tx client bench_pqc bench_nclient bench_aead test clean \
         run-server run-rx run-tx run-bench run-nclient run-aead
 
 all: server server_rx server_tx client bench_pqc bench_nclient bench_aead
@@ -89,12 +112,12 @@ client: client.c $(SHARED_OBJS)
 	@echo "Built: client (x86_64) — interactive terminal"
 
 # ── Receiver terminal ────────────────────────────────────────────
-server_rx: server_rx.c transport.o crypto/aead.o
+server_rx: server_rx.c transport.o crypto/aead.o crypto/replay_window.o
 	$(CC) $(CFLAGS) -o $@ $^ -lssl -lcrypto -lpthread -lm $(LDFLAGS)
 	@echo "Built: server_rx (receiver terminal)"
 
 # ── Sender terminal ──────────────────────────────────────────────
-server_tx: server_tx.c transport.o crypto/aead.o
+server_tx: server_tx.c transport.o crypto/aead.o crypto/replay_window.o
 	$(CC) $(CFLAGS) -o $@ $^ -lssl -lcrypto -lpthread -lm $(LDFLAGS)
 	@echo "Built: server_tx (sender terminal)"
 
@@ -132,9 +155,18 @@ run-nclient: bench_nclient
 run-aead: bench_aead
 	./bench_aead
 
+# ── Test Suite ───────────────────────────────────────────────────
+tests/test_suite: tests/test_suite.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
+	@echo "Built: tests/test_suite"
+
+test: tests/test_suite
+	@echo "=== Running NEXQOR Automated Security and Unit Test Suite ==="
+	./tests/test_suite
+
 # ── Clean ────────────────────────────────────────────────────────
 clean:
-	rm -f server server_rx server_tx client bench_pqc bench_nclient bench_aead \
+	rm -f server server_rx server_tx client bench_pqc bench_nclient bench_aead tests/test_suite \
 	      transport.o client_registry.o \
-	      crypto/aead.o \
+	      crypto/aead.o crypto/replay_window.o crypto/trust_store.o \
 	      wrappers/kem_wrapper.o wrappers/dsa_wrapper.o

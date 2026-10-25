@@ -1,23 +1,37 @@
-# Makefile.arm64 — PQC Client Benchmarks Cross-Compilation [AArch64]
+# Makefile.arm64 — PQC Client Cross-Compilation & Native ARM64 Build [AArch64]
 #
-# Target architecture: ARM64 / AArch64 with NEON
-# Toolchain:           aarch64-linux-gnu-gcc
+# Target: ARM64 (AArch64) with NEON SIMD
+# Supported workflows:
+#   1. Native build on ARM64 hardware (e.g. Raspberry Pi 4/5):
+#        make -f Makefile.arm64 all
+#   2. Cross-compilation from x86_64 host:
+#        make -f Makefile.arm64 all [ARM64_SYSROOT=/path/to/sysroot] [ARM64_LIBOQS=/path/to/liboqs]
 
 HOST_ARCH := $(shell uname -m)
 
 ifeq ($(HOST_ARCH),aarch64)
-  # Native compilation on ARM64 Raspberry Pi
-  CC      = gcc
-  LIBOQS  = liboqs/build
-  INC     = -I. -I$(LIBOQS)/include
-  LIBS    = $(LIBOQS)/lib/liboqs.a -lssl -lcrypto -lpthread -lm
+  # Native compilation on ARM64 Linux
+  CC      ?= gcc
+  LIBOQS  ?= liboqs/build
+  INC     ?= -I. -I$(LIBOQS)/include
+  LIBS    ?= $(LIBOQS)/lib/liboqs.a -lssl -lcrypto -lpthread -lm
 else
   # Cross-compilation on x86_64 host
-  CC      = aarch64-linux-gnu-gcc
-  LIBOQS  = arm64_ref/liboqs/build_aarch64_simd
-  OPENSSL_ARM = arm64_ref/openssl_arm64/usr/lib/aarch64-linux-gnu
-  INC     = -I. -I$(LIBOQS)/include -Iarm64_ref/openssl_arm64/usr/include -Iarm64_ref/openssl_arm64/usr/include/aarch64-linux-gnu
-  LIBS    = $(LIBOQS)/lib/liboqs.a $(OPENSSL_ARM)/libssl.a $(OPENSSL_ARM)/libcrypto.a -lpthread -lm
+  CROSS_COMPILE ?= aarch64-linux-gnu-
+  CC            := $(CROSS_COMPILE)gcc
+  
+  ARM64_SYSROOT ?=
+  ARM64_LIBOQS  ?= liboqs/build_arm64
+  ARM64_OPENSSL ?=
+  
+  ifneq ($(ARM64_SYSROOT),)
+    SYSROOT_FLAG = --sysroot=$(ARM64_SYSROOT)
+    INC          = -I. -I$(ARM64_SYSROOT)/usr/include -I$(ARM64_LIBOQS)/include
+    LIBS         = $(ARM64_LIBOQS)/lib/liboqs.a -L$(ARM64_SYSROOT)/usr/lib/aarch64-linux-gnu -lssl -lcrypto -lpthread -lm
+  else
+    INC          = -I. -I$(ARM64_LIBOQS)/include $(if $(ARM64_OPENSSL),-I$(ARM64_OPENSSL)/include)
+    LIBS         = $(ARM64_LIBOQS)/lib/liboqs.a $(if $(ARM64_OPENSSL),-L$(ARM64_OPENSSL)/lib) -lssl -lcrypto -lpthread -lm
+  endif
 endif
 
 OPT     = -O3 -funroll-loops -fomit-frame-pointer -fno-plt
@@ -26,39 +40,62 @@ LTO     = -flto=auto
 WARN    = -Wall -Wextra -Wno-unused-parameter
 DEFS    = -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 
-CFLAGS  = $(OPT) $(LTO) $(WARN) $(DEFS) $(INC)
-LDFLAGS = $(LTO)
+CFLAGS  = $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG)
+LDFLAGS = $(LTO) $(SYSROOT_FLAG)
 
-SHARED_OBJS = transport_arm.o crypto/aead_arm.o \
+SHARED_OBJS = transport_arm.o crypto/aead_arm.o crypto/replay_window_arm.o crypto/trust_store_arm.o \
               wrappers/kem_wrapper_arm.o wrappers/dsa_wrapper_arm.o
 
-.PHONY: all clean
+.PHONY: all clean objects-arm check-cross-deps
 
-all: bench_nclient_arm bench_pqc_arm client_arm
+all: check-cross-deps bench_nclient_arm bench_pqc_arm client_arm
+
+check-cross-deps:
+ifneq ($(HOST_ARCH),aarch64)
+	@if ! echo "#include <openssl/evp.h>" | $(CC) $(CFLAGS) -E - >/dev/null 2>&1; then \
+	    echo "=========================================================================="; \
+	    echo "ARM64 Cross-Compilation Note:"; \
+	    echo "Host is x86_64, targeting aarch64. The ARM64 OpenSSL target headers are not"; \
+	    echo "in the default search path. Please supply the target sysroot:"; \
+	    echo "  make -f Makefile.arm64 all ARM64_SYSROOT=/path/to/arm64_sysroot"; \
+	    echo "Or run natively on the ARM64 device (e.g., Raspberry Pi 4/5):"; \
+	    echo "  make -f Makefile.arm64 all"; \
+	    echo "=========================================================================="; \
+	fi
+endif
+
+objects-arm: $(SHARED_OBJS)
+	@echo "Compiled ARM64 object files: $(SHARED_OBJS)"
 
 transport_arm.o: transport.c transport.h
-	$(CC) $(FAST) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+	$(CC) $(FAST) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
 
 crypto/aead_arm.o: crypto/aead.c crypto/aead.h
-	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+crypto/replay_window_arm.o: crypto/replay_window.c crypto/replay_window.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+crypto/trust_store_arm.o: crypto/trust_store.c crypto/trust_store.h wrappers/dsa_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
 
 wrappers/kem_wrapper_arm.o: wrappers/kem_wrapper.c wrappers/kem_wrapper.h
-	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
 
 wrappers/dsa_wrapper_arm.o: wrappers/dsa_wrapper.c wrappers/dsa_wrapper.h
-	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -c -o $@ $<
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
 
 client_arm: client.c $(SHARED_OBJS)
-	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
-	@echo "Built: client_arm  [aarch64 + NEON]"
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: client_arm [aarch64 + NEON]"
 
 bench_pqc_arm: bench_pqc.c $(SHARED_OBJS)
-	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
-	@echo "Built: bench_pqc_arm  [aarch64 + NEON]"
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_pqc_arm [aarch64 + NEON]"
 
 bench_nclient_arm: bench_nclient.c $(SHARED_OBJS)
-	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
-	@echo "Built: bench_nclient_arm  [aarch64 + NEON]"
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_nclient_arm [aarch64 + NEON]"
 
 clean:
 	rm -f bench_pqc_arm bench_nclient_arm client_arm $(SHARED_OBJS)

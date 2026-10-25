@@ -1,0 +1,59 @@
+name: NEXQOR CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build libssl-dev liburing-dev gcc-aarch64-linux-gnu
+
+    - name: Cache liboqs
+      id: cache-liboqs
+      uses: actions/cache@v4
+      with:
+        path: liboqs/build
+        key: ${{ runner.os }}-liboqs-0.13.0-v1
+
+    - name: Build liboqs (if not cached)
+      if: steps.cache-liboqs.outputs.cache-hit != 'true'
+      run: |
+        if [ ! -d "liboqs" ]; then
+          git clone --depth 1 --branch 0.13.0 https://github.com/open-quantum-safe/liboqs.git
+        fi
+        cmake -S liboqs -B liboqs/build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DOQS_BUILD_ONLY_LIB=ON \
+              -DOQS_ENABLE_KEM_ml_kem_768=ON \
+              -DOQS_ENABLE_SIG_ml_dsa_65=ON \
+              -DBUILD_SHARED_LIBS=OFF
+        cmake --build liboqs/build -j$(nproc)
+
+    - name: Build NEXQOR (x86_64)
+      run: |
+        make clean
+        make all
+
+    - name: Run Automated Security & Unit Tests
+      run: |
+        make test
+
+    - name: Run Cryptographic Benchmarks
+      run: |
+        ./bench_pqc 100
+        ./bench_aead 100
+
+    - name: Verify ARM64 Cross-Toolchain Configuration
+      run: |
+        make -f Makefile.arm64 check-cross-deps

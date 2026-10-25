@@ -231,7 +231,7 @@ static int handle_encrypt_file(const char *in_path, const char *out_path,
     return 1;
   }
 
-  int ct_len = aead_encrypt(pt, (int)pt_len, key, nonce, ct, tag);
+  int ct_len = aead_encrypt(pt, (int)pt_len, NULL, 0, key, nonce, ct, tag);
   if (ct_len < 0) {
     fprintf(stderr, "Error: AEAD encryption failed.\n");
     free(pt);
@@ -311,7 +311,7 @@ static int handle_decrypt_file(const char *in_path, const char *out_path,
     return 1;
   }
 
-  int pt_len = aead_decrypt(ct, ct_len, key, nonce, tag, pt);
+  int pt_len = aead_decrypt(ct, ct_len, NULL, 0, key, nonce, tag, pt);
   if (pt_len < 0) {
     fprintf(stderr, "Error: AEAD decryption failed (Authentication failed - "
                     "invalid key or tampered file).\n");
@@ -407,7 +407,7 @@ int main(int argc, char *argv[]) {
 
   /* Encrypt */
   int ct_len =
-      aead_encrypt((const uint8_t *)msg_text, pt_len, key, nonce, ct, tag);
+      aead_encrypt((const uint8_t *)msg_text, pt_len, NULL, 0, key, nonce, ct, tag);
   if (ct_len < 0) {
     fprintf(stderr, "Encryption failed!\n");
     free(ct);
@@ -421,7 +421,7 @@ int main(int argc, char *argv[]) {
   printf("\n");
 
   /* Decrypt */
-  int dec_len = aead_decrypt(ct, ct_len, key, nonce, tag, decrypted);
+  int dec_len = aead_decrypt(ct, ct_len, NULL, 0, key, nonce, tag, decrypted);
   if (dec_len < 0) {
     fprintf(stderr, "Decryption/Authentication failed!\n");
     free(ct);
@@ -469,7 +469,7 @@ int main(int argc, char *argv[]) {
       memset(b_nonce, (uint8_t)r, 12);
 
       uint64_t t0 = ns_now();
-      int b_ct_len = aead_encrypt(bench_pt, sz, key, b_nonce, bench_ct, tag);
+      int b_ct_len = aead_encrypt(bench_pt, sz, NULL, 0, key, b_nonce, bench_ct, tag);
       s_enc.samples[r] = (double)(ns_now() - t0) / 1000.0;
 
       if (b_ct_len < 0) {
@@ -479,7 +479,7 @@ int main(int argc, char *argv[]) {
 
       t0 = ns_now();
       int b_rt_len =
-          aead_decrypt(bench_ct, b_ct_len, key, b_nonce, tag, bench_rt);
+          aead_decrypt(bench_ct, b_ct_len, NULL, 0, key, b_nonce, tag, bench_rt);
       s_dec.samples[r] = (double)(ns_now() - t0) / 1000.0;
 
       if (b_rt_len < 0) {

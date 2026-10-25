@@ -69,17 +69,15 @@ int kem_dec(uint8_t ss[KEM_SS_BYTES], const uint8_t ct[KEM_CT_BYTES],
  */
 static __thread EVP_MD_CTX *tls_shake256_ctx = NULL;
 
-void kem_derive_key(uint8_t out[DERIVED_KEY_BYTES],
-                    const uint8_t ss[KEM_SS_BYTES], const uint8_t c_nonce[16],
-                    const uint8_t s_nonce[16], uint64_t session_id) {
+void kem_derive_directional_keys(uint8_t client_write_key[TRAFFIC_KEY_BYTES],
+                                uint8_t server_write_key[TRAFFIC_KEY_BYTES],
+                                const uint8_t ss[KEM_SS_BYTES],
+                                const uint8_t c_nonce[16],
+                                const uint8_t s_nonce[16],
+                                uint64_t session_id) {
   /* Lazy init: first call per thread allocates the context */
   if (__builtin_expect(tls_shake256_ctx == NULL, 0)) {
     tls_shake256_ctx = EVP_MD_CTX_new();
-    /* Full init on first use — sets the algorithm */
-    EVP_DigestInit_ex(tls_shake256_ctx, EVP_shake256(), NULL);
-  } else {
-    /* [OPT-B] Reuse: pass NULL md to skip algorithm re-lookup */
-    EVP_DigestInit_ex(tls_shake256_ctx, NULL, NULL);
   }
 
   uint8_t sid_bytes[8];
@@ -87,12 +85,30 @@ void kem_derive_key(uint8_t out[DERIVED_KEY_BYTES],
     sid_bytes[i] = (session_id >> ((7 - i) * 8)) & 0xFF;
   }
 
-  EVP_DigestUpdate(tls_shake256_ctx, "KEM-DERIVE", 10);
+  /* 1. Client-to-Server traffic key */
+  EVP_DigestInit_ex(tls_shake256_ctx, EVP_shake256(), NULL);
+  EVP_DigestUpdate(tls_shake256_ctx, "NEXQOR-KDF-C2S", 14);
   EVP_DigestUpdate(tls_shake256_ctx, ss, KEM_SS_BYTES);
   EVP_DigestUpdate(tls_shake256_ctx, c_nonce, 16);
   EVP_DigestUpdate(tls_shake256_ctx, s_nonce, 16);
   EVP_DigestUpdate(tls_shake256_ctx, sid_bytes, 8);
-  EVP_DigestFinalXOF(tls_shake256_ctx, out, DERIVED_KEY_BYTES);
+  EVP_DigestFinalXOF(tls_shake256_ctx, client_write_key, TRAFFIC_KEY_BYTES);
+
+  /* 2. Server-to-Client traffic key */
+  EVP_DigestInit_ex(tls_shake256_ctx, EVP_shake256(), NULL);
+  EVP_DigestUpdate(tls_shake256_ctx, "NEXQOR-KDF-S2C", 14);
+  EVP_DigestUpdate(tls_shake256_ctx, ss, KEM_SS_BYTES);
+  EVP_DigestUpdate(tls_shake256_ctx, c_nonce, 16);
+  EVP_DigestUpdate(tls_shake256_ctx, s_nonce, 16);
+  EVP_DigestUpdate(tls_shake256_ctx, sid_bytes, 8);
+  EVP_DigestFinalXOF(tls_shake256_ctx, server_write_key, TRAFFIC_KEY_BYTES);
+}
+
+void kem_derive_key(uint8_t out[DERIVED_KEY_BYTES],
+                    const uint8_t ss[KEM_SS_BYTES], const uint8_t c_nonce[16],
+                    const uint8_t s_nonce[16], uint64_t session_id) {
+  kem_derive_directional_keys(out, out + TRAFFIC_KEY_BYTES, ss, c_nonce,
+                              s_nonce, session_id);
 }
 
 /*

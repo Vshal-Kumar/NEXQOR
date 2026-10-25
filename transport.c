@@ -1,19 +1,14 @@
 /*
- * transport.c — Low-latency UDP transport (multi-client revision)
+ * transport.c — Hardened Low-latency UDP transport for NEXQOR / QRYPTONEX
  *
- * Key change vs original:
- *   net_metrics_t prefix REMOVED from PKT_DATA wire format.
- *
- *   Old PKT_DATA payload:  [ net_metrics_t (56 B) | NONCE(12) | TAG(16) | CT(n)
- * ] New PKT_DATA payload:  [ NONCE(12) | TAG(16) | CT(n) ]
- *
- *   This eliminates 56 bytes of overhead per packet.
- *   All metrics are tracked locally on sender and receiver sides
- *   using monotonic timestamps — no cross-machine clock needed.
- *
- * Everything else is unchanged:
- *   pkt_send, pkt_recv, pkt_send_reliable, send_ack, socket setup,
- *   nonce generation, AEAD calls, metrics_print, metrics_update_rtt.
+ * Implements:
+ *  - Directional traffic keys (tx_key and rx_key separation)
+ *  - Authenticated Associated Data (AAD) binding wire header (pkt_hdr_t, 15 bytes)
+ *  - Nonce exhaustion protection and monotonic tracking
+ *  - Sliding replay window verification (pre-auth check, post-auth commit)
+ *  - Bounded application-level reliability and telemetry acknowledgements
+ *  - Application-level fragmentation and reassembly for oversized PQC messages
+ *  - Local monotonic metric tracking
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -22,6 +17,7 @@
 #include "crypto/aead.h"
 
 #include <arpa/inet.h>
+#include <endian.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdio.h>
@@ -109,11 +105,35 @@ int make_client_sock(void) {
   return s;
 }
 
-/* ── Counter nonce ───────────────────────────────────────────────── */
-static void make_nonce(uint8_t nonce[12], uint64_t ctr) {
-  uint64_t le_ctr = ctr;
+/* ── Connection Lifecycle ────────────────────────────────────────── */
+void conn_init(conn_t *c, int sock) {
+  if (!c) return;
+  memset(c, 0, sizeof(conn_t));
+  c->sock = sock;
+  c->tx_seq = 1;
+  c->tx_nonce_ctr = 0;
+  c->established = 0;
+  replay_window_init(&c->replay_win);
+}
+
+void conn_destroy(conn_t *c) {
+  if (!c) return;
+  explicit_bzero(c->tx_key, sizeof(c->tx_key));
+  explicit_bzero(c->rx_key, sizeof(c->rx_key));
+  replay_window_destroy(&c->replay_win);
+  c->established = 0;
+}
+
+/* ── Counter nonce with strict exhaustion check ──────────────────── */
+static int make_nonce(uint8_t nonce[12], uint64_t ctr) {
+  if (ctr >= 0xFFFFFFFFFFFFFF00ULL) {
+    fprintf(stderr, "[transport] CRITICAL: Nonce counter exhaustion! Rejecting to prevent reuse.\n");
+    return -1;
+  }
+  uint64_t le_ctr = htole64(ctr);
   memcpy(nonce, &le_ctr, 8);
   memset(nonce + 8, 0, 4);
+  return 0;
 }
 
 /* ── pkt_send ────────────────────────────────────────────────────── */
@@ -123,6 +143,7 @@ ssize_t pkt_send(conn_t *c, uint8_t type, const uint8_t *payload,
   hdr.seq = htonl(c->tx_seq++);
   hdr.type = type;
   hdr.len = htons(payload_len);
+  hdr.session_id = htobe64(c->session_id);
 
   struct iovec iov[2];
   iov[0].iov_base = &hdr;
@@ -147,6 +168,14 @@ ssize_t pkt_recv(conn_t *c, pkt_hdr_t *hdr, uint8_t *payload_out,
   socklen_t from_len = sizeof(from);
   ssize_t n = -1;
 
+  if (timeout_us > 0) {
+    struct pollfd pfd;
+    pfd.fd = c->sock;
+    pfd.events = POLLIN;
+    int prc = poll(&pfd, 1, timeout_us / 1000);
+    if (prc <= 0) return -1;
+  }
+
   n = recvfrom(c->sock, raw, sizeof(raw), 0, (struct sockaddr *)&from,
                &from_len);
 
@@ -158,6 +187,7 @@ ssize_t pkt_recv(conn_t *c, pkt_hdr_t *hdr, uint8_t *payload_out,
   memcpy(hdr, raw, PKT_HDR_BYTES);
   hdr->seq = ntohl(hdr->seq);
   hdr->len = ntohs(hdr->len);
+  hdr->session_id = be64toh(hdr->session_id);
 
   c->peer = from;
   c->peer_len = from_len;
@@ -185,7 +215,7 @@ void send_ack(conn_t *c, uint32_t ack_seq) {
 
 /* ── pkt_send_reliable ───────────────────────────────────────────── */
 int pkt_send_reliable(conn_t *c, uint8_t type, const uint8_t *payload,
-                      uint16_t payload_len) {
+                       uint16_t payload_len) {
   uint32_t our_seq = c->tx_seq;
 
   for (int attempt = 0; attempt < RETX_MAX; attempt++) {
@@ -197,7 +227,7 @@ int pkt_send_reliable(conn_t *c, uint8_t type, const uint8_t *payload,
 
     ssize_t sent = pkt_send(c, type, payload, payload_len);
     if (sent < 0) {
-      fprintf(stderr, "[transport] pkt_send attempt %d failed: %s (errno=%d)\n", 
+      fprintf(stderr, "[transport] pkt_send attempt %d failed: %s (errno=%d)\n",
               attempt + 1, strerror(errno), errno);
       usleep(1000);
       continue;
@@ -242,18 +272,11 @@ int pkt_send_reliable(conn_t *c, uint8_t type, const uint8_t *payload,
   return -1;
 }
 
-/* Helper: increment retransmission counter (called by pkt_send_reliable).
- * We can't access metrics_t from transport.c directly, so retransmissions
- * are counted in data_send() by tracking send failures. */
-
 /* ── data_send ───────────────────────────────────────────────────── */
 /*
- * Wire format of PKT_DATA payload (SIMPLIFIED vs original):
- *
- *   [ NONCE(12) | TAG(16) | CIPHERTEXT(n) ]
- *
- * No net_metrics_t prefix.  56 bytes saved per packet.
- * Encrypt cost is measured locally and stored in m->total_encrypt_us.
+ * Directional encryption with ChaCha20-Poly1305.
+ * Uses c->tx_key (client_write_key for client, server_write_key for server).
+ * Binds wire header (pkt_hdr_t, 15 bytes canonical) as Authenticated Associated Data (AAD).
  */
 int data_send(conn_t *c, metrics_t *m, const uint8_t *msg, uint32_t msg_len) {
   uint32_t offset = 0;
@@ -262,16 +285,30 @@ int data_send(conn_t *c, metrics_t *m, const uint8_t *msg, uint32_t msg_len) {
     if (chunk > DATA_CHUNK_MAX)
       chunk = DATA_CHUNK_MAX;
 
-    /* payload = NONCE(12) | TAG(16) | CIPHERTEXT(chunk+overhead) */
+    /* payload = NONCE(12) | TAG(16) | CIPHERTEXT(chunk) */
     uint8_t pkt[12 + 16 + DATA_CHUNK_MAX];
 
     uint8_t nonce[12];
-    make_nonce(nonce, c->tx_nonce_ctr++);
+    if (make_nonce(nonce, c->tx_nonce_ctr++) != 0) {
+      return -1;
+    }
     memcpy(pkt, nonce, 12);
+
+    /* Construct canonical wire header as AAD */
+    uint32_t current_seq = c->tx_seq;
+    uint16_t pkt_len = (uint16_t)(12 + 16 + chunk);
+
+    pkt_hdr_t wire_hdr;
+    wire_hdr.seq = htonl(current_seq);
+    wire_hdr.type = PKT_DATA;
+    wire_hdr.len = htons(pkt_len);
+    wire_hdr.session_id = htobe64(c->session_id);
 
     /* Measure AEAD encrypt cost locally */
     double enc_t0 = now_ms();
-    int ct_len = aead_encrypt(msg + offset, (int)chunk, c->session_key, nonce,
+    int ct_len = aead_encrypt(msg + offset, (int)chunk,
+                              (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                              c->tx_key, nonce,
                               pkt + 12 + 16, /* ciphertext */
                               pkt + 12);     /* tag        */
     double enc_us = (now_ms() - enc_t0) * 1000.0;
@@ -287,7 +324,6 @@ int data_send(conn_t *c, metrics_t *m, const uint8_t *msg, uint32_t msg_len) {
       m->last_send_ns = now_ns();
     }
 
-    uint16_t pkt_len = (uint16_t)(12 + 16 + (uint32_t)ct_len);
     ssize_t sent = pkt_send(c, PKT_DATA, pkt, pkt_len);
     if (sent < 0)
       return -1;
@@ -298,6 +334,13 @@ int data_send(conn_t *c, metrics_t *m, const uint8_t *msg, uint32_t msg_len) {
 }
 
 /* ── data_recv ───────────────────────────────────────────────────── */
+/*
+ * Directional decryption with ChaCha20-Poly1305.
+ * Uses c->rx_key.
+ * Verifies wire header (pkt_hdr_t, 15 bytes canonical) as AAD.
+ * Evaluates sliding replay window: pre-auth check, post-auth commit.
+ * Suppresses duplicate application delivery while re-acknowledging duplicate packets.
+ */
 ssize_t data_recv(conn_t *c, uint8_t *out, size_t out_max) {
   for (;;) {
     pkt_hdr_t hdr;
@@ -311,6 +354,13 @@ ssize_t data_recv(conn_t *c, uint8_t *out, size_t out_max) {
     if (n < (12 + 16))
       continue;
 
+    /* Verify session ID if established */
+    if (c->session_id != 0 && hdr.session_id != 0 && hdr.session_id != c->session_id) {
+      fprintf(stderr, "[rx] Session ID mismatch: got %llu, expected %llu — drop\n",
+              (unsigned long long)hdr.session_id, (unsigned long long)c->session_id);
+      continue;
+    }
+
     /* Clean layout: NONCE(12) | TAG(16) | CIPHERTEXT(n) */
     const uint8_t *nonce = raw;
     const uint8_t *tag = raw + 12;
@@ -319,20 +369,155 @@ ssize_t data_recv(conn_t *c, uint8_t *out, size_t out_max) {
     if (ct_len <= 0 || ct_len > DATA_CHUNK_MAX || (size_t)ct_len > out_max)
       continue;
 
-    int pt_len = aead_decrypt(ct, ct_len, c->session_key, nonce, tag, out);
-    if (pt_len < 0) {
-      fprintf(stderr, "[rx] AEAD auth failure — drop\n");
+    /* Construct canonical wire header as AAD */
+    pkt_hdr_t wire_hdr;
+    wire_hdr.seq = htonl(hdr.seq);
+    wire_hdr.type = hdr.type;
+    wire_hdr.len = htons(hdr.len);
+    wire_hdr.session_id = htobe64(hdr.session_id);
+
+    /* Pre-auth replay window check */
+    int rcheck = replay_window_check(&c->replay_win, hdr.seq);
+    if (rcheck != 0) {
+      /* Duplicate or out-of-window. Check auth before re-acking */
+      uint8_t dummy_pt[DATA_CHUNK_MAX];
+      int auth_rc = aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                                 c->rx_key, nonce, tag, dummy_pt);
+      if (auth_rc >= 0) {
+        send_ack(c, hdr.seq);
+      }
       continue;
     }
+
+    /* Decrypt and authenticate associated data */
+    int pt_len = aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                              c->rx_key, nonce, tag, out);
+    if (pt_len < 0) {
+      fprintf(stderr, "[rx] AEAD auth failure (tampered ciphertext or header AAD) — drop\n");
+      continue;
+    }
+
+    /* Post-auth replay commit */
+    replay_window_update(&c->replay_win, hdr.seq);
+
+    /* Send ACK */
+    send_ack(c, hdr.seq);
+
     return (ssize_t)pt_len;
   }
 }
 
+/* ── Fragmentation & Reassembly ──────────────────────────────────── */
+void reassembly_init(reassembly_ctx_t *ctx) {
+  if (!ctx) return;
+  memset(ctx, 0, sizeof(*ctx));
+}
+
+void reassembly_cleanup(reassembly_ctx_t *ctx) {
+  if (!ctx) return;
+  if (ctx->buf) {
+    free(ctx->buf);
+    ctx->buf = NULL;
+  }
+  ctx->active = 0;
+}
+
+int reassembly_feed_frag(reassembly_ctx_t *ctx, const frag_hdr_t *fhdr,
+                         const uint8_t *frag_data) {
+  if (!ctx || !fhdr || !frag_data) return -1;
+
+  uint16_t msg_id = ntohs(fhdr->msg_id);
+  uint8_t orig_type = fhdr->orig_type;
+  uint8_t frag_idx = fhdr->frag_idx;
+  uint8_t frag_total = fhdr->frag_total;
+  uint16_t frag_len = ntohs(fhdr->frag_len);
+  uint32_t total_len = ntohl(fhdr->total_len);
+
+  /* Bounded sanity checks: max 64KB message, max 256 fragments */
+  if (total_len == 0 || total_len > 65536 || frag_total == 0 || frag_idx >= frag_total) {
+    return -1;
+  }
+
+  /* Reset if a new message arrives */
+  if (ctx->active && ctx->msg_id != msg_id) {
+    reassembly_cleanup(ctx);
+  }
+
+  if (!ctx->active) {
+    ctx->buf = malloc(total_len);
+    if (!ctx->buf) return -1;
+    ctx->msg_id = msg_id;
+    ctx->orig_type = orig_type;
+    ctx->frag_count = frag_total;
+    ctx->frag_received = 0;
+    ctx->total_len = total_len;
+    ctx->received_bytes = 0;
+    memset(ctx->bitmap, 0, sizeof(ctx->bitmap));
+    ctx->start_time_ns = now_ns();
+    ctx->active = 1;
+  }
+
+  /* Check if fragment already received */
+  int byte_idx = frag_idx / 8;
+  int bit_idx = frag_idx % 8;
+  if (ctx->bitmap[byte_idx] & (1 << bit_idx)) {
+    return 0; /* Duplicate fragment */
+  }
+
+  /* Bounds check for fragment placement */
+  uint32_t offset = (uint32_t)frag_idx * FRAG_PAYLOAD_MAX;
+  if (offset + frag_len > ctx->total_len) {
+    return -1;
+  }
+
+  memcpy(ctx->buf + offset, frag_data, frag_len);
+  ctx->bitmap[byte_idx] |= (1 << bit_idx);
+  ctx->frag_received++;
+  ctx->received_bytes += frag_len;
+
+  if (ctx->frag_received == ctx->frag_count && ctx->received_bytes == ctx->total_len) {
+    return 1; /* Complete reassembly */
+  }
+
+  return 0; /* Pending more fragments */
+}
+
+int pkt_send_fragmented(conn_t *c, uint8_t orig_type, const uint8_t *payload,
+                        uint32_t payload_len, uint16_t max_frag_sz) {
+  if (!c || !payload || payload_len == 0) return -1;
+  if (max_frag_sz == 0 || max_frag_sz > FRAG_PAYLOAD_MAX)
+    max_frag_sz = FRAG_PAYLOAD_MAX;
+
+  static uint16_t s_msg_id = 1;
+  uint16_t msg_id = s_msg_id++;
+  uint8_t total_frags = (uint8_t)((payload_len + max_frag_sz - 1) / max_frag_sz);
+
+  uint8_t buf[FRAG_HDR_BYTES + FRAG_PAYLOAD_MAX];
+  uint32_t offset = 0;
+
+  for (uint8_t i = 0; i < total_frags; i++) {
+    uint16_t flen = (uint16_t)((payload_len - offset < max_frag_sz) ? (payload_len - offset) : max_frag_sz);
+
+    frag_hdr_t *fhdr = (frag_hdr_t *)buf;
+    fhdr->msg_id = htons(msg_id);
+    fhdr->orig_type = orig_type;
+    fhdr->frag_idx = i;
+    fhdr->frag_total = total_frags;
+    fhdr->frag_len = htons(flen);
+    fhdr->total_len = htonl(payload_len);
+
+    memcpy(buf + FRAG_HDR_BYTES, payload + offset, flen);
+
+    ssize_t sent = pkt_send(c, PKT_FRAG, buf, FRAG_HDR_BYTES + flen);
+    if (sent < 0) return -1;
+
+    offset += flen;
+  }
+
+  return 0;
+}
+
 /* ── metrics_update_rtt ──────────────────────────────────────────── */
-/*
- * Inter-arrival jitter via RFC 3550 EWMA using local receive clock.
- * No cross-machine clock synchronisation needed.
- */
 void metrics_update_rtt(metrics_t *m, uint64_t recv_ns) {
   if (m->prev_recv_ns == 0) {
     m->prev_recv_ns = recv_ns;
@@ -388,7 +573,7 @@ void metrics_print(const metrics_t *m) {
          m->hs_total_ms <= 1.0 ? "✓ <1ms" : "⚠ >1ms");
   printf("║                                              ║\n");
 
-  printf("║  AEAD (ChaCha20-Poly1305)                    ║\n");
+  printf("║  AEAD (ChaCha20-Poly1305 + AAD)              ║\n");
   printf("║  ─────────────────────────────────────────── ║\n");
   if (m->encrypt_count > 0)
     printf("║  Avg encrypt       : %8.2f µs             ║\n",

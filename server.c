@@ -38,9 +38,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <endian.h>
 
 #include "client_registry.h"
 #include "crypto/aead.h"
+#include "crypto/trust_store.h"
 #include "ipc.h"
 #include "transport.h"
 #include <openssl/evp.h>
@@ -92,10 +94,15 @@ static void on_signal(int s) {
   g_stop = 1;
 }
 
-static void make_nonce(uint8_t nonce[12], uint64_t ctr) {
-  uint64_t le_ctr = ctr;
+static int make_nonce(uint8_t nonce[12], uint64_t ctr) {
+  if (ctr >= 0xFFFFFFFFFFFFFF00ULL) {
+    fprintf(stderr, "[server] CRITICAL: Nonce counter exhaustion! Rejecting.\n");
+    return -1;
+  }
+  uint64_t le_ctr = htole64(ctr);
   memcpy(nonce, &le_ctr, 8);
   memset(nonce + 8, 0, 4);
+  return 0;
 }
 
 static int g_listen_sock = -1;
@@ -236,6 +243,9 @@ typedef struct {
   uint8_t client_dsa_pk[DSA_PK_BYTES];
   uint8_t kem_ct[KEM_CT_BYTES];
   uint8_t session_key[KEM_SS_BYTES];
+  uint8_t client_write_key[32];
+  uint8_t server_write_key[32];
+  replay_window_t replay_win;
   uint8_t sig[DSA_SIG_BYTES];
   uint8_t auth_ctx[AUTH_CTX_LEN];
   uint64_t session_id_val;
@@ -371,6 +381,7 @@ static int session_alloc(uint32_t ip, uint16_t port) {
   s->metrics.msg_min_rtt_ms = 1e15;
 
   session_hash_insert(ip, port, idx);
+  replay_window_init(&s->replay_win);
   return (int)idx;
 }
 
@@ -386,6 +397,9 @@ static void session_free(int idx) {
 
   /* Zeroize sensitive session data */
   explicit_bzero(s->session_key, sizeof(s->session_key));
+  explicit_bzero(s->client_write_key, sizeof(s->client_write_key));
+  explicit_bzero(s->server_write_key, sizeof(s->server_write_key));
+  replay_window_destroy(&s->replay_win);
   explicit_bzero(s->sig, sizeof(s->sig));
   explicit_bzero(s->auth_ctx, SESSION_ID_BYTES);
   explicit_bzero(s->auth_ctx + SESSION_ID_BYTES + DSA_PK_BYTES, KEM_SS_BYTES);
@@ -476,6 +490,7 @@ static void submit_recv_request(int idx) {
 /* ── Thread-Safe Outbound Send ───────────────────────────────────── */
 static ssize_t server_send_packet(int sock, const struct sockaddr_in *peer,
                                   uint32_t seq, uint8_t type,
+                                  uint64_t session_id,
                                   const uint8_t *payload,
                                   uint16_t payload_len) {
   static uint8_t wire[PKT_HDR_BYTES + 8192];
@@ -483,6 +498,7 @@ static ssize_t server_send_packet(int sock, const struct sockaddr_in *peer,
   hdr.seq = htonl(seq);
   hdr.type = type;
   hdr.len = htons(payload_len);
+  hdr.session_id = htobe64(session_id);
 
   pthread_mutex_lock(&g_sock_send_mu);
   memcpy(wire, &hdr, PKT_HDR_BYTES);
@@ -498,11 +514,13 @@ static ssize_t server_send_packet(int sock, const struct sockaddr_in *peer,
 static ssize_t server_send_packet_zero_copy(int sock,
                                             const struct sockaddr_in *peer,
                                             uint32_t seq, uint8_t type,
+                                            uint64_t session_id,
                                             const struct iovec *iovs,
                                             int iov_cnt) {
   pkt_hdr_t hdr;
   hdr.seq = htonl(seq);
   hdr.type = type;
+  hdr.session_id = htobe64(session_id);
 
   uint16_t payload_len = 0;
   for (int i = 0; i < iov_cnt; i++) {
@@ -530,13 +548,13 @@ static ssize_t server_send_packet_zero_copy(int sock,
 }
 
 static void server_send_ack(int sock, const struct sockaddr_in *peer,
-                            uint32_t ack_seq) {
+                            uint32_t ack_seq, uint64_t session_id) {
   uint8_t pl[4];
   pl[0] = (ack_seq >> 24) & 0xFF;
   pl[1] = (ack_seq >> 16) & 0xFF;
   pl[2] = (ack_seq >> 8) & 0xFF;
   pl[3] = ack_seq & 0xFF;
-  server_send_packet(sock, peer, 0, PKT_ACK, pl, 4);
+  server_send_packet(sock, peer, 0, PKT_ACK, session_id, pl, 4);
 }
 
 /* ── IPC helper wrappers ─────────────────────────────────────────── */
@@ -867,8 +885,12 @@ static void *crypto_worker_thread(void *arg) {
 
           uint8_t digest[64];
           if (shake256_hash(digest, cl_tx, cl_tx_len) == 0) {
-            rc =
-                dsa_verify(job.sig, job.sig_len, digest, 64, job.client_dsa_pk);
+            if (trust_store_server_verify_client(job.client_dsa_pk, NULL) == 0) {
+              rc = dsa_verify(job.sig, job.sig_len, digest, 64, job.client_dsa_pk);
+            } else {
+              fprintf(stderr, "[server] Client verification failed: Unauthorized client DSA key!\n");
+              rc = -1;
+            }
           }
           free(cl_tx);
         }
@@ -1070,12 +1092,10 @@ static void process_completion(const crypto_completion_t *comp) {
       return;
     }
 
-    /* Derive key using KDF bound to nonces and session ID */
-    uint8_t derived_key[DERIVED_KEY_BYTES];
-    kem_derive_key(derived_key, s->session_key, s->client_nonce,
-                   s->server_nonce, s->session_id_val);
-    memcpy(s->session_key, derived_key, 32);
-    explicit_bzero(derived_key, sizeof(derived_key));
+    /* Derive distinct directional keys bound to nonces and session ID */
+    kem_derive_directional_keys(s->client_write_key, s->server_write_key,
+                                s->session_key, s->client_nonce,
+                                s->server_nonce, s->session_id_val);
 
     struct iovec iovs[5];
     iovs[0].iov_base = g_srv_dsa_pk;
@@ -1099,7 +1119,7 @@ static void process_completion(const crypto_completion_t *comp) {
     s->last_seen_ns = now_ns();
 
     server_send_packet_zero_copy(g_listen_sock, &peer, s->tx_seq,
-                                 PKT_SERVER_HELLO, iovs, 5);
+                                 PKT_SERVER_HELLO, s->session_id_val, iovs, 5);
   } else if (comp->type == PKT_CLIENT_AUTH) {
     if (s->state != SESSION_WAIT_AUTH_VER)
       return;
@@ -1109,13 +1129,14 @@ static void process_completion(const crypto_completion_t *comp) {
       return;
     }
 
-    conn_t c = {0};
-    c.sock = g_listen_sock;
+    conn_t c;
+    conn_init(&c, g_listen_sock);
     c.peer = peer;
     c.peer_len = sizeof(peer);
     c.tx_seq = s->tx_seq;
     c.established = 1;
-    memcpy(c.session_key, s->session_key, KEM_SS_BYTES);
+    memcpy(c.tx_key, s->server_write_key, 32);
+    memcpy(c.rx_key, s->client_write_key, 32);
     c.session_id = s->session_id_val;
 
     s->metrics.hs_total_ms = (double)(now_ns() - s->last_seen_ns) / 1e6;
@@ -1130,7 +1151,7 @@ static void process_completion(const crypto_completion_t *comp) {
     s->established_time_ns = now_ns();
     s->last_seen_ns = now_ns();
 
-    server_send_ack(g_listen_sock, &peer, s->auth_seq);
+    server_send_ack(g_listen_sock, &peer, s->auth_seq, s->session_id_val);
 
     ipc_push_client_list();
     pthread_mutex_lock(&g_ipc_tx_mu);
@@ -1367,10 +1388,12 @@ int main(void) {
 
   registry_init();
 
-  /* Generate identity keypairs */
+  /* Load or persist long-term server identity */
   double dsa_t0 = now_ms();
-  if (dsa_keypair(g_srv_dsa_pk, g_srv_dsa_sk) != 0) {
-    fprintf(stderr, "[server] DSA keygen failed\n");
+  if (trust_store_load_or_create_server_keys(g_srv_dsa_pk, g_srv_dsa_sk,
+                                             "server_identity.pub",
+                                             "server_identity.key") != 0) {
+    fprintf(stderr, "[server] Failed to load/create server keys\n");
     return 1;
   }
   g_dsa_keygen_ms = now_ms() - dsa_t0;
@@ -1501,7 +1524,7 @@ int main(void) {
       int res = cqe->res;
       int buf_idx = (int)(intptr_t)io_uring_cqe_get_data(cqe);
 
-      if (res >= PKT_HDR_BYTES) {
+      if (res >= (int)PKT_HDR_BYTES) {
         uint8_t *pkt = g_recv_bufs[buf_idx].buffer;
         uint16_t pkt_len = (uint16_t)res;
         struct sockaddr_in *peer = &g_recv_bufs[buf_idx].peer_addr;
@@ -1526,13 +1549,13 @@ int main(void) {
                 uint64_t now = now_ns();
                 if (now - last_busy_ns > 10000000ULL) {
                   last_busy_ns = now;
-                  server_send_packet(g_listen_sock, peer, 0, PKT_BUSY, NULL, 0);
+                  server_send_packet(g_listen_sock, peer, 0, PKT_BUSY, 0, NULL, 0);
                 }
               } else {
                 if (payload_len >= KEM_PK_BYTES + DSA_PK_BYTES + 16) {
                   s_idx = session_alloc(ip, port);
                   if (s_idx >= 0) {
-                    server_send_ack(g_listen_sock, peer, hdr.seq);
+                    server_send_ack(g_listen_sock, peer, hdr.seq, 0);
                     session_t *s = &g_sessions[s_idx];
                     s->state = SESSION_WAIT_KEM_ENC;
                     s->last_seen_ns = now_ns();
@@ -1588,7 +1611,7 @@ int main(void) {
             session_free(s_idx);
           } else if (hdr.type == PKT_CLIENT_HELLO) {
             if (s->state == SESSION_WAIT_KEM_ENC) {
-              server_send_ack(g_listen_sock, peer, hdr.seq);
+              server_send_ack(g_listen_sock, peer, hdr.seq, s->session_id_val);
             } else if (s->state == SESSION_WAIT_AUTH ||
                        s->state == SESSION_ESTABLISHED) {
               struct iovec iovs[5];
@@ -1609,9 +1632,9 @@ int main(void) {
               iovs[4].iov_base = s->srv_sig;
               iovs[4].iov_len = DSA_SIG_BYTES;
 
-              server_send_ack(g_listen_sock, peer, hdr.seq);
+              server_send_ack(g_listen_sock, peer, hdr.seq, s->session_id_val);
               server_send_packet_zero_copy(g_listen_sock, peer, s->tx_seq,
-                                           PKT_SERVER_HELLO, iovs, 5);
+                                           PKT_SERVER_HELLO, s->session_id_val, iovs, 5);
             }
           } else if (hdr.type == PKT_CLIENT_AUTH) {
             if (s->state == SESSION_WAIT_AUTH) {
@@ -1646,10 +1669,10 @@ int main(void) {
               }
             } else if (s->state == SESSION_WAIT_AUTH_VER ||
                        s->state == SESSION_ESTABLISHED) {
-              server_send_ack(g_listen_sock, peer, hdr.seq);
+              server_send_ack(g_listen_sock, peer, hdr.seq, s->session_id_val);
             }
           } else if (hdr.type == PKT_DATA) {
-            if (s->state == SESSION_ESTABLISHED && hdr.seq > s->rx_seq) {
+            if (s->state == SESSION_ESTABLISHED) {
               if (payload_len >= 12 + 16) {
                 const uint8_t *nonce = payload;
                 const uint8_t *tag = payload + 12;
@@ -1659,13 +1682,39 @@ int main(void) {
                   continue; /* Prevent stack buffer overflow */
                 }
 
+                /* Construct canonical wire header as AAD */
+                pkt_hdr_t wire_hdr;
+                wire_hdr.seq = htonl(hdr.seq);
+                wire_hdr.type = hdr.type;
+                wire_hdr.len = htons(payload_len);
+                wire_hdr.session_id = htobe64(hdr.session_id);
+
+                /* Pre-auth replay window check */
+                int rcheck = replay_window_check(&s->replay_win, hdr.seq);
+                if (rcheck != 0) {
+                  /* Duplicate packet. Re-send ACK if authentic, but do not process again */
+                  uint8_t dummy_pt[DATA_CHUNK_MAX];
+                  int auth_rc = aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                                             s->client_write_key, nonce, tag, dummy_pt);
+                  if (auth_rc >= 0) {
+                    server_send_ack(g_listen_sock, peer, hdr.seq, s->session_id_val);
+                  }
+                  continue;
+                }
+
                 uint8_t plaintext[DATA_CHUNK_MAX];
                 double dec_t0 = now_ms();
-                int pt_len = aead_decrypt(ct, ct_len, s->session_key, nonce,
-                                          tag, plaintext);
+                int pt_len = aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                                          s->client_write_key, nonce, tag, plaintext);
                 double dec_us = (now_ms() - dec_t0) * 1000.0;
 
                 if (pt_len >= 0) {
+                  /* Post-auth replay commit */
+                  replay_window_update(&s->replay_win, hdr.seq);
+
+                  /* Acknowledge received telemetry datagram */
+                  server_send_ack(g_listen_sock, peer, hdr.seq, s->session_id_val);
+
                   s->rx_seq = hdr.seq;
                   s->metrics.bytes_recv += pkt_len;
                   s->metrics.msg_count++;
@@ -1695,25 +1744,34 @@ int main(void) {
                                       0.0f, 0.0f, avg_dec,
                                       s->metrics.bytes_recv, hdr.seq);
 
-                  /* Echo back to client */
+                  /* Echo back to client using server_write_key */
                   uint8_t echo_pkt[12 + 16 + DATA_CHUNK_MAX];
                   uint8_t echo_nonce[12];
-                  make_nonce(echo_nonce, s->tx_nonce_ctr++);
-                  memcpy(echo_pkt, echo_nonce, 12);
+                  if (make_nonce(echo_nonce, s->tx_nonce_ctr++) == 0) {
+                    memcpy(echo_pkt, echo_nonce, 12);
 
-                  int echo_ct_len = aead_encrypt(
-                      plaintext, pt_len, s->session_key, echo_nonce,
-                      echo_pkt + 12 + 16, /* ciphertext */
-                      echo_pkt + 12);     /* tag */
-                  if (echo_ct_len >= 0) {
-                    uint16_t echo_pkt_len = (uint16_t)(12 + 16 + echo_ct_len);
-                    server_send_packet(g_listen_sock, peer, s->tx_seq++,
-                                       PKT_DATA, echo_pkt, echo_pkt_len);
+                    uint16_t echo_pkt_len = (uint16_t)(12 + 16 + pt_len);
+                    pkt_hdr_t echo_wire_hdr;
+                    echo_wire_hdr.seq = htonl(s->tx_seq);
+                    echo_wire_hdr.type = PKT_DATA;
+                    echo_wire_hdr.len = htons(echo_pkt_len);
+                    echo_wire_hdr.session_id = htobe64(s->session_id_val);
+
+                    int echo_ct_len = aead_encrypt(
+                        plaintext, pt_len, (const uint8_t *)&echo_wire_hdr, PKT_HDR_BYTES,
+                        s->server_write_key, echo_nonce,
+                        echo_pkt + 12 + 16, /* ciphertext */
+                        echo_pkt + 12);     /* tag */
+                    if (echo_ct_len >= 0) {
+                      server_send_packet(g_listen_sock, peer, s->tx_seq++,
+                                         PKT_DATA, s->session_id_val, echo_pkt, echo_pkt_len);
+                    }
                   }
                 }
               }
             }
           }
+
         }
       }
 
@@ -1758,8 +1816,8 @@ int main(void) {
       peer.sin_family = AF_INET;
       peer.sin_port = s->port;
       peer.sin_addr.s_addr = s->ip;
-      server_send_packet(g_listen_sock, &peer, s->tx_seq, PKT_DISCONNECT, NULL,
-                         0);
+      server_send_packet(g_listen_sock, &peer, s->tx_seq, PKT_DISCONNECT,
+                         s->session_id_val, NULL, 0);
     }
   }
 
