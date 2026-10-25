@@ -1,0 +1,4 @@
+# NEXQOR / QRYPTONEX Active Server Endpoints
+PORT=9877
+LOCAL=127.0.0.1
+LAN=10.58.3.114
