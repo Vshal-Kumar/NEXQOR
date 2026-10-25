@@ -12,6 +12,7 @@
 /bench_pqc_arm32
 /bench_nclient_arm32
 /client_arm32
+/liboqs
 
 # Object and dependency files
 *.o
@@ -24,9 +25,8 @@
 # Build & temporary directories
 build/
 bin/
-out/
-liboqs/build*/
-liboqs/obuild/
+liboqs/
+server_endpoint.info
 
 # Machine-specific symlinks and external references
 arm64_ref
