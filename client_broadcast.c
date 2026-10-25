@@ -1,0 +1,582 @@
+/*
+ * client_broadcast.c — Continuous IoT Sensor Telemetry Broadcast Client
+ *
+ * Designed for embedded IoT nodes (ESP32, Raspberry Pi, ARM64/ARM32, x86_64)
+ * communicating with NEXQOR / QRYPTONEX Post-Quantum Server Core.
+ *
+ * Features:
+ *   1. Establishes post-quantum secure session via 4-way handshake (ML-KEM-768 + ML-DSA-65).
+ *   2. In-band Trust-On-First-Use (TOFU) server identity verification.
+ *   3. Derives directional traffic keys via domain-separated SHAKE256.
+ *   4. Streams continuous, authenticated IoT sensor telemetry (temperature, humidity,
+ *      pressure, battery voltage, 3-axis accelerometer, device status, sequence, uptime).
+ *   5. Encrypts every telemetry datagram using ChaCha20-Poly1305 with canonical 15-byte
+ *      wire header as Associated Authenticated Data (AAD).
+ *   6. Background RX thread receives ACKs and echoes, tracking live RTT, packet loss, and jitter.
+ *   7. Configurable broadcast interval (e.g. 100ms, 500ms, 1000ms) and device ID.
+ *   8. Clean shutdown on Ctrl+C (SIGINT/SIGTERM) with final performance telemetry summary.
+ */
+
+#define _POSIX_C_SOURCE 200809L
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <pthread.h>
+#include <arpa/inet.h>
+#include <math.h>
+
+#include "transport.h"
+#include "crypto/aead.h"
+#include "crypto/trust_store.h"
+#include "wrappers/kem_wrapper.h"
+#include "wrappers/dsa_wrapper.h"
+
+#include <openssl/rand.h>
+#include <openssl/evp.h>
+
+static int shake256_hash(uint8_t out[64], const uint8_t *in, size_t in_len) {
+  EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+  if (!ctx) return -1;
+  if (EVP_DigestInit_ex(ctx, EVP_shake256(), NULL) != 1) {
+    EVP_MD_CTX_free(ctx);
+    return -1;
+  }
+  if (EVP_DigestUpdate(ctx, in, in_len) != 1) {
+    EVP_MD_CTX_free(ctx);
+    return -1;
+  }
+  if (EVP_DigestFinalXOF(ctx, out, 64) != 1) {
+    EVP_MD_CTX_free(ctx);
+    return -1;
+  }
+  EVP_MD_CTX_free(ctx);
+  return 0;
+}
+
+/* ── Key Material ────────────────────────────────────────────────── */
+typedef struct {
+  uint8_t kem_pk[KEM_PK_BYTES];
+  uint8_t kem_sk[KEM_SK_BYTES];
+  uint8_t dsa_pk[DSA_PK_BYTES];
+  uint8_t dsa_sk[DSA_SK_BYTES];
+  double  kem_keygen_ms;
+  double  dsa_keygen_ms;
+} keygen_result_t;
+
+static keygen_result_t g_keys;
+static volatile int    g_stop = 0;
+static void on_signal(int s) { (void)s; g_stop = 1; }
+
+/* ── Parallel Keygen Threads ─────────────────────────────────────── */
+static void *kem_keygen_thread(void *arg) {
+  keygen_result_t *k = (keygen_result_t *)arg;
+  double t0 = now_ms();
+  if (kem_keypair(k->kem_pk, k->kem_sk) != 0) {
+    fprintf(stderr, "[broadcast] KEM keygen failed\n"); exit(1);
+  }
+  k->kem_keygen_ms = now_ms() - t0;
+  return NULL;
+}
+
+static void *dsa_keygen_thread(void *arg) {
+  keygen_result_t *k = (keygen_result_t *)arg;
+  double t0 = now_ms();
+  if (dsa_keypair(k->dsa_pk, k->dsa_sk) != 0) {
+    fprintf(stderr, "[broadcast] DSA keygen failed\n"); exit(1);
+  }
+  k->dsa_keygen_ms = now_ms() - t0;
+  return NULL;
+}
+
+/* ── Recv Helper (handshake only) ────────────────────────────────── */
+static ssize_t recv_type(conn_t *c, uint8_t want_type,
+                         uint8_t *payload, size_t payload_max) {
+  pkt_hdr_t hdr;
+  for (;;) {
+    ssize_t n = pkt_recv(c, &hdr, payload, payload_max, 0);
+    if (n < 0) return -1;
+    if (hdr.type == PKT_DISCONNECT) {
+      fprintf(stderr, "\n[broadcast] Server disconnected during handshake.\n");
+      exit(1);
+    }
+    if (hdr.type == want_type) {
+      send_ack(c, hdr.seq);
+      return n;
+    }
+    if (hdr.type != PKT_ACK && hdr.type != PKT_DATA) {
+      send_ack(c, hdr.seq);
+    }
+  }
+}
+
+/* ── Background RX Thread (Telemetry ACKs & Echoes) ──────────────── */
+typedef struct {
+  conn_t       *conn;
+  metrics_t    *metrics;
+  volatile int  stop;
+  uint64_t      echoes_received;
+  double        last_rtt_ms;
+} broadcast_rx_args_t;
+
+static void *broadcast_rx_thread(void *arg) {
+  broadcast_rx_args_t *a = (broadcast_rx_args_t *)arg;
+  uint8_t pt[DATA_CHUNK_MAX + 16];
+
+  while (!a->stop && !g_stop) {
+    pkt_hdr_t hdr;
+    uint8_t raw[12 + 16 + DATA_CHUNK_MAX + 64];
+    ssize_t n = pkt_recv(a->conn, &hdr, raw, sizeof(raw), RX_POLL_TIMEOUT_US);
+    if (n < 0) continue;
+
+    if (hdr.type == PKT_DISCONNECT) {
+      printf("\n\033[1;31m[broadcast] Server signaled disconnection.\033[0m\n");
+      g_stop = 1;
+      break;
+    }
+
+    if (hdr.type != PKT_DATA) continue;
+    if (n < 28) continue; /* Must contain at least NONCE(12) + TAG(16) */
+
+    /* Pre-auth replay check */
+    if (replay_window_check(&a->conn->replay_win, hdr.seq) != 0) {
+      continue;
+    }
+
+    uint64_t recv_ns = now_ns();
+    const uint8_t *nonce = raw;
+    const uint8_t *tag   = raw + 12;
+    const uint8_t *ct    = raw + 28;
+    int ct_len = (int)n - 28;
+    if (ct_len <= 0) continue;
+
+    /* Reconstruct canonical 15-byte wire header as AAD */
+    pkt_hdr_t wire_hdr;
+    wire_hdr.seq = htonl(hdr.seq);
+    wire_hdr.type = hdr.type;
+    wire_hdr.len = htons(hdr.len);
+    wire_hdr.session_id = htobe64(hdr.session_id);
+
+    /* Decrypt using server_write_key */
+    int pt_len = aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                              a->conn->rx_key, nonce, tag, pt);
+
+    if (pt_len <= 0) {
+      /* Authentication failure: tampered ciphertext or AAD */
+      continue;
+    }
+
+    /* Post-auth commit */
+    replay_window_update(&a->conn->replay_win, hdr.seq);
+    send_ack(a->conn, hdr.seq);
+
+    a->echoes_received++;
+    a->metrics->bytes_recv += (uint64_t)(PKT_HDR_BYTES + 28 + ct_len);
+    metrics_update_rtt(a->metrics, recv_ns);
+    a->last_rtt_ms = a->metrics->msg_last_rtt_ms;
+  }
+  return NULL;
+}
+
+/* ── 4-Way PQC Handshake ─────────────────────────────────────────── */
+static int do_handshake(conn_t *c, metrics_t *m, const keygen_result_t *k) {
+  double t0, t1;
+  double hs_start = now_ms();
+
+  uint8_t srv_dsa_pk[DSA_PK_BYTES];
+  uint8_t kem_ct[KEM_CT_BYTES];
+  uint8_t shared_secret[KEM_SS_BYTES];
+  uint8_t session_id[SESSION_ID_BYTES];
+  uint8_t sig[DSA_SIG_BYTES];
+  size_t  sig_len = 0;
+
+  m->hs_kem_keygen_ms = k->kem_keygen_ms;
+  m->hs_dsa_keygen_ms = k->dsa_keygen_ms;
+
+  /* Generate client nonce */
+  uint8_t c_nonce[16];
+  if (RAND_bytes(c_nonce, 16) != 1) {
+    fprintf(stderr, "[broadcast] Nonce generation failed\n");
+    return -1;
+  }
+
+  /* Phase 1: Send CLIENT_HELLO */
+  uint8_t hello[KEM_PK_BYTES + DSA_PK_BYTES + 16];
+  memcpy(hello,                            k->kem_pk, KEM_PK_BYTES);
+  memcpy(hello + KEM_PK_BYTES,             k->dsa_pk, DSA_PK_BYTES);
+  memcpy(hello + KEM_PK_BYTES + DSA_PK_BYTES, c_nonce, 16);
+
+  if (pkt_send_reliable(c, PKT_CLIENT_HELLO, hello, (uint16_t)sizeof(hello)) != 0) {
+    fprintf(stderr, "[broadcast] CLIENT_HELLO send failed\n");
+    return -1;
+  }
+  printf("  CLIENT_HELLO sent (%zu bytes)\n", sizeof(hello));
+
+  /* Phase 2: Receive SERVER_HELLO */
+  size_t srv_hello_min = DSA_PK_BYTES + KEM_CT_BYTES + SESSION_ID_BYTES + 16 + DSA_SIG_BYTES;
+  uint8_t srv_hello[DSA_PK_BYTES + KEM_CT_BYTES + SESSION_ID_BYTES + 16 + DSA_SIG_BYTES + 128];
+  ssize_t srv_len = recv_type(c, PKT_SERVER_HELLO, srv_hello, sizeof(srv_hello));
+  if (srv_len < (ssize_t)srv_hello_min) {
+    fprintf(stderr, "[broadcast] SERVER_HELLO too short\n");
+    return -1;
+  }
+
+  uint8_t s_nonce[16];
+  uint8_t srv_sig[DSA_SIG_BYTES];
+  {
+    size_t off = 0;
+    memcpy(srv_dsa_pk, srv_hello + off, DSA_PK_BYTES);    off += DSA_PK_BYTES;
+    memcpy(kem_ct,     srv_hello + off, KEM_CT_BYTES);    off += KEM_CT_BYTES;
+    memcpy(session_id, srv_hello + off, SESSION_ID_BYTES); off += SESSION_ID_BYTES;
+    memcpy(s_nonce,    srv_hello + off, 16);              off += 16;
+    memcpy(srv_sig,    srv_hello + off, DSA_SIG_BYTES);
+  }
+  printf("  SERVER_HELLO received (%zu bytes)\n", (size_t)srv_len);
+
+  /* Verify server identity against trust store (pins server DSA public key with TOFU) */
+  if (trust_store_client_verify_server(srv_dsa_pk, "server_identity.pub") != 0) {
+    fprintf(stderr, "\033[1;31m[broadcast] CRITICAL: Server public key NOT trusted! Possible MITM attack.\033[0m\n");
+    return -1;
+  }
+
+  /* Reconstruct and verify server signature */
+  size_t tx_len = 16 + 16 + SESSION_ID_BYTES + KEM_PK_BYTES + DSA_PK_BYTES + DSA_PK_BYTES + KEM_CT_BYTES;
+  uint8_t *tx = malloc(tx_len);
+  if (!tx) return -1;
+  size_t tx_off = 0;
+  memcpy(tx + tx_off, c_nonce, 16);                   tx_off += 16;
+  memcpy(tx + tx_off, s_nonce, 16);                   tx_off += 16;
+  memcpy(tx + tx_off, session_id, SESSION_ID_BYTES);  tx_off += SESSION_ID_BYTES;
+  memcpy(tx + tx_off, k->kem_pk, KEM_PK_BYTES);       tx_off += KEM_PK_BYTES;
+  memcpy(tx + tx_off, k->dsa_pk, DSA_PK_BYTES);       tx_off += DSA_PK_BYTES;
+  memcpy(tx + tx_off, srv_dsa_pk, DSA_PK_BYTES);      tx_off += DSA_PK_BYTES;
+  memcpy(tx + tx_off, kem_ct, KEM_CT_BYTES);
+
+  uint8_t server_tx_digest[64];
+  if (shake256_hash(server_tx_digest, tx, tx_len) != 0) {
+    free(tx);
+    return -1;
+  }
+
+  t0 = now_ms();
+  if (dsa_verify(srv_sig, DSA_SIG_BYTES, server_tx_digest, 64, srv_dsa_pk) != 0) {
+    fprintf(stderr, "[broadcast] Server signature verification failed\n");
+    free(tx);
+    return -1;
+  }
+  printf("  dsa_verify (server) : %.3f ms\n", now_ms() - t0);
+
+  /* KEM decapsulate */
+  t0 = now_ms();
+  if (kem_dec(shared_secret, kem_ct, k->kem_sk) != 0) {
+    fprintf(stderr, "[broadcast] KEM decaps failed\n");
+    free(tx);
+    return -1;
+  }
+  t1 = now_ms();
+  m->hs_encap_ms = t1 - t0;
+  printf("  kem_decaps          : %.3f ms\n", m->hs_encap_ms);
+
+  uint64_t sid64 = 0;
+  for (int i = 0; i < SESSION_ID_BYTES; i++) {
+    sid64 = (sid64 << 8) | session_id[i];
+  }
+  c->session_id = sid64;
+
+  /* Derive distinct directional keys: client_write_key and server_write_key */
+  kem_derive_directional_keys(c->tx_key, c->rx_key, shared_secret, c_nonce, s_nonce, sid64);
+
+  /* DSA sign client transcript */
+  size_t cl_tx_len = tx_len + DSA_SIG_BYTES;
+  uint8_t *cl_tx = malloc(cl_tx_len);
+  if (!cl_tx) {
+    free(tx);
+    return -1;
+  }
+  memcpy(cl_tx, tx, tx_len);
+  memcpy(cl_tx + tx_len, srv_sig, DSA_SIG_BYTES);
+  free(tx);
+
+  uint8_t client_tx_digest[64];
+  if (shake256_hash(client_tx_digest, cl_tx, cl_tx_len) != 0) {
+    free(cl_tx);
+    return -1;
+  }
+  free(cl_tx);
+
+  t0 = now_ms();
+  if (dsa_sign(sig, &sig_len, client_tx_digest, 64, k->dsa_sk) != 0) {
+    fprintf(stderr, "[broadcast] DSA sign failed\n");
+    explicit_bzero(shared_secret, sizeof(shared_secret));
+    return -1;
+  }
+  m->hs_sign_ms = now_ms() - t0;
+  printf("  dsa_sign            : %.3f ms  (sig=%zu bytes)\n", m->hs_sign_ms, sig_len);
+
+  /* Phase 3: Send CLIENT_AUTH */
+  if (pkt_send_reliable(c, PKT_CLIENT_AUTH, sig, (uint16_t)sig_len) != 0) {
+    fprintf(stderr, "[broadcast] CLIENT_AUTH send failed\n");
+    explicit_bzero(shared_secret, sizeof(shared_secret));
+    return -1;
+  }
+  printf("  CLIENT_AUTH sent\n");
+
+  c->established = 1;
+  explicit_bzero(shared_secret, sizeof(shared_secret));
+  explicit_bzero(sig, sizeof(sig));
+
+  m->hs_total_ms = now_ms() - hs_start;
+  printf("\n  ┌── PQC Handshake Summary ──────────────────────┐\n");
+  printf("  │  ML-KEM-768  keygen  : %7.3f ms              │\n", m->hs_kem_keygen_ms);
+  printf("  │  ML-DSA-65   keygen  : %7.3f ms              │\n", m->hs_dsa_keygen_ms);
+  printf("  │  ML-KEM-768  decaps  : %7.3f ms              │\n", m->hs_encap_ms);
+  printf("  │  ML-DSA-65   sign    : %7.3f ms              │\n", m->hs_sign_ms);
+  printf("  │  Total handshake     : %7.3f ms  %s           │\n",
+         m->hs_total_ms,
+         m->hs_total_ms <= 1.0 ? "✓ <1ms" : "⚠  >1ms");
+  printf("  └───────────────────────────────────────────────┘\n");
+
+  return 0;
+}
+
+/* ── Realistic Dynamic IoT Sensor Simulator ──────────────────────── */
+typedef struct {
+  char     device_id[32];
+  uint64_t seq;
+  double   temp_c;
+  double   humidity_pct;
+  double   pressure_hpa;
+  double   v_bat;
+  double   accel_x;
+  double   accel_y;
+  double   accel_z;
+  uint32_t uptime_s;
+} sensor_state_t;
+
+static void sensor_init(sensor_state_t *s, const char *device_id) {
+  strncpy(s->device_id, device_id ? device_id : "ESP32-NODE-01", sizeof(s->device_id) - 1);
+  s->seq = 1;
+  s->temp_c = 25.5;
+  s->humidity_pct = 55.0;
+  s->pressure_hpa = 1013.25;
+  s->v_bat = 4.12;
+  s->accel_x = 0.02;
+  s->accel_y = -0.01;
+  s->accel_z = 0.98;
+  s->uptime_s = 0;
+}
+
+static void sensor_sample(sensor_state_t *s, char *out_json, size_t out_max) {
+  /* Random-walk fluctuation for realistic dynamic telemetry */
+  double r1 = ((double)rand() / (double)RAND_MAX) - 0.5;
+  double r2 = ((double)rand() / (double)RAND_MAX) - 0.5;
+  double r3 = ((double)rand() / (double)RAND_MAX) - 0.5;
+
+  s->temp_c += r1 * 0.15;
+  if (s->temp_c < 18.0) s->temp_c = 18.0;
+  if (s->temp_c > 42.0) s->temp_c = 42.0;
+
+  s->humidity_pct += r2 * 0.4;
+  if (s->humidity_pct < 30.0) s->humidity_pct = 30.0;
+  if (s->humidity_pct > 85.0) s->humidity_pct = 85.0;
+
+  s->pressure_hpa += r3 * 0.05;
+  s->v_bat -= 0.0001; /* Slow battery discharge simulation */
+  if (s->v_bat < 3.30) s->v_bat = 4.20;
+
+  s->accel_x = 0.01 + (((double)rand() / (double)RAND_MAX) - 0.5) * 0.08;
+  s->accel_y = -0.01 + (((double)rand() / (double)RAND_MAX) - 0.5) * 0.08;
+  s->accel_z = 0.98 + (((double)rand() / (double)RAND_MAX) - 0.5) * 0.04;
+
+  const char *status = (s->temp_c > 38.0) ? "WARN_HIGH_TEMP" :
+                       (s->v_bat < 3.40)  ? "WARN_LOW_BAT"  : "NOMINAL";
+
+  snprintf(out_json, out_max,
+           "{\"node\":\"%s\",\"seq\":%llu,\"temp\":%.2f,\"hum\":%.1f,\"press\":%.2f,"
+           "\"vbat\":%.2f,\"accel\":[%.2f,%.2f,%.2f],\"status\":\"%s\",\"uptime\":%u}",
+           s->device_id,
+           (unsigned long long)s->seq,
+           s->temp_c,
+           s->humidity_pct,
+           s->pressure_hpa,
+           s->v_bat,
+           s->accel_x, s->accel_y, s->accel_z,
+           status,
+           s->uptime_s);
+  s->seq++;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * main()
+ * ════════════════════════════════════════════════════════════════ */
+int main(int argc, char *argv[]) {
+  signal(SIGINT,  on_signal);
+  signal(SIGTERM, on_signal);
+  signal(SIGPIPE, SIG_IGN);
+
+  const char *server_ip = (argc > 1) ? argv[1] : SERVER_ADDR;
+  int interval_ms = (argc > 2) ? atoi(argv[2]) : 500;
+  if (interval_ms < 10) interval_ms = 10;
+  const char *device_id = (argc > 3) ? argv[3] : "ESP32-NODE-01";
+
+  char ts[16]; now_hms(ts, sizeof(ts));
+  printf("╔══════════════════════════════════════════════════════════════╗\n");
+  printf("║   QRYPTONEX — Post-Quantum Continuous Telemetry Broadcaster  ║\n");
+  printf("╚══════════════════════════════════════════════════════════════╝\n");
+  printf("  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305 (AAD)\n");
+  printf("  Target   : %s:%d\n", server_ip, SERVER_PORT);
+  printf("  Device ID: %s\n", device_id);
+  printf("  Interval : %d ms (%.1f pkts/sec)\n\n", interval_ms, 1000.0 / interval_ms);
+
+  /* Warmup */
+  {
+    double wu_t0 = now_ms();
+    kem_warmup();
+    dsa_warmup();
+    printf("  Warmup (KEM + DSA) : %.2f ms\n", now_ms() - wu_t0);
+  }
+
+  /* Parallel Keygen */
+  memset(&g_keys, 0, sizeof(g_keys));
+  pthread_t kem_tid, dsa_tid;
+  pthread_create(&kem_tid, NULL, kem_keygen_thread, &g_keys);
+  pthread_create(&dsa_tid, NULL, dsa_keygen_thread, &g_keys);
+
+  int sock = make_client_sock();
+  if (sock < 0) return 1;
+
+  conn_t c;
+  conn_init(&c, sock);
+  c.peer_len = sizeof(c.peer);
+  c.peer.sin_family = AF_INET;
+  c.peer.sin_port   = htons(SERVER_PORT);
+  if (inet_pton(AF_INET, server_ip, &c.peer.sin_addr) != 1) {
+    fprintf(stderr, "Invalid server address: %s\n", server_ip);
+    return 1;
+  }
+
+  pthread_join(kem_tid, NULL);
+  pthread_join(dsa_tid, NULL);
+
+  printf("  KEM KeyGen         : %.3f ms\n", g_keys.kem_keygen_ms);
+  printf("  DSA KeyGen         : %.3f ms\n\n", g_keys.dsa_keygen_ms);
+
+  /* Perform 4-way post-quantum handshake */
+  metrics_t metrics = {0};
+  metrics.msg_min_rtt_ms = 1e15;
+
+  if (do_handshake(&c, &metrics, &g_keys) != 0) {
+    fprintf(stderr, "[broadcast] Handshake failed! Aborting.\n");
+    close(sock);
+    conn_destroy(&c);
+    return 1;
+  }
+
+  /* Wipe private signing & decapsulation keys */
+  explicit_bzero(g_keys.kem_sk, sizeof(g_keys.kem_sk));
+  explicit_bzero(g_keys.dsa_sk, sizeof(g_keys.dsa_sk));
+
+  now_hms(ts, sizeof(ts));
+  printf("\n[%s] \033[1;32mSession established (ID: %016llx)\033[0m\n",
+         ts, (unsigned long long)c.session_id);
+  printf("  Handshake Total: %.3f ms\n\n", metrics.hs_total_ms);
+
+  metrics.session_start_ns = now_ns();
+
+  /* Start background RX thread for ACKs / Echoes */
+  broadcast_rx_args_t rx_args = {
+    .conn = &c,
+    .metrics = &metrics,
+    .stop = 0,
+    .echoes_received = 0,
+    .last_rtt_ms = 0.0
+  };
+  pthread_t rx_tid;
+  pthread_create(&rx_tid, NULL, broadcast_rx_thread, &rx_args);
+
+  /* Initialize Sensor Simulation */
+  sensor_state_t sensor;
+  sensor_init(&sensor, device_id);
+
+  printf("\033[1;36m┌── STREAMING CONTINUOUS SENSOR TELEMETRY (Ctrl+C to stop) ────────────────────────┐\033[0m\n");
+  printf("\033[90m│  [TIME]      PKT#   TEMP    HUM    PRESS    VBAT   STATUS   ENCRYPT    RTT   TX_RATE  │\033[0m\n");
+  printf("\033[1;36m├──────────────────────────────────────────────────────────────────────────────────┤\033[0m\n");
+
+  char json_buf[512];
+  uint64_t broadcast_count = 0;
+  double broadcast_start_ms = now_ms();
+
+  while (!g_stop) {
+    sensor_sample(&sensor, json_buf, sizeof(json_buf));
+    uint32_t payload_len = (uint32_t)strlen(json_buf);
+
+    double enc_t0 = now_ms();
+    if (data_send(&c, &metrics, (const uint8_t *)json_buf, payload_len) != 0) {
+      fprintf(stderr, "\r\033[1;31m[broadcast] data_send failed at packet %llu\033[0m\n",
+              (unsigned long long)broadcast_count);
+    }
+    double enc_us = (now_ms() - enc_t0) * 1000.0;
+    broadcast_count++;
+
+    now_hms(ts, sizeof(ts));
+    double elapsed_s = (now_ms() - broadcast_start_ms) / 1000.0;
+    double tx_rate_kbps = (elapsed_s > 0.0) ? (metrics.bytes_sent * 8.0 / elapsed_s / 1000.0) : 0.0;
+
+    printf("│ [%s] #%-5llu %4.1f°C %5.1f%% %7.1fhPa %4.2fV  %-6.6s %5.1fµs %5.1fms %5.1fkbps │\r",
+           ts,
+           (unsigned long long)broadcast_count,
+           sensor.temp_c,
+           sensor.humidity_pct,
+           sensor.pressure_hpa,
+           sensor.v_bat,
+           (sensor.temp_c > 38.0) ? "WARN" : "OK",
+           enc_us,
+           rx_args.last_rtt_ms,
+           tx_rate_kbps);
+    fflush(stdout);
+
+    /* Sleep for specified interval */
+    usleep((useconds_t)(interval_ms * 1000));
+    sensor.uptime_s = (uint32_t)((now_ms() - broadcast_start_ms) / 1000.0);
+  }
+
+  printf("\n\033[1;36m└──────────────────────────────────────────────────────────────────────────────────┘\033[0m\n");
+  printf("\n[broadcast] Stopping telemetry stream...\n");
+
+  rx_args.stop = 1;
+  pthread_join(rx_tid, NULL);
+
+  /* Send disconnect notification to server */
+  pkt_send(&c, PKT_DISCONNECT, NULL, 0);
+
+  /* Print final summary */
+  double total_time_s = (now_ms() - broadcast_start_ms) / 1000.0;
+  double avg_enc = (metrics.msg_count > 0) ? (metrics.total_encrypt_us / (double)metrics.msg_count) : 0.0;
+  double loss_rate = (broadcast_count > 0 && rx_args.echoes_received <= broadcast_count)
+                     ? ((1.0 - ((double)rx_args.echoes_received / (double)broadcast_count)) * 100.0) : 0.0;
+
+  printf("\n╔══════════════════════════════════════════════════════════════╗\n");
+  printf("║      TELEMETRY BROADCAST SUMMARY REPORT                      ║\n");
+  printf("╠══════════════════════════════════════════════════════════════╣\n");
+  printf("║  Device Identifier        :  %-31s ║\n", sensor.device_id);
+  printf("║  Server Endpoint          :  %s:%-13d ║\n", server_ip, SERVER_PORT);
+  printf("║  Broadcast Stream Count   :  %-31llu ║\n", (unsigned long long)broadcast_count);
+  printf("║  Acks/Echoes Received     :  %-31llu ║\n", (unsigned long long)rx_args.echoes_received);
+  printf("║  Estimated Packet Loss    :  %5.2f %%                        ║\n", loss_rate);
+  printf("║  Total Bytes Transmitted  :  %-31llu ║\n", (unsigned long long)metrics.bytes_sent);
+  printf("║  Broadcast Duration       :  %7.2f s                        ║\n", total_time_s);
+  printf("║  Average Encrypt Latency  :  %7.2f µs                       ║\n", avg_enc);
+  printf("║  Average Network RTT      :  %7.2f ms                       ║\n", metrics.msg_avg_rtt_ms);
+  printf("║  Cryptographic Cipher     :  ChaCha20-Poly1305 + 15B AAD     ║\n");
+  printf("╚══════════════════════════════════════════════════════════════╝\n\n");
+
+  close(sock);
+  conn_destroy(&c);
+  printf("[broadcast] Clean exit complete.\n");
+  return 0;
+}

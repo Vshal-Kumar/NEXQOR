@@ -99,7 +99,7 @@ SERVER_OBJS = $(SHARED_OBJS) client_registry.o
 .PHONY: all server server_rx server_tx client bench_pqc bench_nclient bench_aead test clean \
         run-server run-rx run-tx run-bench run-nclient run-aead
 
-all: server server_rx server_tx client bench_pqc bench_nclient bench_aead
+all: server server_rx server_tx client client_broadcast bench_pqc bench_nclient bench_aead
 
 # ── Server (multi-client core) ───────────────────────────────────
 server: server.c $(SERVER_OBJS)
@@ -110,6 +110,11 @@ server: server.c $(SERVER_OBJS)
 client: client.c $(SHARED_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
 	@echo "Built: client (x86_64) — interactive terminal"
+
+# ── Client Broadcast (continuous IoT sensor telemetry) ──────────
+client_broadcast: client_broadcast.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: client_broadcast (x86_64) — IoT telemetry broadcaster"
 
 # ── Receiver terminal ────────────────────────────────────────────
 server_rx: server_rx.c transport.o crypto/aead.o crypto/replay_window.o
@@ -166,7 +171,7 @@ test: tests/test_suite
 
 # ── Clean ────────────────────────────────────────────────────────
 clean:
-	rm -f server server_rx server_tx client bench_pqc bench_nclient bench_aead tests/test_suite \
+	rm -f server server_rx server_tx client client_broadcast bench_pqc bench_nclient bench_aead tests/test_suite \
 	      transport.o client_registry.o \
 	      crypto/aead.o crypto/replay_window.o crypto/trust_store.o \
 	      wrappers/kem_wrapper.o wrappers/dsa_wrapper.o

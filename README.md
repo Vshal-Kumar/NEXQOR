@@ -1097,18 +1097,18 @@ rm -rf liburing
 ```bash
 make all -j$(nproc)
 ```
-*Binaries generated*: `server`, `server_rx`, `server_tx`, `client`, `bench_pqc`, `bench_nclient`, `bench_aead`.
+*Binaries generated*: `server`, `server_rx`, `server_tx`, `client`, `client_broadcast`, `bench_pqc`, `bench_nclient`, `bench_aead`.
 
 #### B. Build for ARM64 / AArch64 (Raspberry Pi 4/5 64-bit)
 - **Native Build on Pi**: `make -f Makefile.arm64 all -j2`
 - **Verify Cross-Dependencies on x86_64**: `make -f Makefile.arm64 check-cross-deps`
 - **Cross-Compilation from x86_64**: `make -f Makefile.arm64 all -j$(nproc)`
-*Binaries generated*: `client_arm`, `bench_pqc_arm`, `bench_nclient_arm`.
+*Binaries generated*: `client_arm`, `client_broadcast_arm`, `bench_pqc_arm`, `bench_nclient_arm`.
 
 #### C. Build for ARM32 / ARMv7-A (Raspberry Pi 3/4 32-bit)
 - **Native Build on Pi**: `make -f Makefile.arm32 all -j2`
 - **Cross-Compilation from x86_64**: `make -f Makefile.arm32 all -j$(nproc)`
-*Binaries generated*: `client_arm32`, `bench_pqc_arm32`, `bench_nclient_arm32`.
+*Binaries generated*: `client_arm32`, `client_broadcast_arm32`, `bench_pqc_arm32`, `bench_nclient_arm32`.
 
 ---
 
@@ -1192,7 +1192,34 @@ Connect to the server from an x86_64 PC or embedded Raspberry Pi:
 
 ---
 
-### 3. Running Benchmarks & Performance Telemetry
+### 3. Running Continuous IoT Sensor Broadcaster (`client_broadcast`)
+
+Simulates an autonomous embedded sensor node (e.g., ESP32, Raspberry Pi) that connects via post-quantum handshake and continuously broadcasts encrypted sensor telemetry (temperature, humidity, pressure, battery voltage, 3-axis accelerometer, device status, uptime):
+
+```bash
+# On x86_64:
+./client_broadcast [SERVER_IP] [INTERVAL_MS] [DEVICE_ID]
+
+# On ARM64 (Raspberry Pi 4/5):
+./client_broadcast_arm [SERVER_IP] [INTERVAL_MS] [DEVICE_ID]
+
+# On ARM32 (Raspberry Pi 3):
+./client_broadcast_arm32 [SERVER_IP] [INTERVAL_MS] [DEVICE_ID]
+```
+
+*Examples*:
+- Broadcast telemetry every 500ms to local server:
+  ```bash
+  ./client_broadcast 127.0.0.1 500 "ESP32-NODE-01"
+  ```
+- Broadcast high-rate sensor readings every 100ms from Raspberry Pi:
+  ```bash
+  ./client_broadcast_arm 192.168.137.168 100 "PI-SENSOR-NODE"
+  ```
+
+---
+
+### 4. Running Benchmarks & Performance Telemetry
 
 #### A. Standalone Cryptographic Primitives Microbenchmark (`bench_pqc`)
 Profiles execution latency, cycle-level timing, variance, and P95/P99 latency:
