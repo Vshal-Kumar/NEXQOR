@@ -249,8 +249,9 @@ Evaluates the server's stress capacity under simultaneous connections.
 ./bench_nclient_arm [num_clients] [num_messages] [server_ip]   # ARM64
 ./bench_nclient_arm32 [num_clients] [num_messages] [server_ip] # ARM32
 ```
-* *Example (128 concurrent clients sending 10 messages each)*: `./bench_nclient 128 10 127.0.0.1`
-* **What it does**: Spawns `N` concurrent client threads which initiate PQC handshakes simultaneously. Once the handshakes finish, threads send `M` encrypted messages to evaluate the server's throughput capacity, packet processing performance, and hardware resources (CPU, RAM).
+* *Example (Auto-discovery, 128 clients, 10 msgs)*: `./bench_nclient 128 10`
+* *Example (Explicit IP / Tailscale)*: `./bench_nclient 128 10 100.104.77.63`
+* **What it does**: Spawns `N` concurrent client threads which initiate PQC handshakes simultaneously. The server address is discovered automatically or resolved dynamically. Once handshakes finish, threads stream encrypted messages to evaluate throughput, latency percentiles, and hardware utilization (CPU, RAM).
 
 ### C. AEAD Performance & File Utility (`bench_aead`)
 Symmetric cryptoprimitive microbenchmark and file encryption tool.
