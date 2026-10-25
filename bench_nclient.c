@@ -659,7 +659,7 @@ int main(int argc, char *argv[]) {
   /* ── Aggregate results ───────────────────────────────────── */
   int success = 0, failed = 0;
   stats_t s_kem_kg, s_dsa_kg, s_kem_dec, s_dsa_sign, s_dsa_verify;
-  stats_t s_hs_net_rtt, s_hs_serial, s_hs_parallel;
+  stats_t s_hs_net_rtt, s_hs_serial;
   stats_t s_enc, s_dec;
   stats_t s_msg_rtt;
   stats_init(&s_kem_kg);
@@ -669,7 +669,6 @@ int main(int argc, char *argv[]) {
   stats_init(&s_dsa_verify);
   stats_init(&s_hs_net_rtt);
   stats_init(&s_hs_serial);
-  stats_init(&s_hs_parallel);
   stats_init(&s_enc);
   stats_init(&s_dec);
   stats_init(&s_msg_rtt);
@@ -681,9 +680,6 @@ int main(int argc, char *argv[]) {
     if (r->success) {
       success++;
       double serial_hs = r->kem_keygen_us + r->dsa_keygen_us + r->hs_total_us;
-      double max_kg = (r->kem_keygen_us > r->dsa_keygen_us) ? r->kem_keygen_us
-                                                            : r->dsa_keygen_us;
-      double parallel_hs = max_kg + r->hs_total_us;
 
       stats_add(&s_kem_kg, r->kem_keygen_us);
       stats_add(&s_dsa_kg, r->dsa_keygen_us);
@@ -692,7 +688,6 @@ int main(int argc, char *argv[]) {
       stats_add(&s_dsa_verify, r->dsa_verify_us);
       stats_add(&s_hs_net_rtt, r->hs_total_us);
       stats_add(&s_hs_serial, serial_hs);
-      stats_add(&s_hs_parallel, parallel_hs);
       if (r->avg_encrypt_us > 0)
         stats_add(&s_enc, r->avg_encrypt_us);
       if (r->msgs_recv > 0) {
@@ -761,12 +756,9 @@ int main(int argc, char *argv[]) {
   printf("│  Network Handshake RTT (Average)    │  %20.3f   │  ms              "
          "        │\n",
          stats_mean(&s_hs_net_rtt) / 1000.0);
-  printf("│  Total Handshake (Serial Avg)       │  %20.3f   │  ms              "
+  printf("│  Total Handshake Latency (Average)  │  %20.3f   │  ms              "
          "        │\n",
          stats_mean(&s_hs_serial) / 1000.0);
-  printf("│  Total Handshake (Parallel Avg)     │  %20.3f   │  ms              "
-         "        │\n",
-         stats_mean(&s_hs_parallel) / 1000.0);
   printf("│  End-to-End Message RTT (Average)   │  %20.3f   │  ms              "
          "        │\n",
          stats_mean(&s_msg_rtt) / 1000.0);
@@ -852,22 +844,13 @@ int main(int argc, char *argv[]) {
          (s_hs_net_rtt.n > 0 ? s_hs_net_rtt.max_us : 0.0) / 1000.0,
          s_hs_net_rtt.n);
 
-  printf("│  Total Handshake (Serial Est.)      │  %12.3f  │  %11.3f  │  "
+  printf("│  Total Handshake Latency            │  %12.3f  │  %11.3f  │  "
          "%11.3f  │  "
          "%11.3f  │  %5d  │\n",
          stats_mean(&s_hs_serial) / 1000.0, stats_stddev(&s_hs_serial) / 1000.0,
          (s_hs_serial.n > 0 ? s_hs_serial.min_us : 0.0) / 1000.0,
          (s_hs_serial.n > 0 ? s_hs_serial.max_us : 0.0) / 1000.0,
          s_hs_serial.n);
-
-  printf("│  Total Handshake (Parallel Est.)    │  %12.3f  │  %11.3f  │  "
-         "%11.3f  │  "
-         "%11.3f  │  %5d  │\n",
-         stats_mean(&s_hs_parallel) / 1000.0,
-         stats_stddev(&s_hs_parallel) / 1000.0,
-         (s_hs_parallel.n > 0 ? s_hs_parallel.min_us : 0.0) / 1000.0,
-         (s_hs_parallel.n > 0 ? s_hs_parallel.max_us : 0.0) / 1000.0,
-         s_hs_parallel.n);
 
   printf("└────────────────────────────────────────────────────────────────────"
          "────────────────────────────────────┘\n");

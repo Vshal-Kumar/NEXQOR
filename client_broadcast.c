@@ -73,27 +73,6 @@ static keygen_result_t g_keys;
 static volatile int    g_stop = 0;
 static void on_signal(int s) { (void)s; g_stop = 1; }
 
-/* ── Parallel Keygen Threads ─────────────────────────────────────── */
-static void *kem_keygen_thread(void *arg) {
-  keygen_result_t *k = (keygen_result_t *)arg;
-  double t0 = now_ms();
-  if (kem_keypair(k->kem_pk, k->kem_sk) != 0) {
-    fprintf(stderr, "[broadcast] KEM keygen failed\n"); exit(1);
-  }
-  k->kem_keygen_ms = now_ms() - t0;
-  return NULL;
-}
-
-static void *dsa_keygen_thread(void *arg) {
-  keygen_result_t *k = (keygen_result_t *)arg;
-  double t0 = now_ms();
-  if (dsa_keypair(k->dsa_pk, k->dsa_sk) != 0) {
-    fprintf(stderr, "[broadcast] DSA keygen failed\n"); exit(1);
-  }
-  k->dsa_keygen_ms = now_ms() - t0;
-  return NULL;
-}
-
 /* ── Recv Helper (handshake only) ────────────────────────────────── */
 static ssize_t recv_type(conn_t *c, uint8_t want_type,
                          uint8_t *payload, size_t payload_max) {
@@ -215,7 +194,6 @@ static int do_handshake(conn_t *c, metrics_t *m, const keygen_result_t *k) {
     fprintf(stderr, "[broadcast] CLIENT_HELLO send failed\n");
     return -1;
   }
-  printf("  CLIENT_HELLO sent (%zu bytes)\n", sizeof(hello));
 
   /* Phase 2: Receive SERVER_HELLO */
   size_t srv_hello_min = DSA_PK_BYTES + KEM_CT_BYTES + SESSION_ID_BYTES + 16 + DSA_SIG_BYTES;
@@ -236,7 +214,6 @@ static int do_handshake(conn_t *c, metrics_t *m, const keygen_result_t *k) {
     memcpy(s_nonce,    srv_hello + off, 16);              off += 16;
     memcpy(srv_sig,    srv_hello + off, DSA_SIG_BYTES);
   }
-  printf("  SERVER_HELLO received (%zu bytes)\n", (size_t)srv_len);
 
   /* Verify server identity against trust store (pins server DSA public key with TOFU) */
   if (trust_store_client_verify_server(srv_dsa_pk, "server_identity.pub") != 0) {
@@ -269,7 +246,6 @@ static int do_handshake(conn_t *c, metrics_t *m, const keygen_result_t *k) {
     free(tx);
     return -1;
   }
-  printf("  dsa_verify (server) : %.3f ms\n", now_ms() - t0);
 
   /* KEM decapsulate */
   t0 = now_ms();
@@ -280,7 +256,6 @@ static int do_handshake(conn_t *c, metrics_t *m, const keygen_result_t *k) {
   }
   t1 = now_ms();
   m->hs_encap_ms = t1 - t0;
-  printf("  kem_decaps          : %.3f ms\n", m->hs_encap_ms);
 
   uint64_t sid64 = 0;
   for (int i = 0; i < SESSION_ID_BYTES; i++) {
@@ -316,7 +291,6 @@ static int do_handshake(conn_t *c, metrics_t *m, const keygen_result_t *k) {
     return -1;
   }
   m->hs_sign_ms = now_ms() - t0;
-  printf("  dsa_sign            : %.3f ms  (sig=%zu bytes)\n", m->hs_sign_ms, sig_len);
 
   /* Phase 3: Send CLIENT_AUTH */
   if (pkt_send_reliable(c, PKT_CLIENT_AUTH, sig, (uint16_t)sig_len) != 0) {
@@ -324,22 +298,12 @@ static int do_handshake(conn_t *c, metrics_t *m, const keygen_result_t *k) {
     explicit_bzero(shared_secret, sizeof(shared_secret));
     return -1;
   }
-  printf("  CLIENT_AUTH sent\n");
 
   c->established = 1;
   explicit_bzero(shared_secret, sizeof(shared_secret));
   explicit_bzero(sig, sizeof(sig));
 
   m->hs_total_ms = now_ms() - hs_start;
-  printf("\n  ┌── PQC Handshake Summary ──────────────────────┐\n");
-  printf("  │  ML-KEM-768  keygen  : %7.3f ms              │\n", m->hs_kem_keygen_ms);
-  printf("  │  ML-DSA-65   keygen  : %7.3f ms              │\n", m->hs_dsa_keygen_ms);
-  printf("  │  ML-KEM-768  decaps  : %7.3f ms              │\n", m->hs_encap_ms);
-  printf("  │  ML-DSA-65   sign    : %7.3f ms              │\n", m->hs_sign_ms);
-  printf("  │  Total handshake     : %7.3f ms  %s           │\n",
-         m->hs_total_ms,
-         m->hs_total_ms <= 1.0 ? "✓ <1ms" : "⚠  >1ms");
-  printf("  └───────────────────────────────────────────────┘\n");
 
   return 0;
 }
@@ -424,28 +388,24 @@ int main(int argc, char *argv[]) {
   if (interval_ms < 10) interval_ms = 10;
   const char *device_id = (argc > 3) ? argv[3] : "ESP32-NODE-01";
 
-  char ts[16]; now_hms(ts, sizeof(ts));
-  printf("╔══════════════════════════════════════════════════════════════╗\n");
-  printf("║   QRYPTONEX — Post-Quantum Continuous Telemetry Broadcaster  ║\n");
-  printf("╚══════════════════════════════════════════════════════════════╝\n");
-  printf("  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305 (AAD)\n");
-  printf("  Target   : %s:%d\n", server_ip, SERVER_PORT);
-  printf("  Device ID: %s\n", device_id);
-  printf("  Interval : %d ms (%.1f pkts/sec)\n\n", interval_ms, 1000.0 / interval_ms);
-
-  /* Warmup */
-  {
-    double wu_t0 = now_ms();
-    kem_warmup();
-    dsa_warmup();
-    printf("  Warmup (KEM + DSA) : %.2f ms\n", now_ms() - wu_t0);
-  }
-
-  /* Parallel Keygen */
+  /* Serial KEM + DSA Key Generation */
+  kem_warmup();
+  dsa_warmup();
   memset(&g_keys, 0, sizeof(g_keys));
-  pthread_t kem_tid, dsa_tid;
-  pthread_create(&kem_tid, NULL, kem_keygen_thread, &g_keys);
-  pthread_create(&dsa_tid, NULL, dsa_keygen_thread, &g_keys);
+
+  double t0 = now_ms();
+  if (kem_keypair(g_keys.kem_pk, g_keys.kem_sk) != 0) {
+    fprintf(stderr, "[broadcast] KEM keygen failed\n");
+    return 1;
+  }
+  g_keys.kem_keygen_ms = now_ms() - t0;
+
+  t0 = now_ms();
+  if (dsa_keypair(g_keys.dsa_pk, g_keys.dsa_sk) != 0) {
+    fprintf(stderr, "[broadcast] DSA keygen failed\n");
+    return 1;
+  }
+  g_keys.dsa_keygen_ms = now_ms() - t0;
 
   int sock = make_client_sock();
   if (sock < 0) return 1;
@@ -460,31 +420,26 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  pthread_join(kem_tid, NULL);
-  pthread_join(dsa_tid, NULL);
-
-  printf("  KEM KeyGen         : %.3f ms\n", g_keys.kem_keygen_ms);
-  printf("  DSA KeyGen         : %.3f ms\n\n", g_keys.dsa_keygen_ms);
-
-  /* Perform 4-way post-quantum handshake */
+  /* Serial Handshake */
   metrics_t metrics = {0};
   metrics.msg_min_rtt_ms = 1e15;
 
   if (do_handshake(&c, &metrics, &g_keys) != 0) {
-    fprintf(stderr, "[broadcast] Handshake failed! Aborting.\n");
+    fprintf(stderr, "[broadcast] Handshake failed\n");
     close(sock);
     conn_destroy(&c);
     return 1;
   }
 
-  /* Wipe private signing & decapsulation keys */
   explicit_bzero(g_keys.kem_sk, sizeof(g_keys.kem_sk));
   explicit_bzero(g_keys.dsa_sk, sizeof(g_keys.dsa_sk));
 
+  char ts[16];
   now_hms(ts, sizeof(ts));
-  printf("\n[%s] \033[1;32mSession established (ID: %016llx)\033[0m\n",
-         ts, (unsigned long long)c.session_id);
-  printf("  Handshake Total: %.3f ms\n\n", metrics.hs_total_ms);
+  printf("[%s] Connected to %s:%d (Session ID: %016llx)\n",
+         ts, server_ip, SERVER_PORT, (unsigned long long)c.session_id);
+  printf("[%s] Broadcasting telemetry from device '%s' (interval: %dms)...\n",
+         ts, device_id, interval_ms);
 
   metrics.session_start_ns = now_ns();
 
@@ -503,10 +458,6 @@ int main(int argc, char *argv[]) {
   sensor_state_t sensor;
   sensor_init(&sensor, device_id);
 
-  printf("\033[1;36m┌── STREAMING CONTINUOUS SENSOR TELEMETRY (Ctrl+C to stop) ────────────────────────┐\033[0m\n");
-  printf("\033[90m│  [TIME]      PKT#   TEMP    HUM    PRESS    VBAT   STATUS   ENCRYPT    RTT   TX_RATE  │\033[0m\n");
-  printf("\033[1;36m├──────────────────────────────────────────────────────────────────────────────────┤\033[0m\n");
-
   char json_buf[512];
   uint64_t broadcast_count = 0;
   double broadcast_start_ms = now_ms();
@@ -515,68 +466,36 @@ int main(int argc, char *argv[]) {
     sensor_sample(&sensor, json_buf, sizeof(json_buf));
     uint32_t payload_len = (uint32_t)strlen(json_buf);
 
-    double enc_t0 = now_ms();
     if (data_send(&c, &metrics, (const uint8_t *)json_buf, payload_len) != 0) {
-      fprintf(stderr, "\r\033[1;31m[broadcast] data_send failed at packet %llu\033[0m\n",
+      fprintf(stderr, "\r[broadcast] send failed at packet %llu\n",
               (unsigned long long)broadcast_count);
     }
-    double enc_us = (now_ms() - enc_t0) * 1000.0;
     broadcast_count++;
 
     now_hms(ts, sizeof(ts));
-    double elapsed_s = (now_ms() - broadcast_start_ms) / 1000.0;
-    double tx_rate_kbps = (elapsed_s > 0.0) ? (metrics.bytes_sent * 8.0 / elapsed_s / 1000.0) : 0.0;
-
-    printf("│ [%s] #%-5llu %4.1f°C %5.1f%% %7.1fhPa %4.2fV  %-6.6s %5.1fµs %5.1fms %5.1fkbps │\r",
+    printf("[%s] #%-5llu | Temp: %4.1f°C | Hum: %4.1f%% | Press: %6.1fhPa | Vbat: %4.2fV | Status: %-4.4s\n",
            ts,
            (unsigned long long)broadcast_count,
            sensor.temp_c,
            sensor.humidity_pct,
            sensor.pressure_hpa,
            sensor.v_bat,
-           (sensor.temp_c > 38.0) ? "WARN" : "OK",
-           enc_us,
-           rx_args.last_rtt_ms,
-           tx_rate_kbps);
+           (sensor.temp_c > 38.0) ? "WARN" : "OK");
     fflush(stdout);
 
-    /* Sleep for specified interval */
     usleep((useconds_t)(interval_ms * 1000));
     sensor.uptime_s = (uint32_t)((now_ms() - broadcast_start_ms) / 1000.0);
   }
 
-  printf("\n\033[1;36m└──────────────────────────────────────────────────────────────────────────────────┘\033[0m\n");
-  printf("\n[broadcast] Stopping telemetry stream...\n");
-
   rx_args.stop = 1;
   pthread_join(rx_tid, NULL);
 
-  /* Send disconnect notification to server */
   pkt_send(&c, PKT_DISCONNECT, NULL, 0);
-
-  /* Print final summary */
-  double total_time_s = (now_ms() - broadcast_start_ms) / 1000.0;
-  double avg_enc = (metrics.msg_count > 0) ? (metrics.total_encrypt_us / (double)metrics.msg_count) : 0.0;
-  double loss_rate = (broadcast_count > 0 && rx_args.echoes_received <= broadcast_count)
-                     ? ((1.0 - ((double)rx_args.echoes_received / (double)broadcast_count)) * 100.0) : 0.0;
-
-  printf("\n╔══════════════════════════════════════════════════════════════╗\n");
-  printf("║      TELEMETRY BROADCAST SUMMARY REPORT                      ║\n");
-  printf("╠══════════════════════════════════════════════════════════════╣\n");
-  printf("║  Device Identifier        :  %-31s ║\n", sensor.device_id);
-  printf("║  Server Endpoint          :  %s:%-13d ║\n", server_ip, SERVER_PORT);
-  printf("║  Broadcast Stream Count   :  %-31llu ║\n", (unsigned long long)broadcast_count);
-  printf("║  Acks/Echoes Received     :  %-31llu ║\n", (unsigned long long)rx_args.echoes_received);
-  printf("║  Estimated Packet Loss    :  %5.2f %%                        ║\n", loss_rate);
-  printf("║  Total Bytes Transmitted  :  %-31llu ║\n", (unsigned long long)metrics.bytes_sent);
-  printf("║  Broadcast Duration       :  %7.2f s                        ║\n", total_time_s);
-  printf("║  Average Encrypt Latency  :  %7.2f µs                       ║\n", avg_enc);
-  printf("║  Average Network RTT      :  %7.2f ms                       ║\n", metrics.msg_avg_rtt_ms);
-  printf("║  Cryptographic Cipher     :  ChaCha20-Poly1305 + 15B AAD     ║\n");
-  printf("╚══════════════════════════════════════════════════════════════╝\n\n");
-
   close(sock);
   conn_destroy(&c);
-  printf("[broadcast] Clean exit complete.\n");
+
+  now_hms(ts, sizeof(ts));
+  printf("\n[%s] Disconnected. Streamed %llu telemetry packets.\n",
+         ts, (unsigned long long)broadcast_count);
   return 0;
 }

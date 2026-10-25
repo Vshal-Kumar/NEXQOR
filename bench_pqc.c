@@ -359,10 +359,6 @@ int main(int argc, char *argv[]) {
   s_hs_ser.samples = malloc(rounds * sizeof(double));
   s_hs_ser.count = rounds;
 
-  sample_set_t s_hs_par;
-  s_hs_par.samples = malloc(rounds * sizeof(double));
-  s_hs_par.count = rounds;
-
   double kem_kg_sum = 0, dsa_kg_sum = 0, enc_sum = 0, dec_sum = 0, sign_sum = 0,
          verify_sum = 0, kdf_sum = 0;
 
@@ -394,11 +390,6 @@ int main(int argc, char *argv[]) {
 
     // Serial Handshake: (KEM KeyGen + DSA KeyGen) + Server Encap + Server Sign + Client Decap + Client Verify + Client Sign + Server Verify + Key derivation
     s_hs_ser.samples[i] = k_kg + d_kg + enc + sig + dec + ver + sig + ver + kdf;
-
-    // Parallel Handshake: max(KEM KeyGen, DSA KeyGen) + Server Encap + Server Sign + max(Client Decap, Client Verify) + Client Sign + Server Verify + Key derivation
-    double max_keygen = (k_kg > d_kg) ? k_kg : d_kg;
-    double max_client_proc = (dec > ver) ? dec : ver;
-    s_hs_par.samples[i] = max_keygen + enc + sig + max_client_proc + sig + ver + kdf;
   }
 
   double avg_k_kg = kem_kg_sum / rounds;
@@ -412,26 +403,23 @@ int main(int argc, char *argv[]) {
   detailed_stats_t d_hs_ser;
   compute_stats(&s_hs_ser, &d_hs_ser);
 
-  detailed_stats_t d_hs_par;
-  compute_stats(&s_hs_par, &d_hs_par);
-
-  printf("┌─────────────────────────────────────────┬──────────────────┬──────────────────┐\n");
-  printf("│ TABLE 7 — Standalone Cryptographic CPU Execution Handshake Breakdown          │\n");
-  printf("├─────────────────────────────────────────┼──────────────────┼──────────────────┤\n");
-  printf("│ Phase / Operation                       │ Serial Mean (µs) │ Parallel Mean(µs)│\n");
-  printf("├─────────────────────────────────────────┼──────────────────┼──────────────────┤\n");
-  printf("│ Client KEM KeyGen                       │ %16.3f │ %16.3f │\n", avg_k_kg, avg_k_kg);
-  printf("│ Client DSA KeyGen                       │ %16.3f │ %16.3f │\n", avg_d_kg, avg_d_kg);
-  printf("│ Server KEM Encapsulation                │ %16.3f │ %16.3f │\n", avg_enc, avg_enc);
-  printf("│ Server DSA Signature                    │ %16.3f │ %16.3f │\n", avg_sig, avg_sig);
-  printf("│ Client KEM Decapsulation                │ %16.3f │ %16.3f │\n", avg_dec, avg_dec);
-  printf("│ Client DSA Verification                 │ %16.3f │ %16.3f │\n", avg_ver, avg_ver);
-  printf("│ Client DSA Signature                    │ %16.3f │ %16.3f │\n", avg_sig, avg_sig);
-  printf("│ Server DSA Verification                 │ %16.3f │ %16.3f │\n", avg_ver, avg_ver);
-  printf("│ ChaCha20 Key Setup (SHAKE KDF)          │ %16.3f │ %16.3f │\n", avg_kdf, avg_kdf);
-  printf("├─────────────────────────────────────────┼──────────────────┼──────────────────┤\n");
-  printf("│ Total CPU Handshake Latency             │ %16.3f │ %16.3f │\n", d_hs_ser.mean, d_hs_par.mean);
-  printf("└─────────────────────────────────────────┴──────────────────┴──────────────────┘\n\n");
+  printf("┌─────────────────────────────────────────┬──────────────────┐\n");
+  printf("│ TABLE 7 — Standalone Cryptographic CPU Execution Handshake Breakdown │\n");
+  printf("├─────────────────────────────────────────┼──────────────────┤\n");
+  printf("│ Phase / Operation                       │ Mean Latency(µs) │\n");
+  printf("├─────────────────────────────────────────┼──────────────────┤\n");
+  printf("│ Client KEM KeyGen                       │ %16.3f │\n", avg_k_kg);
+  printf("│ Client DSA KeyGen                       │ %16.3f │\n", avg_d_kg);
+  printf("│ Server KEM Encapsulation                │ %16.3f │\n", avg_enc);
+  printf("│ Server DSA Signature                    │ %16.3f │\n", avg_sig);
+  printf("│ Client KEM Decapsulation                │ %16.3f │\n", avg_dec);
+  printf("│ Client DSA Verification                 │ %16.3f │\n", avg_ver);
+  printf("│ Client DSA Signature                    │ %16.3f │\n", avg_sig);
+  printf("│ Server DSA Verification                 │ %16.3f │\n", avg_ver);
+  printf("│ ChaCha20 Key Setup (SHAKE KDF)          │ %16.3f │\n", avg_kdf);
+  printf("├─────────────────────────────────────────┼──────────────────┤\n");
+  printf("│ Total CPU Handshake Latency             │ %16.3f │\n", d_hs_ser.mean);
+  printf("└─────────────────────────────────────────┴──────────────────┘\n\n");
 
   /* ── TABLE 8: Network Overhead ────────────────────────────────── */
   size_t total_network_bytes =
@@ -458,24 +446,24 @@ int main(int argc, char *argv[]) {
   printf("└─────────────────────────────────────────┴───────────────┘\n\n");
 
   /* ── TABLE 18: Statistical Summary of CPU Handshake Latency ───── */
-  printf("┌─────────────────────────────────────────┬──────────────────┬──────────────────┐\n");
-  printf("│ TABLE 18 — Standalone CPU Handshake Latency Statistical Summary               │\n");
-  printf("├─────────────────────────────────────────┼──────────────────┼──────────────────┤\n");
-  printf("│ Metric                                  │ Serial (µs)      │ Parallel (µs)    │\n");
-  printf("├─────────────────────────────────────────┼──────────────────┼──────────────────┤\n");
-  printf("│ Mean                                    │ %16.3f │ %16.3f │\n", d_hs_ser.mean, d_hs_par.mean);
-  printf("│ Median                                  │ %16.3f │ %16.3f │\n", d_hs_ser.median, d_hs_par.median);
-  printf("│ Minimum                                 │ %16.3f │ %16.3f │\n", d_hs_ser.min, d_hs_par.min);
-  printf("│ Maximum                                 │ %16.3f │ %16.3f │\n", d_hs_ser.max, d_hs_par.max);
-  printf("│ Range (Max - Min)                       │ %16.3f │ %16.3f │\n", d_hs_ser.max - d_hs_ser.min, d_hs_par.max - d_hs_par.min);
-  printf("│ Variance                                │ %16.3f │ %16.3f │\n", d_hs_ser.variance, d_hs_par.variance);
-  printf("│ Standard Deviation                      │ %16.3f │ %16.3f │\n", d_hs_ser.stddev, d_hs_par.stddev);
-  printf("│ Coefficient of Variation (CV)           │ %15.2f%% │ %15.2f%% │\n", d_hs_ser.coeff_var, d_hs_par.coeff_var);
-  printf("│ 95th Percentile                         │ %16.3f │ %16.3f │\n", d_hs_ser.p95, d_hs_par.p95);
-  printf("│ 99th Percentile                         │ %16.3f │ %16.3f │\n", d_hs_ser.p99, d_hs_par.p99);
-  printf("│ 95%% Confidence Interval                 │ [%7.1f,%7.1f] │ [%7.1f,%7.1f] │\n",
-         d_hs_ser.ci_lower, d_hs_ser.ci_upper, d_hs_par.ci_lower, d_hs_par.ci_upper);
-  printf("└─────────────────────────────────────────┴──────────────────┴──────────────────┘\n\n");
+  printf("┌─────────────────────────────────────────┬──────────────────┐\n");
+  printf("│ TABLE 18 — Standalone CPU Handshake Latency Statistical Summary │\n");
+  printf("├─────────────────────────────────────────┼──────────────────┤\n");
+  printf("│ Metric                                  │ Value (µs)       │\n");
+  printf("├─────────────────────────────────────────┼──────────────────┤\n");
+  printf("│ Mean                                    │ %16.3f │\n", d_hs_ser.mean);
+  printf("│ Median                                  │ %16.3f │\n", d_hs_ser.median);
+  printf("│ Minimum                                 │ %16.3f │\n", d_hs_ser.min);
+  printf("│ Maximum                                 │ %16.3f │\n", d_hs_ser.max);
+  printf("│ Range (Max - Min)                       │ %16.3f │\n", d_hs_ser.max - d_hs_ser.min);
+  printf("│ Variance                                │ %16.3f │\n", d_hs_ser.variance);
+  printf("│ Standard Deviation                      │ %16.3f │\n", d_hs_ser.stddev);
+  printf("│ Coefficient of Variation (CV)           │ %15.2f%% │\n", d_hs_ser.coeff_var);
+  printf("│ 95th Percentile                         │ %16.3f │\n", d_hs_ser.p95);
+  printf("│ 99th Percentile                         │ %16.3f │\n", d_hs_ser.p99);
+  printf("│ 95%% Confidence Interval                 │ [%7.1f,%7.1f] │\n",
+         d_hs_ser.ci_lower, d_hs_ser.ci_upper);
+  printf("└─────────────────────────────────────────┴──────────────────┘\n\n");
 
   // Free all allocated arrays
   free(kem_keygen.samples);
@@ -485,7 +473,6 @@ int main(int argc, char *argv[]) {
   free(dsa_sign.samples);
   free(dsa_verify.samples);
   free(s_hs_ser.samples);
-  free(s_hs_par.samples);
 
   return 0;
 }

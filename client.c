@@ -79,29 +79,6 @@ static keygen_result_t g_keys;
 static volatile int    g_stop = 0;
 static void on_signal(int s) { (void)s; g_stop = 1; }
 
-/* ── Parallel keygen threads ─────────────────────────────────────── */
-static void *kem_keygen_thread(void *arg)
-{
-    keygen_result_t *k = (keygen_result_t *)arg;
-    double t0 = now_ms();
-    if (kem_keypair(k->kem_pk, k->kem_sk) != 0) {
-        fprintf(stderr, "[client] KEM keygen failed\n"); exit(1);
-    }
-    k->kem_keygen_ms = now_ms() - t0;
-    return NULL;
-}
-
-static void *dsa_keygen_thread(void *arg)
-{
-    keygen_result_t *k = (keygen_result_t *)arg;
-    double t0 = now_ms();
-    if (dsa_keypair(k->dsa_pk, k->dsa_sk) != 0) {
-        fprintf(stderr, "[client] DSA keygen failed\n"); exit(1);
-    }
-    k->dsa_keygen_ms = now_ms() - t0;
-    return NULL;
-}
-
 /* ── Recv helper (handshake only) ────────────────────────────────── */
 static ssize_t recv_type(conn_t *c, uint8_t want_type,
                           uint8_t *payload, size_t payload_max)
@@ -193,7 +170,7 @@ static void *rx_thread(void *arg)
             pt[--pt_len] = '\0';
 
         char ts[16]; now_hms(ts, sizeof(ts));
-        printf("\r\033[2K\033[1;36m[%s] PC :\033[0m %s\n", ts, pt);
+        printf("\r\033[2K\033[1;36m[%s] Server:\033[0m %s\n", ts, pt);
 
         /* Update local metrics */
         a->metrics->bytes_recv        += (uint64_t)(PKT_HDR_BYTES + 28 + ct_len);
@@ -201,17 +178,7 @@ static void *rx_thread(void *arg)
         a->metrics->decrypt_count++;
         metrics_update_rtt(a->metrics, recv_ns);
 
-        /* Compact per-message metrics line */
-        double avg_dec = (a->metrics->decrypt_count > 0)
-            ? a->metrics->total_decrypt_us / (double)a->metrics->decrypt_count : 0.0;
-        printf("\033[90m  [rx] decrypt=%.1fµs  avg=%.1fµs"
-               "  ia=%.3fms  jitter=%.3fms  rx=%lluB\033[0m\n",
-               dec_us, avg_dec,
-               a->metrics->msg_last_rtt_ms,
-               a->metrics->jitter_ms,
-               (unsigned long long)a->metrics->bytes_recv);
-
-        printf("\033[1;35mPi  >\033[0m ");
+        printf("\033[1;35m> \033[0m");
         fflush(stdout);
     }
     return NULL;
@@ -250,7 +217,6 @@ static int do_handshake(conn_t *c, metrics_t *m,
     if (pkt_send_reliable(c, PKT_CLIENT_HELLO, hello, (uint16_t)sizeof(hello)) != 0) {
         fprintf(stderr, "[client] CLIENT_HELLO send failed\n"); return -1;
     }
-    printf("  CLIENT_HELLO sent (%zu bytes)\n", sizeof(hello));
 
     /* Phase 2: Receive SERVER_HELLO */
     size_t srv_hello_min = DSA_PK_BYTES + KEM_CT_BYTES + SESSION_ID_BYTES + 16 + DSA_SIG_BYTES;
@@ -269,7 +235,6 @@ static int do_handshake(conn_t *c, metrics_t *m,
         memcpy(s_nonce,    srv_hello + off, 16);              off += 16;
         memcpy(srv_sig,    srv_hello + off, DSA_SIG_BYTES);
     }
-    printf("  SERVER_HELLO received (%zu bytes)\n", (size_t)srv_len);
 
     /* Verify server identity against trust store (pins server DSA public key) */
     if (trust_store_client_verify_server(srv_dsa_pk, "server_identity.pub") != 0) {
@@ -302,8 +267,6 @@ static int do_handshake(conn_t *c, metrics_t *m,
         free(tx);
         return -1;
     }
-    double verify_ms = now_ms() - t0;
-    printf("  dsa_verify (server) : %.3f ms\n", verify_ms);
 
     /* KEM decapsulate */
     t0 = now_ms();
@@ -312,7 +275,6 @@ static int do_handshake(conn_t *c, metrics_t *m,
     }
     t1 = now_ms();
     m->hs_encap_ms = t1 - t0;
-    printf("  kem_decaps          : %.3f ms\n", m->hs_encap_ms);
 
     uint64_t sid64 = 0;
     for (int i = 0; i < SESSION_ID_BYTES; i++) sid64 = (sid64 << 8) | session_id[i];
@@ -346,8 +308,6 @@ static int do_handshake(conn_t *c, metrics_t *m,
     }
     t1 = now_ms();
     m->hs_sign_ms = t1 - t0;
-    printf("  dsa_sign            : %.3f ms  (sig=%zu bytes)\n",
-           m->hs_sign_ms, sig_len);
 
     /* Phase 3: Send CLIENT_AUTH */
     if (pkt_send_reliable(c, PKT_CLIENT_AUTH, sig, (uint16_t)sig_len) != 0) {
@@ -355,7 +315,6 @@ static int do_handshake(conn_t *c, metrics_t *m,
         explicit_bzero(shared_secret, sizeof(shared_secret));
         return -1;
     }
-    printf("  CLIENT_AUTH sent\n");
 
     /* Phase 4: session active */
     c->established = 1;
@@ -364,16 +323,6 @@ static int do_handshake(conn_t *c, metrics_t *m,
 
     c->session_id = sid64;
     m->hs_total_ms = now_ms() - hs_start;
-
-    printf("\n  ┌── PQC Handshake Summary ──────────────────────┐\n");
-    printf("  │  ML-KEM-768  keygen  : %7.3f ms              │\n", m->hs_kem_keygen_ms);
-    printf("  │  ML-DSA-65   keygen  : %7.3f ms              │\n", m->hs_dsa_keygen_ms);
-    printf("  │  ML-KEM-768  decaps  : %7.3f ms              │\n", m->hs_encap_ms);
-    printf("  │  ML-DSA-65   sign    : %7.3f ms              │\n", m->hs_sign_ms);
-    printf("  │  Total handshake     : %7.3f ms  %s           │\n",
-           m->hs_total_ms,
-           m->hs_total_ms <= 1.0 ? "✓ <1ms" : "⚠  >1ms");
-    printf("  └───────────────────────────────────────────────┘\n");
 
     return 0;
 }
@@ -389,24 +338,24 @@ int main(int argc, char *argv[])
 
     const char *server_ip = (argc > 1) ? argv[1] : SERVER_ADDR;
 
-    char ts[16]; now_hms(ts, sizeof(ts));
-    printf("[%s] QRYPTONEX — Post-Quantum Secure Client\n", ts);
-    printf("  Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305\n");
-    printf("  Server   : %s:%d\n\n", server_ip, SERVER_PORT);
-
-    /* Warmup */
-    {
-        double wu_t0 = now_ms();
-        kem_warmup();
-        dsa_warmup();
-        printf("  Warmup (KEM + DSA) : %.2f ms\n", now_ms() - wu_t0);
-    }
-
-    /* Parallel KEM + DSA keygen */
+    /* Serial KEM + DSA key generation */
+    kem_warmup();
+    dsa_warmup();
     memset(&g_keys, 0, sizeof(g_keys));
-    pthread_t kem_tid, dsa_tid;
-    pthread_create(&kem_tid, NULL, kem_keygen_thread, &g_keys);
-    pthread_create(&dsa_tid, NULL, dsa_keygen_thread, &g_keys);
+
+    double t0 = now_ms();
+    if (kem_keypair(g_keys.kem_pk, g_keys.kem_sk) != 0) {
+        fprintf(stderr, "[client] KEM keygen failed\n");
+        return 1;
+    }
+    g_keys.kem_keygen_ms = now_ms() - t0;
+
+    t0 = now_ms();
+    if (dsa_keypair(g_keys.dsa_pk, g_keys.dsa_sk) != 0) {
+        fprintf(stderr, "[client] DSA keygen failed\n");
+        return 1;
+    }
+    g_keys.dsa_keygen_ms = now_ms() - t0;
 
     int sock = make_client_sock();
     if (sock < 0) return 1;
@@ -420,13 +369,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Invalid server address: %s\n", server_ip); return 1;
     }
 
-    pthread_join(kem_tid, NULL);
-    pthread_join(dsa_tid, NULL);
-
-    printf("  KEM KeyGen         : %.3f ms\n", g_keys.kem_keygen_ms);
-    printf("  DSA KeyGen         : %.3f ms\n\n", g_keys.dsa_keygen_ms);
-
-    /* Handshake */
+    /* Serial Handshake */
     metrics_t metrics = {0};
     metrics.msg_min_rtt_ms = 1e15;
 
@@ -438,17 +381,13 @@ int main(int argc, char *argv[])
     explicit_bzero(g_keys.kem_sk, sizeof(g_keys.kem_sk));
     explicit_bzero(g_keys.dsa_sk, sizeof(g_keys.dsa_sk));
 
+    char ts[16];
     now_hms(ts, sizeof(ts));
-    printf("\n[%s] Session established  (ID: %016llx)\n",
-           ts, (unsigned long long)c.session_id);
-    printf("  Handshake total     : %.3f ms\n\n", metrics.hs_total_ms);
+    printf("[%s] Connected to %s:%d (Session ID: %016llx)\n",
+           ts, server_ip, SERVER_PORT, (unsigned long long)c.session_id);
+    printf("[%s] Ready to chat. Type a message and press Enter (Ctrl-C to exit).\n", ts);
 
     metrics.session_start_ns = now_ns();
-
-    printf("\033[1;35m╔══════════════════════════════════════╗\033[0m\n");
-    printf("\033[1;35m║  QRYPTONEX Secure Chat — Client      ║\033[0m\n");
-    printf("\033[1;35m║  Type to chat  |  Ctrl-C to exit     ║\033[0m\n");
-    printf("\033[1;35m╚══════════════════════════════════════╝\033[0m\n\n");
 
     /* Start RX thread */
     rx_args_t rx_args = { .conn = &c, .metrics = &metrics, .stop = 0 };
@@ -456,40 +395,32 @@ int main(int argc, char *argv[])
     pthread_create(&rx_tid, NULL, rx_thread, &rx_args);
 
     /* TX loop */
-    printf("\033[1;35mClient >\033[0m ");
+    printf("\033[1;35m> \033[0m");
     fflush(stdout);
 
     char line[DATA_CHUNK_MAX];
     while (!g_stop && fgets(line, sizeof(line), stdin)) {
         size_t len = strlen(line);
-        if (len == 0) {
-            printf("\033[1;35mClient >\033[0m ");
+        if (len == 0 || (len == 1 && (line[0] == '\n' || line[0] == '\r'))) {
+            printf("\033[1;35m> \033[0m");
             fflush(stdout);
             continue;
         }
 
-        double enc_t0 = now_ms();
-        if (data_send(&c, &metrics, (const uint8_t *)line, (uint32_t)len) != 0)
+        if (data_send(&c, &metrics, (const uint8_t *)line, (uint32_t)len) != 0) {
             fprintf(stderr, "[client] send failed\n");
-        double enc_us = (now_ms() - enc_t0) * 1000.0;
+        }
 
-        printf("\033[90m  [tx] encrypt=%.1fµs  msgs=%llu  sent=%lluB\033[0m\n",
-               enc_us,
-               (unsigned long long)metrics.msg_count,
-               (unsigned long long)metrics.bytes_sent);
-
-        printf("\033[1;35mClient >\033[0m ");
+        printf("\033[1;35m> \033[0m");
         fflush(stdout);
     }
 
     rx_args.stop = 1;
     pthread_join(rx_tid, NULL);
 
-    metrics_print(&metrics);
-
     pkt_send(&c, PKT_DISCONNECT, NULL, 0);
     close(sock);
     conn_destroy(&c);
-    printf("[client] Exit.\n");
+    printf("\n[client] Disconnected.\n");
     return 0;
 }
