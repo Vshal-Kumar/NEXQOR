@@ -43,7 +43,7 @@
 
 /* ── Endpoint ────────────────────────────────────────────────────── */
 #define SERVER_PORT 9877
-#define SERVER_ADDR "127.0.0.1"
+#define SERVER_ADDR "192.168.137.168"
 
 /* ── Packet types ────────────────────────────────────────────────── */
 #define PKT_CLIENT_HELLO 0x01

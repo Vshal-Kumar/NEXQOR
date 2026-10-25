@@ -69,9 +69,14 @@ int trust_store_client_verify_server(const uint8_t srv_dsa_pk[DSA_PK_BYTES],
     const char *p_path = pinned_pub_path ? pinned_pub_path : TRUST_SERVER_PUB_DEFAULT;
     FILE *f = fopen(p_path, "rb");
     if (!f) {
-        /* If no explicit pinned file exists, check fallback or reject */
-        fprintf(stderr, "[trust_store] ERROR: Pinned server public key not found at '%s'. Aborting handshake.\n", p_path);
-        return -1;
+        /* Trust-On-First-Use (TOFU): Automatically trust and pin server public key delivered in handshake */
+        FILE *fw = fopen(p_path, "wb");
+        if (fw) {
+            fwrite(srv_dsa_pk, 1, DSA_PK_BYTES, fw);
+            fclose(fw);
+            printf("[trust_store] In-band trust established: server identity pinned on first use to '%s'\n", p_path);
+        }
+        return 0;
     }
 
     uint8_t pinned_pk[DSA_PK_BYTES];
