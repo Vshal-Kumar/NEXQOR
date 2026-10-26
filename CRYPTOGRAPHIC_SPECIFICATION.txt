@@ -1,0 +1,452 @@
+================================================================================
+  QRYPTONEX (NEXQOR) — CORE CRYPTOGRAPHIC SPECIFICATION & TECHNICAL IMPLEMENTATION
+================================================================================
+Document Type   : Technical Cryptographic Architecture Specification
+Standard Bases  : NIST FIPS 203 (ML-KEM), NIST FIPS 204 (ML-DSA), RFC 8439 (AEAD),
+                  NIST FIPS 202 (SHA-3/SHAKE), RFC 6479 (Replay Window)
+Target Codebase : QRYPTONEX / NEXQOR (C11 Systems Framework)
+Author          : Senior Post-Quantum Cryptography & Systems Security Team
+================================================================================
+
+
+--------------------------------------------------------------------------------
+1. PROJECT OBJECTIVES & ARCHITECTURAL REALIZATION
+--------------------------------------------------------------------------------
+
+1.1 High-Level Mission & Motivation
+Modern public-key cryptographic algorithms (RSA, Diffie-Hellman, ECDH, ECDSA) 
+depend directly on two underlying mathematical assumptions:
+  1. The difficulty of integer factorization (Integer Factoring Problem).
+  2. The difficulty of computing discrete logarithms in finite fields and elliptic 
+     curves (Discrete Logarithm Problem).
+
+Peter Shor demonstrated in 1994 that a sufficiently capable quantum computer 
+running polynomial-time quantum algorithms (Shor's Algorithm) can solve both 
+problems in O((log N)^3) time, completely invalidating modern asymmetric 
+cryptography. Furthermore, Grover's quantum search algorithm reduces the effective 
+brute-force security of symmetric ciphers from 256 bits to 128 bits (square-root 
+speedup).
+
+Additionally, hostile state and commercial entities execute "Store-Now-Decrypt-Later" 
+(SNDL) espionage campaigns: encrypted network traffic is harvested today and 
+stored until a Cryptographically Relevant Quantum Computer (CRQC) is constructed, 
+retroactively exposing private keys, trade secrets, and national defense traffic.
+
+1.2 Core Project Objectives
+The objective of QRYPTONEX (NEXQOR) is to design, implement, and formally verify 
+a complete, high-performance, quantum-resilient networking protocol and multi-client 
+relay engine in C11. Specifically, the framework was engineered to achieve:
+  - NIST FIPS-Standard Lattice Security: Elimination of all pre-quantum key exchange 
+    and signature algorithms.
+  - Sub-Millisecond Latency: Handshakes completed in under 1 millisecond on modern 
+    processors and under 5 milliseconds on low-power edge microprocessors.
+  - Asymmetric High Concurrency: Supporting thousands of simultaneous client sessions 
+    on the server using the Linux kernel io_uring asynchronous engine.
+  - Heterogeneous Edge Acceleration: Zero-overhead vectorization tailored for x86_64 
+    (AVX2/BMI2), ARM64 (AArch64 NEON), and ARM32 (ARMv7-A NEON/VFPv4).
+  - Robust Transport & Wire Security: Prevention of replay attacks, out-of-order 
+    packet drops, header tampering, and nonce reuse.
+  - Zero-Configuration Dynamic Addressing: Seamless server auto-discovery across 
+    Localhost, local Wi-Fi/LAN, and external networks via Tailscale Mesh VPN.
+  - Formal Mathematical Verification: Rigorous verification in Applied Pi-Calculus 
+    proving 21 distinct security invariants under the Dolev-Yao attacker model.
+
+1.3 How Each Objective Was Implemented in Code
+  - Post-Quantum Primitives: Implemented via optimized C wrappers (`wrappers/kem_wrapper.c` 
+    and `wrappers/dsa_wrapper.c`) linking against `liboqs`.
+  - io_uring Multi-Core Server: Built in `server.c` using an Actor-model architecture 
+    on Core 0 with lock-free SPMC/MPSC worker queues across Cores 1-3.
+  - Directional KDF & Key Separation: Built in `wrappers/kem_wrapper.c` using SHAKE256 
+    domain separation strings.
+  - Wire Integrity & Authenticated Associated Data (AAD): Built in `crypto/aead.c` and 
+    `transport.c`, binding the 15-byte packet wire header directly into Poly1305.
+  - Anti-Replay Sliding Window: Implemented in `crypto/replay_window.c` as a 64-packet 
+    thread-safe bitmap tracking RFC 6479 specifications.
+  - Pinned Peer Authentication: Built in `crypto/trust_store.c` (TOFU identity store 
+    preventing Man-in-the-Middle public-key substitution).
+  - Dynamic Network Discovery: Implemented in `transport.c` (`server_publish_endpoints` 
+    and `resolve_server_address`) using UDP broadcast probes (`PKT_DISCOVERY_PROBE` / 
+    `PKT_DISCOVERY_OFFER`) and Tailscale WireGuard integration.
+
+
+--------------------------------------------------------------------------------
+2. CRYPTOGRAPHIC PRIMITIVES & ALGORITHM SELECTION
+--------------------------------------------------------------------------------
+
+2.1 Key Encapsulation: ML-KEM-768 (NIST FIPS 203)
+  - Primitive Classification: Module Learning With Errors (M-LWE) lattice-based 
+    Key Encapsulation Mechanism (formerly known as Kyber768).
+  - Security Category: NIST Level 3 (equivalent brute-force security to AES-192, 
+    surpassing 128-bit quantum security margins).
+  - Mathematical Foundation: Polynomial rings R_q = Z_q[X]/(X^256 + 1), where 
+    dimension n = 256, modulus q = 3329, and matrix rank k = 3.
+  - Hardness Assumption: Hardness of distinguishing Module-LWE samples from uniform 
+    distributions in the presence of quantum polynomial-time adversaries.
+  - IND-CCA2 Security: Transforms an IND-CPA public-key encryption scheme into an 
+    IND-CCA2 secure KEM via the Fujisaki-Okamoto (FO) transform with domain-separated 
+    Keccak hashes.
+
+2.2 Digital Signatures: ML-DSA-65 (NIST FIPS 204)
+  - Primitive Classification: Module Learning With Errors and Module Short Integer 
+    Solution (M-SIS) lattice signature scheme (formerly known as Dilithium3).
+  - Security Category: NIST Level 3.
+  - Mathematical Foundation: Polynomial rings R_q with dimension n = 256, modulus 
+    q = 8380417 (23-bit prime), matrix dimensions (k = 6, l = 5).
+  - Construction: Fiat-Shamir with Aborts. The signer samples small masking polynomials, 
+    computes candidate signatures, and aborts if candidate vectors leak private-key 
+    coefficient distributions.
+  - Signature Scope: Authenticates ephemeral transcript states and pins long-term 
+    identities, providing non-repudiation and MITM immunity.
+
+2.3 Symmetric Encryption: ChaCha20-Poly1305 (RFC 8439)
+  - Cipher: ChaCha20 stream cipher with 256-bit key and 96-bit (12-byte) nonce. 
+    Operates on a 4x4 matrix of 32-bit words using 20 quarter-rounds.
+  - Authenticator: Poly1305 one-time polynomial authenticator modulo 2^130 - 5.
+  - Performance Rationale: Constant-time software execution with zero cache-timing 
+    or S-box lookup vulnerabilities. Outperforms AES-GCM on ARM platforms lacking 
+    dedicated ARMv8 Crypto Extensions (e.g. Raspberry Pi 3/4).
+
+2.4 Cryptographic Hashing & KDF: SHAKE256 (NIST FIPS 202)
+  - Primitive Classification: Extendable-Output Function (XOF) based on Keccak-p[1600, 24].
+  - Rate: 1088 bits (136 bytes), Capacity: 512 bits (64 bytes).
+  - Usage: Serves as the pseudo-random Key Derivation Function (KDF) and transcript 
+    accumulator, supporting arbitrary output lengths without length-extension flaws.
+
+
+--------------------------------------------------------------------------------
+3. COMPREHENSIVE KEY INVENTORY, SIZES, AND DOMAINS
+--------------------------------------------------------------------------------
+
+3.1 Exhaustive Key & Buffer Sizing Table
+
++------------------------+----------------+------------+------------+-----------------------+
+| Cryptographic Asset    | Parameter Name | Byte Size  | Bit Size   | Origin / Lifecycle    |
++------------------------+----------------+------------+------------+-----------------------+
+| ML-KEM Public Key      | KEM_PK_BYTES   | 1,184 B    | 9,472 bits | Ephemeral (per sess)  |
+| ML-KEM Secret Key      | KEM_SK_BYTES   | 2,400 B    | 19,200 bits| Ephemeral (client)    |
+| ML-KEM Ciphertext      | KEM_CT_BYTES   | 1,088 B    | 8,704 bits | Ephemeral (server)    |
+| ML-KEM Shared Secret   | KEM_SS_BYTES   | 32 B       | 256 bits   | Decapsulated secret   |
+| ML-DSA Public Key      | DSA_PK_BYTES   | 1,952 B    | 15,616 bits| Long-term (pinned)    |
+| ML-DSA Secret Key      | DSA_SK_BYTES   | 4,032 B    | 32,256 bits| Long-term (identity)  |
+| ML-DSA Signature       | DSA_SIG_BYTES  | 3,309 B    | 26,472 bits| Wire authentication   |
+| Client Nonce           | c_nonce        | 16 B       | 128 bits   | Ephemeral CSPRNG (C)  |
+| Server Nonce           | s_nonce        | 16 B       | 128 bits   | Ephemeral CSPRNG (S)  |
+| Session Identifier     | session_id     | 8 B        | 64 bits    | Atomic counter/RAND   |
+| Full Derived Key       | DERIVED_KEY    | 64 B       | 512 bits   | SHAKE256 expansion    |
+| Client Write Key (tx)  | tx_key         | 32 B       | 256 bits   | Directional KDF       |
+| Server Write Key (rx)  | rx_key         | 32 B       | 256 bits   | Directional KDF       |
+| AEAD Nonce             | AEAD_NONCE     | 12 B       | 96 bits    | Monotonic counter     |
+| Poly1305 Tag           | AEAD_TAG       | 16 B       | 128 bits   | Per-packet MAC        |
++------------------------+----------------+------------+------------+-----------------------+
+
+3.2 Ephemeral vs. Long-Term Identity Keys
+  - Ephemeral KEM Keys (`g_keys.kem_pk`, `g_keys.kem_sk`):
+    Generated fresh for every connection attempt via `kem_keypair()`. As soon as 
+    decapsulation finishes and traffic keys are derived, `kem_sk` is explicitly 
+    wiped using `explicit_bzero()`. This guarantees Perfect Forward Secrecy (PFS).
+  - Long-Term DSA Keys (`g_srv_dsa_pk`, `g_srv_dsa_sk`):
+    Persisted to disk in `server_identity.pub` and `server_identity.key`. Used 
+    exclusively to sign handshake transcripts and authenticate identity.
+
+3.3 Directional Traffic Keys
+  To prevent reflection and cross-channel injection, traffic keys are strictly 
+  separated by directional domain:
+    - Client TX Key == Server RX Key (32 bytes)
+    - Server TX Key == Client RX Key (32 bytes)
+  An attacker echoing a client packet back to the client will immediately fail 
+  Poly1305 MAC verification because the client decrypts exclusively with `rx_key`.
+
+3.4 Key Storage & Secure Zeroization
+  - Private key files are written with POSIX permissions 0600.
+  - Ephemeral keys in memory are scrubbed with `explicit_bzero()` (resistant to 
+    dead-code elimination optimizations by compilers).
+  - On connection termination (`SESSION_FREE`), session memory structures are 
+    cleared via `memset()` and counter zeroization.
+
+
+--------------------------------------------------------------------------------
+4. DIRECTIONAL KEY DERIVATION FUNCTION (KDF) & TRANSCRIPT HASHING
+--------------------------------------------------------------------------------
+
+4.1 Input Entropy Elements
+The key derivation pipeline consumes five distinct inputs:
+  1. `ss` [32 Bytes]        : The raw ML-KEM-768 shared secret from decapsulation.
+  2. `session_id` [8 Bytes] : Unique 64-bit session index assigned by the server.
+  3. `domain_label` [String]: ASCII literal ("client_write" or "server_write").
+  4. `c_nonce` [16 Bytes]   : Cryptographic random bytes generated by the client.
+  5. `s_nonce` [16 Bytes]   : Cryptographic random bytes generated by the server.
+
+4.2 Mathematical Formulas for Directional Traffic Keys
+The directional derivation in `wrappers/kem_wrapper.c` executes:
+
+  Client Write Key (Client -> Server):
+    K_tx = SHAKE256( ss || session_id_be || "client_write" || c_nonce || s_nonce )
+    Length: 32 Bytes (256 bits)
+
+  Server Write Key (Server -> Client):
+    K_rx = SHAKE256( ss || session_id_be || "server_write" || c_nonce || s_nonce )
+    Length: 32 Bytes (256 bits)
+
+Where `session_id_be` is encoded in Big-Endian network byte order. Because SHAKE256 
+is an XOF, it acts as a random oracle: even if one key were leaked, recovering `ss` 
+or the peer key is mathematically infeasible.
+
+4.3 Transcript Hash 1 (H1) Construction
+Before the server returns `PKT_SERVER_HELLO`, it accumulates the handshake transcript:
+
+  H1 = SHAKE256( c_nonce [16B] || s_nonce [16B] || session_id [8B] || 
+                 srv_dsa_pk [1952B] || kem_ct [1088B] )
+  Output: 64 Bytes digest.
+
+The server signs H1 using its private identity key:
+  sigma_s = ML-DSA-65_Sign( srv_dsa_sk, H1 )
+
+4.4 Transcript Hash 2 (H2) Construction
+Upon receipt and verification of the server signature, the client proves possession 
+of its own identity key and binds the full transcript:
+
+  H2 = SHAKE256( H1 [64B] || sigma_s [3309B] )
+  Output: 64 Bytes digest.
+
+The client signs H2 using its private identity key:
+  sigma_c = ML-DSA-65_Sign( client_dsa_sk, H2 )
+
+
+--------------------------------------------------------------------------------
+5. THE 4-WAY SERIAL MUTUAL AUTHENTICATION HANDSHAKE
+--------------------------------------------------------------------------------
+
+5.1 Complete Sequence Diagram
+
+  Client (x86_64 / ARM64 / ARM32)                           Server Core (x86_64)
+  ════════════════════════════                              ════════════════════
+               │                                                      │
+    [1. KEM Keypair (pk_c, sk_c)]                                     │
+    [2. DSA Keypair (pk_c, sk_c)]                                     │
+    [3. Generate Nonce c_nonce]                                       │
+               │                                                      │
+               ├─────── PKT_CLIENT_HELLO (3,152 Bytes Payload) ──────>│
+               │        [ kem_pk (1184) | dsa_pk (1952) | nonce (16) ]│ [1. Verify Client DB]
+               │                                                      │ [2. KEM Encap -> ss, ct]
+               │                                                      │ [3. Generate s_nonce, SID]
+               │                                                      │ [4. Compute Transcript H1]
+               │                                                      │ [5. ML-DSA Sign -> sigma_s]
+               │<────── PKT_SERVER_HELLO (6,373 Bytes Payload) ───────┤
+               │        [ dsa_pk (1952) | kem_ct (1088) | SID (8)    │
+               │          s_nonce (16)  | sigma_s (3309) ]            │
+               │                                                      │
+    [4. Verify Server Identity via Trust Store (server_identity.pub)] │
+    [5. Compute H1 & Verify sigma_s]                                  │
+    [6. KEM Decap(ct, sk_c) -> ss]                                    │
+    [7. Derive K_tx and K_rx]                                         │
+    [8. Compute H2 & ML-DSA Sign -> sigma_c]                          │
+               │                                                      │
+               ├─────── PKT_CLIENT_AUTH (3,309 Bytes Payload) ───────>│
+               │        [ sigma_c (3309) ]                            │ [6. Compute H2 & Verify]
+               │                                                      │ [7. Derive K_tx and K_rx]
+               │                                                      │ [8. Commit Session Active]
+               │<────── PKT_ACK (0 Bytes Payload) ────────────────────┤
+               │                                                      │
+  *════════════ Secure Symmetric Channel Active (ChaCha20-Poly1305) ════════════*
+               │                                                      │
+               ├─────── PKT_DATA [ Nonce (12) | Tag (16) | CT (N) ] ─>│
+               │<────── PKT_DATA [ Nonce (12) | Tag (16) | CT (N) ] ──┤
+
+5.2 Phase 1: Client Hello
+  - Size: 3,152 Bytes of payload (3,167 Bytes wire with 15B header).
+  - Transmitted using UDP fragmentation into 1,024-byte chunks.
+  - Server verifies client public key against `authorized_clients.db` (unless 
+    `PQC_DISABLE_RATE_LIMIT=1` / permissive mode is enabled).
+
+5.3 Phase 2: Server Hello
+  - Size: 6,373 Bytes of payload (6,388 Bytes wire with 15B header).
+  - Contains server's long-term identity public key, KEM ciphertext, session ID, 
+    server nonce, and detached signature.
+  - Offloaded on the server to Core 1-3 crypto worker threads via lock-free queue.
+
+5.4 Phase 3: Client Authentication
+  - Client verifies server identity against local `server_identity.pub` (pins key).
+  - Reconstructs H1 and validates server signature with `dsa_verify()`.
+  - Recovers `ss` via `kem_dec()`.
+  - Wipes `sk_c` immediately.
+  - Signs transcript H2 and returns `PKT_CLIENT_AUTH` (3,309 Bytes).
+
+5.5 Phase 4: Server Client Auth & Activation
+  - Server verifies client signature with client's previously cached `dsa_pk`.
+  - Both nodes independently execute directional KDF.
+  - Server marks session state `SESSION_ACTIVE` and issues `PKT_ACK`.
+
+5.6 Engineering Rationale for Serial Execution
+  Earlier revisions attempted multithreading KEM and DSA operations in parallel 
+  during the client handshake. On embedded edge hardware (e.g. Raspberry Pi), thread 
+  spawning overhead, POSIX barrier waits, and CPU cache thrashing caused latency 
+  jitter and memory spikes.
+  Executing KEM keygen, DSA keygen, decapsulation, and signing **serially** provides:
+    1. Deterministic memory footprint (< 14 MB RAM usage).
+    2. Zero lock contention or thread context switches.
+    3. Optimal L1/L2 cache locality for NTT polynomial operations.
+
+
+--------------------------------------------------------------------------------
+6. WIRE PACKET FORMATS & EXACT BYTE SIZES
+--------------------------------------------------------------------------------
+
+6.1 Canonical Packet Wire Header (`pkt_hdr_t`): Exactly 15 Bytes
+All UDP datagrams begin with this fixed 15-byte packed structure:
+
+  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                      Sequence Number (seq)                    |  [Bytes 0-3]
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |  Type (type)  |          Payload Length (len)                 |  [Bytes 4-6]
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                                                               |  [Bytes 7-10]
+  +                    Session Identifier (session_id)            +
+  |                                                               |  [Bytes 11-14]
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+  - `seq`        [uint32_t, 4B]: Monotonic packet sequence number (Big-Endian).
+  - `type`       [uint8_t,  1B]: Packet opcode (e.g., 0x01 = HELLO, 0x10 = DATA).
+  - `len`        [uint16_t, 2B]: Big-Endian byte length of the payload following header.
+  - `session_id` [uint64_t, 8B]: Big-Endian session identifier.
+
+6.2 Fragmentation Wire Header (`frag_hdr_t`): Exactly 11 Bytes
+When a payload exceeds `FRAG_PAYLOAD_MAX` (1,024 bytes), `type` is set to `0x05` 
+(`PKT_FRAG`) and the payload begins with `frag_hdr_t`:
+
+  - `msg_id`     [uint16_t, 2B]: Unique message counter.
+  - `orig_type`  [uint8_t,  1B]: Original packet opcode (e.g., 0x01, 0x02, 0x03).
+  - `frag_idx`   [uint8_t,  1B]: Zero-based fragment index.
+  - `frag_total` [uint8_t,  1B]: Total number of fragments.
+  - `frag_len`   [uint16_t, 2B]: Length of fragment slice in this datagram.
+  - `total_len`  [uint32_t, 4B]: Total byte size of unfragmented payload.
+
+6.3 Wire Size Breakdown by Packet Type
+
+  +--------------------+-------+--------------------+----------------+--------------+
+  | Packet Type Name   | Opcode| Payload Contents   | Payload Bytes  | Total Wire   |
+  +--------------------+-------+--------------------+----------------+--------------+
+  | PKT_CLIENT_HELLO   | 0x01  | kem_pk+dsa_pk+nonce| 3,152 Bytes    | 3,167 Bytes  |
+  | PKT_SERVER_HELLO   | 0x02  | dsa_pk+ct+sid+n+sig| 6,373 Bytes    | 6,388 Bytes  |
+  | PKT_CLIENT_AUTH    | 0x03  | client_signature   | 3,309 Bytes    | 3,324 Bytes  |
+  | PKT_FRAG           | 0x05  | frag_hdr + slice   | <= 1,035 Bytes | <= 1,050 B   |
+  | PKT_DATA (AEAD)    | 0x10  | Nonce + Tag + CT   | 28 + N Bytes   | 43 + N Bytes |
+  | PKT_ACK            | 0x11  | None (Header only) | 0 Bytes        | 15 Bytes     |
+  | PKT_PING / PONG    | 0x12/3| Timestamp (optional| 0 or 8 Bytes   | 15 or 23 B   |
+  | PKT_BUSY           | 0x14  | Error text         | Variable       | 15 + N Bytes |
+  | PKT_DISCONNECT     | 0x15  | None               | 0 Bytes        | 15 Bytes     |
+  | PKT_DISCOVERY_PROBE| 0x16  | Probe identifier   | 0 Bytes        | 15 Bytes     |
+  | PKT_DISCOVERY_OFFER| 0x17  | Server Banner Info | 12 Bytes       | 27 Bytes     |
+  +--------------------+-------+--------------------+----------------+--------------+
+
+
+--------------------------------------------------------------------------------
+7. SYMMETRIC ENCRYPTION, DECRYPTION, & WIRE SECURITY
+--------------------------------------------------------------------------------
+
+7.1 ChaCha20-Poly1305 Processing Flow
+Every application data message transmitted via `data_send()` in `transport.c` 
+is processed through ChaCha20-Poly1305 (`crypto/aead.c`).
+
+  Encryption Pipeline:
+    1. Increment local monotonic transmission counter: `tx_nonce_ctr++`.
+    2. Construct 12-byte nonce:
+         nonce[0..3]  = 0x00000000
+         nonce[4..11] = BigEndian64(tx_nonce_ctr)
+    3. Construct 15-byte `pkt_hdr_t`:
+         hdr.seq = htonl(tx_seq++)
+         hdr.type = PKT_DATA (0x10)
+         hdr.len = htons(12 + 16 + plaintext_len)
+         hdr.session_id = htobe64(c->session_id)
+    4. Call `aead_encrypt()`:
+         - Key: `tx_key` (32 bytes)
+         - Nonce: `nonce` (12 bytes)
+         - Plaintext: `msg[0..plaintext_len)`
+         - Associated Data (AAD): `(uint8_t*)&hdr` (15 bytes)
+         - Produces: `ciphertext` (plaintext_len bytes) and `tag` (16 bytes)
+    5. Wire Serialization:
+         [ pkt_hdr_t (15B) | Nonce (12B) | Tag (16B) | Ciphertext (n B) ]
+
+  Decryption Pipeline:
+    1. Parse incoming 15-byte header `pkt_hdr_t`.
+    2. Pre-authentication replay check: `replay_window_check(&c->replay_win, hdr.seq)`.
+       If duplicate or stale (> 64 packets old), immediately drop packet.
+    3. Parse Nonce (12B), Tag (16B), and Ciphertext (len - 28 B).
+    4. Call `aead_decrypt()`:
+         - Key: `rx_key` (32 bytes)
+         - Nonce: from packet (12 bytes)
+         - Ciphertext & Tag: from packet
+         - AAD: exact 15-byte incoming header
+    5. If Poly1305 authentication succeeds:
+         - Commit replay window: `replay_window_update(&c->replay_win, hdr.seq)`.
+         - Deliver plaintext to user/application.
+    6. If authentication fails:
+         - Discard payload without modifying replay window.
+
+7.2 Authenticated Associated Data (AAD) Header Binding
+In typical naive network implementations, the transport header is unauthenticated, 
+permitting attackers to modify sequence numbers, opcodes, or session IDs in flight.
+QRYPTONEX binds the exact 15-byte `pkt_hdr_t` into the Poly1305 polynomial:
+  - If an attacker flips a single bit in `seq`, `type`, `len`, or `session_id`, 
+    Poly1305 tag verification fails and the packet is discarded.
+
+7.3 Nonce Exhaustion Protection
+Using a repeated nonce with the same key in Poly1305 completely destroys the 
+one-time key property, permitting key recovery. QRYPTONEX enforces:
+  - Strict monotonic incrementation (`tx_nonce_ctr++`).
+  - Hard limit check at 0xFFFFFFFFFFFFFF00ULL. If reached, the connection refuses 
+    further encryption and forcibly terminates.
+
+7.4 64-Packet Bitmap Sliding Replay Window (RFC 6479)
+  - `base_seq`: The highest valid sequence number accepted so far.
+  - `bitmap`: 64-bit unsigned integer representing packet history.
+    Bit i (0 to 63) is set to 1 if packet `(base_seq - i)` has been received.
+  - Logic:
+    - If `seq > base_seq`: Shift `bitmap` left by `(seq - base_seq)`. Set bit 0 = 1.
+    - If `seq <= base_seq` and `base_seq - seq < 64`: Check if bit `(base_seq - seq)` 
+      is set. If 1, drop as duplicate. If 0, mark as 1 (accepted out of order).
+    - If `base_seq - seq >= 64`: Drop as stale.
+  - Pre-auth verification ensures attackers cannot flood invalid sequence numbers 
+    to desynchronize the bitmap before AEAD cryptographic verification.
+
+
+--------------------------------------------------------------------------------
+8. FORMAL SECURITY VERIFICATION (PROVERIF) MAPPING
+--------------------------------------------------------------------------------
+
+8.1 Active Dolev-Yao Adversary Model
+The protocol was modeled in Applied Pi-Calculus in `verification/protocol.pv` and 
+executed via the ProVerif automated cryptographic verifier. The adversary possesses:
+  - Complete control of the public communications network (intercept, inject, 
+    duplicate, reorder, and modify all datagrams).
+  - Ability to initiate unbounded concurrent client and server sessions (`!client`, `!server`).
+  - Capability to corrupt long-term signing keys in post-session phases to test PFS.
+
+8.2 Summary of the 21 Formally Proven Invariants
+
+  [1]  Session Key Secrecy              : not attacker(session_key_secret) is TRUE.
+  [2]  Client Data Secrecy               : not attacker(client_data) is TRUE.
+  [3]  Server Data Secrecy               : not attacker(server_data) is TRUE.
+  [4]  Client Injective Authentication   : inj-event(server_accepts) ==> inj-event(client_initiates).
+  [5]  Server Injective Authentication   : inj-event(client_accepts) ==> inj-event(server_initiates).
+  [6]  Mutual Cryptographic Agreement    : Bi-directional correspondence proven.
+  [7]  Replay Resistance                 : inj-event enforces exact 1-to-1 session mapping.
+  [8]  Perfect Forward Secrecy (PFS)     : Compromise of dsa_sk yields zero historic session keys.
+  [9]  Key Confirmation                  : Injective verification of identical derived traffic keys.
+  [10] Message Integrity                 : AEAD reduction proves non-tampering of payloads.
+  [11] Transcript Binding                : Injective agreement over full transcript H1 and H2.
+  [12] Signature Unforgeability          : EUF-CMA resistance under active lattice model.
+  [13] Ciphertext Integrity              : Modified ciphertext fails Poly1305 MAC reduction.
+  [14] KEM Ciphertext Substitution Prot. : Substitution of ct invalidates server signature.
+  [15] Unknown Key-Share (UKS) Immunity  : Explicit binding of dsa_pk eliminates identity sharing.
+  [16] Reflection Attack Resistance      : Domain-separated packet types prevent reflection.
+  [17] Parallel Session Isolation        : Replicated processes prove zero cross-session bleed.
+  [18] Session Mix-Up Resistance         : Separation enforced via ephemeral nonces and session IDs.
+  [19] Identity Public Key Binding       : Signatures bind public keys into transcript hashes.
+  [20] Ephemeral Nonce Freshness         : Proved via unguessable new c_nonce / new s_nonce.
+  [21] Session ID Global Uniqueness      : Atomic server generation guarantees collision freedom.
+
+================================================================================
+                                END OF SPECIFICATION
+================================================================================

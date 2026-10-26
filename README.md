@@ -208,6 +208,8 @@ The server process decouples network packet processing from console interaction 
 | **Symmetric AEAD** | **ChaCha20-Poly1305** (RFC 8439) | 256-bit Key | **Key**: 32 Bytes<br>**Nonce**: 12 Bytes<br>**Tag**: 16 Bytes | High-speed authenticated encryption (header bound as AAD) |
 | **Hash & KDF** | **SHAKE256** (NIST FIPS 202) | Extendable Output | **Digest**: Variable (64 Bytes) | Transcript binding & directional key separation |
 
+*(For complete byte-level mathematical derivations, KDF entropy vectors, and wire framing layouts, see [CRYPTOGRAPHIC_SPECIFICATION.txt](CRYPTOGRAPHIC_SPECIFICATION.txt)).*
+
 ---
 
 ## 3. Hardware Acceleration & Platform Support Matrix
@@ -257,6 +259,7 @@ The server process decouples network packet processing from console interaction 
 ├── Makefile.arm32                  # Build system for ARM32 (Raspberry Pi 2/3)
 ├── run.sh                          # Automated 3-window terminal launcher for server
 ├── NETWORKING_GUIDE.md             # Dedicated guide for dynamic discovery & Tailscale setup
+├── CRYPTOGRAPHIC_SPECIFICATION.txt # Exhaustive cryptographic technical & wire specification
 ├── commands.md                     # Detailed command reference and cheatsheet
 └── README.md                       # Main project documentation
 ```
