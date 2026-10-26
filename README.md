@@ -1,4 +1,4 @@
-# QRYPTONEX — Post-Quantum Secure Networking Framework
+# QRYPTONEX (NEXQOR) — Enterprise Post-Quantum Cryptographic Network & High-Concurrency Multi-Client Engine
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?logo=c&logoColor=white)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![Architecture: Heterogeneous](https://img.shields.io/badge/Architecture-x86__64%20%7C%20ARM64%20%7C%20ARM32-blue.svg)](https://arm.com)
@@ -9,160 +9,481 @@
 [![Server Engine: io_uring](https://img.shields.io/badge/Async%20I%2FO-Linux%20io__uring-black.svg)](https://kernel.dk/io_uring.pdf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A high-performance, SIMD-accelerated **Post-Quantum Cryptographic (PQC) networking framework**, asynchronous multi-client server, and formal verification suite in C11.
-
-QRYPTONEX secures communications between high-throughput **x86_64 servers** (vectorized via **AVX2 / BMI2**) and resource-constrained **ARM edge devices** (Raspberry Pi 4/5 via **ARM64 NEON** and Raspberry Pi 2/3 via **ARM32 NEON / VFPv4**), achieving **sub-millisecond serial PQC handshakes** resistant to quantum cryptanalysis (Shor's and Grover's algorithms).
-
 ---
 
-## ⚡ 30-Second Quick Start
+## 📖 Executive Overview
 
-```bash
-# 1. Install dependencies
-sudo apt-get update && sudo apt-get install -y build-essential cmake git pkg-config libssl-dev liburing-dev
+**QRYPTONEX** (identified in engine sources as **NEXQOR**) is a production-grade, SIMD-vectorized **Post-Quantum Cryptographic (PQC) networking framework**, high-concurrency multi-client relay engine, and formal verification suite written in **C11**.
 
-# 2. Build binaries & run automated security tests
-make all -j$(nproc)
-make test
+Modern public-key cryptography (RSA, ECDH, ECDSA) relies on mathematical problems (integer factorization and discrete logarithms) that will be completely broken by polynomial-time quantum algorithms (**Shor's algorithm**) once cryptographically relevant quantum computers (CRQCs) emerge. Furthermore, adversaries are executing **"Store-Now-Decrypt-Later" (SNDL)** campaigns—intercepting and storing encrypted traffic today to retroactively decrypt it when quantum hardware becomes available.
 
-# 3. Start the server (publishes active endpoints on port 9877)
-./server
-
-# 4. In a separate terminal, launch the chat client (auto-discovers server!)
-./client
-```
+QRYPTONEX addresses this paradigm shift by establishing a secure communication channel between high-throughput **x86_64 servers** (accelerated via **AVX2 / BMI2**) and resource-constrained **ARM edge devices** (Raspberry Pi 4/5 via **ARM64 NEON** and Raspberry Pi 2/3 via **ARM32 NEON / VFPv4**). The framework combines NIST-standardized lattice cryptography (**ML-KEM-768**, **ML-DSA-65**), authenticated symmetric encryption (**ChaCha20-Poly1305**), and directional session key derivation (**SHAKE256**) over an asynchronous Linux **`io_uring`** engine with application-level reliability and dynamic zero-configuration network discovery.
 
 ---
 
 ## 📋 Table of Contents
 
-1. [Key Features](#-key-features)
-2. [Cryptographic Specifications](#-cryptographic-specifications)
-3. [Building the Project](#-building-the-project)
-4. [Testing & Verification](#-testing--verification)
-5. [Operational Usage Guide](#-operational-usage-guide)
-   - [A. Running the Multi-Client Server](#a-running-the-multi-client-server)
-   - [B. Running the Interactive Secure Chat Client](#b-running-the-interactive-secure-chat-client)
-   - [C. Running Continuous IoT Sensor Broadcaster](#c-running-continuous-iot-sensor-broadcaster)
-   - [D. Running Concurrent Handshake Benchmark](#d-running-concurrent-handshake-benchmark)
-   - [E. AEAD File Encryption & Symmetric Microbenchmark](#e-aead-file-encryption--symmetric-microbenchmark)
-6. [Dynamic Networking & Tailscale Mesh](#-dynamic-networking--tailscale-mesh)
-7. [Empirical Performance Benchmarks](#-empirical-performance-benchmarks)
-8. [Repository Structure](#-repository-structure)
-9. [License & Citation](#-license--citation)
+1. [System Architecture & Protocols](#1-system-architecture--protocols)
+   - [A. 4-Way Serial Mutual Authentication Handshake Protocol](#a-4-way-serial-mutual-authentication-handshake-protocol)
+   - [B. Multi-Core Asynchronous Server Architecture (`io_uring`)](#b-multi-core-asynchronous-server-architecture-io_uring)
+   - [C. Decoupled UNIX IPC Architecture](#c-decoupled-unix-ipc-architecture)
+   - [D. Symmetric Data Transport & Wire Framing](#d-symmetric-data-transport--wire-framing)
+2. [Cryptographic Specifications & Sizing](#2-cryptographic-specifications--sizing)
+3. [Hardware Acceleration & Platform Support Matrix](#3-hardware-acceleration--platform-support-matrix)
+4. [Repository Directory Structure](#4-repository-directory-structure)
+5. [Exhaustive Setup & Compilation Guide](#5-exhaustive-setup--compilation-guide)
+   - [Step 1: System Dependencies Installation](#step-1-system-dependencies-installation)
+   - [Step 2: Cloning NEXQOR & `liboqs`](#step-2-cloning-nexqor--liboqs)
+   - [Step 3: Compiling Static `liboqs` (x86_64, ARM64, ARM32)](#step-3-compiling-static-liboqs-x86_64-arm64-arm32)
+   - [Step 4: Compiling Application Binaries for All 3 Device Tiers](#step-4-compiling-application-binaries-for-all-3-device-tiers)
+6. [Dynamic Networking & Tailscale Mesh Guide](#6-dynamic-networking--tailscale-mesh-guide)
+   - [Zero-Config 5-Tier Discovery Hierarchy](#zero-config-5-tier-discovery-hierarchy)
+   - [Topology 1: Localhost (Same Machine)](#topology-1-localhost-same-machine)
+   - [Topology 2: Local Network (LAN / Wi-Fi)](#topology-2-local-network-lan--wi-fi)
+   - [Topology 3: Cross-Network / External via Tailscale](#topology-3-cross-network--external-via-tailscale)
+7. [Running All Application Workflows](#7-running-all-application-workflows)
+   - [Workflow 1: Multi-Client Server Relay](#workflow-1-multi-client-server-relay)
+   - [Workflow 2: Interactive Secure Chat Client](#workflow-2-interactive-secure-chat-client)
+   - [Workflow 3: Autonomous IoT Sensor Broadcaster (`client_broadcast`)](#workflow-3-autonomous-iot-sensor-broadcaster-client_broadcast)
+   - [Workflow 4: High-Concurrency Benchmark (`bench_nclient`)](#workflow-4-high-concurrency-benchmark-bench_nclient)
+   - [Workflow 5: Cryptographic Microbenchmark & AEAD Utility](#workflow-5-cryptographic-microbenchmark--aead-utility)
+8. [Empirical Performance & Hardware Benchmarks](#8-empirical-performance--hardware-benchmarks)
+9. [Automated Security Testing & Formal Verification](#9-automated-security-testing--formal-verification)
+   - [A. Automated Security & Cryptographic Regression Test Suite](#a-automated-security--cryptographic-regression-test-suite)
+   - [B. Formal Security Verification with ProVerif](#b-formal-security-verification-with-proverif)
+10. [Research References, License & Citation](#10-research-references-license--citation)
 
 ---
 
-## 🌟 Key Features
+## 1. System Architecture & Protocols
 
-- **NIST FIPS Standard Compliance**: Built on NIST-standardized lattice cryptography — **ML-KEM-768** (FIPS 203) for key encapsulation and **ML-DSA-65** (FIPS 204) for digital signatures.
-- **Zero Hardcoded IPs & Dynamic Auto-Discovery**: Automatic server endpoint discovery via LAN UDP broadcast probes, system files, environment variables, or Tailscale Mesh VPN. No code edits needed when changing networks.
-- **SIMD Hardware Acceleration**: Tailored vector extensions utilizing **256-bit AVX2/BMI2** on x86_64 and **128-bit NEON / VFPv4** on ARM architectures.
-- **Asynchronous Linux `io_uring` Core**: Core server uses the Linux `io_uring` ring for zero-copy packet batching, lock-free SPMC/MPSC worker thread dispatching, and handling up to 4,096 concurrent clients.
-- **Formally Verified Security**: Modeled in Applied Pi-Calculus with **ProVerif** — mathematically proving 21 distinct security properties including **Mutual Authentication**, **Perfect Forward Secrecy (PFS)**, and **Replay Resistance**.
-- **Decoupled Operator Consoles**: Clean POSIX UNIX domain socket architecture (`/tmp/pqc_rx.sock`, `/tmp/pqc_tx.sock`) separating real-time network processing from terminal rendering.
+### A. 4-Way Serial Mutual Authentication Handshake Protocol
+
+Communication operates over **UDP port 9877**, establishing mutual cryptographic trust and deriving quantum-resistant session keys. The handshake executes **serially** (sequential keypair generation, transcript exchange, decapsulation, and transcript signing) to provide deterministic timing, zero multithreading lock contention, and minimal memory overhead on embedded edge devices:
+
+```text
+      Client (x86 / ARM64 / ARM32)                                Server Core (x86_64)
+           │                                                                 │
+    [Serial Keygen: KEM + DSA]                                               │
+    [Phase 1: Client Hello]                                                  │
+           ├─────────────── PKT_CLIENT_HELLO ───────────────────────────────>│ [Parse & Validate]
+           │        (KEM_PK_c || DSA_PK_c || Nonce_c)                       │
+           │                                                                 │ [KEM Encap: ss, ct]
+           │                                                                 │ [Transcript Hash 1]
+           │                                                                 │ [ML-DSA-65 Sign]
+    [Phase 2: Server Hello]                                                  │
+           │<────────────── PKT_SERVER_HELLO ────────────────────────────────┤
+           │        (DSA_PK_s || KEM_CT || Session_ID ||                     │
+           │         Nonce_s || Signature_s)                                 │
+           │                                                                 │
+    [Verify Server Identity (TOFU Store)]                                    │
+    [Verify Server Signature]                                                │
+    [KEM Decap: ss]                                                          │
+    [Transcript Hash 2]                                                      │
+    [ML-DSA-65 Sign]                                                         │
+    [Phase 3: Client Authentication]                                         │
+           ├─────────────── PKT_CLIENT_AUTH ────────────────────────────────>│
+           │        (Signature_c)                                            │
+           │                                                                 │ [Verify Client Sig]
+           │                                                                 │ [Derive Directional Keys]
+    [Phase 4: Active Session]                                                │ (SHAKE256 KDF)
+           │<────────────── PKT_ACK ─────────────────────────────────────────┤
+           │                                                                 │
+           *═══════════════ Secure AEAD Channel Established ═════════════════*
+           │                                                                 │
+           ├─────────────── PKT_DATA (ChaCha20-Poly1305) ───────────────────>│ [Decrypt & Route]
+           │        [Nonce (12B) | Tag (16B) | Encrypted Payload]            │ (Wire Header as AAD)
+           │<────────────── PKT_DATA (ChaCha20-Poly1305) ────────────────────┤
+```
+
+#### Detailed Mathematical Breakdown:
+1. **Phase 1 (Client Hello)**:
+   - Client generates ephemeral lattice keypair: $\text{KEM.KeyGen}() \to (pk_c, sk_c)$.
+   - Client generates identity keypair: $\text{DSA.KeyGen}() \to (pk_c^{dsa}, sk_c^{dsa})$.
+   - Client generates a 128-bit cryptographic nonce $N_c \xleftarrow{\$} \{0,1\}^{128}$.
+   - Transmits `PKT_CLIENT_HELLO` containing $pk_c \parallel pk_c^{dsa} \parallel N_c$.
+
+2. **Phase 2 (Server Hello)**:
+   - Server encapsulates a 256-bit shared secret: $\text{KEM.Encap}(pk_c) \to (ct, ss)$.
+   - Server generates server nonce $N_s \xleftarrow{\$} \{0,1\}^{128}$ and 64-bit atomic Session ID ($SID$).
+   - Computes Transcript Hash 1: $H_1 = \text{SHAKE256}(N_c \parallel N_s \parallel SID \parallel pk_s^{dsa} \parallel ct)$.
+   - Generates digital signature: $\sigma_s = \text{DSA.Sign}(sk_s^{dsa}, H_1)$.
+   - Transmits `PKT_SERVER_HELLO` containing $pk_s^{dsa} \parallel ct \parallel SID \parallel N_s \parallel \sigma_s$.
+
+3. **Phase 3 (Client Authentication & Verification)**:
+   - Client verifies $pk_s^{dsa}$ against local pinned Trust Store (`server_identity.pub`).
+   - Reconstructs $H_1$ and verifies signature: $\text{DSA.Verify}(pk_s^{dsa}, H_1, \sigma_s) \stackrel{?}{=} \text{VALID}$.
+   - Decapsulates shared secret: $\text{KEM.Decap}(sk_c, ct) \to ss$.
+   - Computes Transcript Hash 2: $H_2 = \text{SHAKE256}(H_1 \parallel \sigma_s)$.
+   - Signs transcript: $\sigma_c = \text{DSA.Sign}(sk_c^{dsa}, H_2)$.
+   - Transmits `PKT_CLIENT_AUTH` containing $\sigma_c$.
+
+4. **Phase 4 (Session Key Derivation & Channel Activation)**:
+   - Server verifies client signature: $\text{DSA.Verify}(pk_c^{dsa}, H_2, \sigma_c) \stackrel{?}{=} \text{VALID}$.
+   - Both parties independently derive separate directional traffic keys using domain separation:
+     $$K_{\text{tx}} = \text{SHAKE256}(ss \parallel SID \parallel \text{"client\_write"} \parallel N_c \parallel N_s)$$
+     $$K_{\text{rx}} = \text{SHAKE256}(ss \parallel SID \parallel \text{"server\_write"} \parallel N_c \parallel N_s)$$
+   - Server transmits `PKT_ACK`. The bidirectional AEAD session is active.
 
 ---
 
-## 🔒 Cryptographic Specifications
+### B. Multi-Core Asynchronous Server Architecture (`io_uring`)
 
-| Component | Scheme / Standard | Security Level | Key / Signature Sizes | Function |
+The server leverages Linux **`io_uring`** for asynchronous, zero-copy packet batching across a dedicated multi-core architecture:
+
+```text
+                          Incoming Client UDP Packets (:9877)
+                                          │
+                                          ▼
+                +───────────────────────────────────────────────────+
+                │           Core 0: Network Event Loop              │
+                │  - io_uring Asynchronous Submission/Completion   │
+                │  - Lock-Free Pre-allocated Buffer Ring (1024 bufs)│
+                │  - Actor-Model Client Session Table (Lockless)    │
+                │  - Adaptive Token-Bucket Rate Limiter             │
+                +─────────────────────────┬─────────────────────────+
+                                          │
+                   SPMC Lock-Free Ring    │    MPSC Completion Ring
+                                          ▼
+                +───────────────────────────────────────────────────+
+                │       Cores 1-3: Worker Thread Pool (x3)          │
+                │  - Asynchronous ML-KEM-768 Encapsulation          │
+                │  - Asynchronous ML-DSA-65 Verification & Signing  │
+                │  - SHAKE-256 Transcript Hashing & Key Derivation  │
+                +─────────────────────────┬─────────────────────────+
+                                          │
+                                          ▼
+                +───────────────────────────────────────────────────+
+                │        Core 4: Warm Path & IPC Subsystems         │
+                │  - Thread-Safe Unix Domain Socket Dispatcher      │
+                │  - Dynamic Endpoint Discovery & Beacon Broadcaster│
+                +───────────────────────────────────────────────────+
+```
+
+---
+
+### C. Decoupled UNIX IPC Architecture
+
+The server process decouples network packet processing from console interaction using non-blocking UNIX domain sockets (`/tmp/pqc_rx.sock`, `/tmp/pqc_tx.sock`):
+
+```text
+                            +───────────────────────+
+                            │   Remote PQC Clients  │
+                            +───────────┬───────────+
+                                        │ UDP :9877
+                                        ▼
+                            +───────────────────────+
+                            │   Server Core Relay   │
+                            │      (server.c)       │
+                            +─────┬───────────▲─────+
+                                  │           │
+           /tmp/pqc_rx.sock (IPC) │           │ /tmp/pqc_tx.sock (IPC)
+                                  ▼           │
+                      +───────────────+   +───┴───────────+
+                      │   Receiver    │   │  Transmitter  │
+                      │ Display (CLI) │   │ Command (CLI) │
+                      │ (server_rx.c) │   │ (server_tx.c) │
+                      +───────────────+   +───────────────+
+```
+
+---
+
+### D. Symmetric Data Transport & Wire Framing
+
+1. **Authenticated Associated Data (AAD) Binding**:
+   The 15-byte canonical wire header (`seq` [4B], `type` [1B], `len` [2B], `session_id` [8B]) is bound as AAD into every ChaCha20-Poly1305 packet. Any alteration of packet headers in flight causes Poly1305 authentication failure and immediate packet drop.
+2. **Monotonic Nonce & Replay Protection**:
+   Nonces are tracked strictly monotonically. A 64-packet bitmap sliding replay window (RFC 6479) verifies and drops delayed, duplicated, or replayed packets.
+3. **Application-Level Fragmentation & Reassembly**:
+   Transports large post-quantum public keys and signatures across sub-MTU UDP boundaries without IP fragmentation.
+
+---
+
+## 2. Cryptographic Specifications & Sizing
+
+| Cryptographic Component | Algorithm / Standard | Security Strength | Wire / Key Sizes | Architectural Function |
 | :--- | :--- | :--- | :--- | :--- |
-| **Key Encapsulation (KEM)** | **ML-KEM-768** (NIST FIPS 203) | Level 3 (~AES-192) | **PK**: 1,184 B \| **CT**: 1,088 B \| **SS**: 32 B | Ephemeral session key exchange |
-| **Digital Signatures (DSA)** | **ML-DSA-65** (NIST FIPS 204) | Level 3 (~AES-192) | **PK**: 1,952 B \| **Sig**: 3,309 B | Mutual identity authentication |
-| **Symmetric AEAD** | **ChaCha20-Poly1305** (RFC 8439) | 256-bit Key | **Key**: 32 B \| **Nonce**: 12 B \| **Tag**: 16 B | Authenticated message encryption (wire header bound as AAD) |
-| **Key Derivation (KDF)** | **SHAKE256** (NIST FIPS 202) | Extendable Output | **Digest**: 64 B | Transcript binding & directional key separation (`tx_key` vs `rx_key`) |
+| **Key Encapsulation (KEM)** | **ML-KEM-768** (NIST FIPS 203) | Level 3 (~AES-192) | **Public Key**: 1,184 Bytes<br>**Ciphertext**: 1,088 Bytes<br>**Shared Secret**: 32 Bytes | Ephemeral post-quantum session key establishment |
+| **Digital Signatures (DSA)** | **ML-DSA-65** (NIST FIPS 204) | Level 3 (~AES-192) | **Public Key**: 1,952 Bytes<br>**Signature**: 3,309 Bytes | Mutual identity authentication & transcript signing |
+| **Symmetric AEAD** | **ChaCha20-Poly1305** (RFC 8439) | 256-bit Key | **Key**: 32 Bytes<br>**Nonce**: 12 Bytes<br>**Tag**: 16 Bytes | High-speed authenticated encryption (header bound as AAD) |
+| **Hash & KDF** | **SHAKE256** (NIST FIPS 202) | Extendable Output | **Digest**: Variable (64 Bytes) | Transcript binding & directional key separation |
 
 ---
 
-## 🏗️ Building the Project
+## 3. Hardware Acceleration & Platform Support Matrix
 
-### Prerequisites
+| Architecture | Hardware Targets | Vector Extensions | Compiler & Flags | Target Executables |
+| :--- | :--- | :--- | :--- | :--- |
+| **x86_64** | Intel / AMD Ryzen Servers, Laptops | **AVX2**, **BMI2**, **POPCNT** | `gcc` with `-O3 -march=native -flto=auto` | `server`, `server_rx`, `server_tx`, `client`, `client_broadcast`, `bench_pqc`, `bench_nclient`, `bench_aead` |
+| **ARM64 (AArch64)** | Raspberry Pi 4 / 5 (64-bit OS), Jetson | **ARM NEON** (128-bit SIMD) | `gcc` with `-O3 -march=armv8-a+simd` | `client_arm`, `client_broadcast_arm`, `bench_pqc_arm`, `bench_nclient_arm` |
+| **ARM32 (ARMv7-A)** | Raspberry Pi 2 / 3 (32-bit OS), BeagleBone | **ARM NEON** + **VFPv4** (armhf) | `gcc` with `-O3 -mfpu=neon-vfpv4 -mfloat-abi=hard` | `client_arm32`, `client_broadcast_arm32`, `bench_pqc_arm32`, `bench_nclient_arm32` |
 
+---
+
+## 4. Repository Directory Structure
+
+```text
+.
+├── crypto/
+│   ├── aead.c / aead.h             # ChaCha20-Poly1305 AEAD with AAD wire header binding (RFC 8439)
+│   ├── replay_window.c / .h        # 64-packet bitmap sliding replay window (RFC 6479)
+│   └── trust_store.c / .h          # Pinned peer identity key store and verification (TOFU)
+├── wrappers/
+│   ├── kem_wrapper.c / kem_wrapper.h # ML-KEM-768 wrappers & directional SHAKE256 KDF
+│   └── dsa_wrapper.c / dsa_wrapper.h # ML-DSA-65 digital signature C wrappers
+├── tests/
+│   └── test_suite.c                # 8-suite automated cryptographic and security regression harness
+├── verification/
+│   ├── protocol.pv                 # Formal security verification model in Applied Pi-Calculus
+│   └── README.md                   # ProVerif execution guide and proof breakdown
+├── metrics/
+│   ├── arm_client_side/            # Pre-collected client benchmark logs (1 to 1000 clients)
+│   ├── arm64  sevrer/              # Server-side telemetry on ARM64 platforms
+│   ├── x86 serevr/                 # Server-side telemetry on x86_64 platforms
+│   └── *_bench_pqc_*.txt           # 10,000-run microbenchmark datasets
+├── Research_papers/                # 20+ reference papers (NIST standards, lattice SIMD, IoT)
+├── client.c                        # Interactive PQC chat client (clean UI, serial handshake)
+├── client_broadcast.c              # Autonomous IoT sensor telemetry broadcaster
+├── client_registry.c / .h          # Thread-safe client session state registry
+├── server.c                        # High-throughput asynchronous io_uring multi-client server
+├── server_rx.c / server_tx.c       # Decoupled server operator console interfaces
+├── transport.c / transport.h       # Dynamic discovery, packet framing, AAD AEAD, ACKs, reassembly
+├── ipc.h                           # IPC frame headers and command codes
+├── bench_pqc.c                     # Standalone cryptographic primitives microbenchmark
+├── bench_nclient.c                 # Multi-client concurrent stress-test harness
+├── bench_aead.c                    # AEAD buffer benchmark & file encryption tool
+├── Makefile                        # Native build system for x86_64 host
+├── Makefile.arm64                  # Build system for ARM64 (Raspberry Pi 4/5)
+├── Makefile.arm32                  # Build system for ARM32 (Raspberry Pi 2/3)
+├── run.sh                          # Automated 3-window terminal launcher for server
+├── NETWORKING_GUIDE.md             # Dedicated guide for dynamic discovery & Tailscale setup
+├── commands.md                     # Detailed command reference and cheatsheet
+└── README.md                       # Main project documentation
+```
+
+---
+
+## 5. Exhaustive Setup & Compilation Guide
+
+Follow these steps from a clean environment to compile and run across all platforms.
+
+### Step 1: System Dependencies Installation
+
+#### On Ubuntu / Debian / x86_64 Host:
 ```bash
-# Ubuntu / Debian / Raspberry Pi OS:
 sudo apt-get update
 sudo apt-get install -y build-essential cmake git pkg-config libssl-dev liburing-dev
 ```
 
-*(Optional cross-compilers on x86 host targeting ARM):*
+#### On Raspberry Pi (Raspberry Pi OS 64-bit or 32-bit):
 ```bash
-sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+sudo apt-get update
+sudo apt-get install -y build-essential cmake git pkg-config libssl-dev
+```
+
+*(Optional: Cross-compilers if building for ARM from an x86_64 host)*:
+```bash
+sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
 ```
 
 ---
 
-### Compiling Binaries
+### Step 2: Cloning NEXQOR & `liboqs`
 
-#### 1. Native Build for x86_64 (Linux Server / Host)
+Clone the NEXQOR repository and the Open Quantum Safe library (`liboqs`):
+
 ```bash
-# Compiles server, server_rx, server_tx, client, client_broadcast, bench_pqc, bench_nclient, bench_aead
+# 1. Clone NEXQOR
+git clone https://github.com/Vshal-Kumar/QRYPTONEX.git
+cd QRYPTONEX
+
+# 2. Clone liboqs into the project tree
+git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git liboqs
+```
+
+---
+
+### Step 3: Compiling Static `liboqs` (x86_64, ARM64, ARM32)
+
+Compile `liboqs` with target-specific SIMD vectorization flags:
+
+#### A. For x86_64 Host (AVX2 & BMI2 SIMD Acceleration)
+```bash
+cmake -S liboqs -B liboqs/build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DOQS_BUILD_ONLY_LIB=ON \
+      -DOQS_ENABLE_KEM_ml_kem_768=ON \
+      -DOQS_ENABLE_SIG_ml_dsa_65=ON \
+      -DOQS_USE_AVX2_INSTRUCTIONS=ON \
+      -DOQS_USE_BMI2_INSTRUCTIONS=ON \
+      -DOQS_USE_POPCNT_INSTRUCTIONS=ON \
+      -DCMAKE_C_FLAGS="-march=native -O3" \
+      -DBUILD_SHARED_LIBS=OFF
+
+cmake --build liboqs/build -j$(nproc)
+```
+
+#### B. For ARM64 / AArch64 (Raspberry Pi 4 / 5 NEON SIMD)
+> [!IMPORTANT]
+> When compiling directly on a Raspberry Pi, **do not use `-j$(nproc)`**; excessive parallel compilation will exhaust RAM and trigger kernel OOM kills. Use `-j2` or `-j1`.
+
+```bash
+cmake -S liboqs -B liboqs/build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DOQS_BUILD_ONLY_LIB=ON \
+      -DOQS_ENABLE_KEM_ml_kem_768=ON \
+      -DOQS_ENABLE_SIG_ml_dsa_65=ON \
+      -DCMAKE_C_FLAGS="-O3 -march=armv8-a+simd" \
+      -DBUILD_SHARED_LIBS=OFF
+
+cmake --build liboqs/build -j2
+```
+
+#### C. For ARM32 / ARMv7-A (Raspberry Pi 2 / 3 NEON / VFPv4)
+```bash
+cmake -S liboqs -B liboqs/build_arm32 \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DOQS_BUILD_ONLY_LIB=ON \
+      -DOQS_ENABLE_KEM_ml_kem_768=ON \
+      -DOQS_ENABLE_SIG_ml_dsa_65=ON \
+      -DCMAKE_C_FLAGS="-O3 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard" \
+      -DBUILD_SHARED_LIBS=OFF
+
+cmake --build liboqs/build_arm32 -j2
+```
+
+---
+
+### Step 4: Compiling Application Binaries for All 3 Device Tiers
+
+#### Tier 1: x86_64 Server, Clients & Benchmarks
+```bash
 make all -j$(nproc)
 ```
+*Outputs*: `server`, `server_rx`, `server_tx`, `client`, `client_broadcast`, `bench_pqc`, `bench_nclient`, `bench_aead`.
 
-#### 2. Native Build on Raspberry Pi 4 / 5 (ARM64 / AArch64)
+#### Tier 2: ARM64 (Raspberry Pi 4 / 5)
 ```bash
-# Use -j2 on Raspberry Pi to avoid exhausting RAM:
+# On Raspberry Pi hardware:
 make -f Makefile.arm64 all -j2
-```
-*Generated ARM64 targets*: `client_arm`, `client_broadcast_arm`, `bench_pqc_arm`, `bench_nclient_arm`.
 
-#### 3. Native Build on Raspberry Pi 2 / 3 (ARM32 / ARMv7-A)
+# Or cross-compiled from x86_64 host:
+make -f Makefile.arm64 all -j$(nproc)
+```
+*Outputs*: `client_arm`, `client_broadcast_arm`, `bench_pqc_arm`, `bench_nclient_arm`.
+
+#### Tier 3: ARM32 (Raspberry Pi 2 / 3)
 ```bash
+# On Raspberry Pi hardware:
 make -f Makefile.arm32 all -j2
+
+# Or cross-compiled from x86_64 host:
+make -f Makefile.arm32 all -j$(nproc)
 ```
-*Generated ARM32 targets*: `client_arm32`, `client_broadcast_arm32`, `bench_pqc_arm32`, `bench_nclient_arm32`.
+*Outputs*: `client_arm32`, `client_broadcast_arm32`, `bench_pqc_arm32`, `bench_nclient_arm32`.
 
 ---
 
-## 🧪 Testing & Verification
+## 6. Dynamic Networking & Tailscale Mesh Guide
 
-### 1. Automated Security & Cryptographic Regression Test Suite
-The repository includes an 8-suite automated unit and security test harness verifying the cryptographic primitives, directional KDF, sliding replay window, AEAD AAD header tamper rejection, peer identity trust store, packet fragmentation reassembly, and multi-session isolation:
+Hardcoded IP addresses have been completely eliminated. All binaries resolve server addresses dynamically using a 5-tier resolution chain.
 
-```bash
-make test
-```
+### Zero-Config 5-Tier Discovery Hierarchy
 
-**Output:**
 ```text
-╔══════════════════════════════════════════════════════════════╗
-║       NEXQOR — Post-Quantum Security & Cryptographic Tests   ║
-╚══════════════════════════════════════════════════════════════╝
-
-[TEST 01] test_kem_agreement_and_negative                  PASS
-[TEST 02] test_dsa_signing_and_tampering                   PASS
-[TEST 03] test_directional_kdf_separation                  PASS
-[TEST 04] test_aead_aad_binding_and_tampering              PASS
-[TEST 05] test_sliding_replay_window                       PASS
-[TEST 06] test_trust_store_peer_authentication            PASS
-[TEST 07] test_packet_framing_and_reassembly               PASS
-[TEST 08] test_session_isolation_and_cleanup               PASS
-
-Test Results: 8/8 passed (0 failed)
-ALL SECURITY & REGRESSION TESTS PASSED SUCCESSFULLY!
+┌────────────────────────────────────────────────────────────────────────┐
+│ 1. Explicit CLI Target (IPv4, Hostname, or Tailscale MagicDNS name)    │
+│    e.g., ./client 10.58.3.114  or  ./client nexqor-server              │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │ (if omitted)
+┌──────────────────────────────────▼─────────────────────────────────────┐
+│ 2. Environment Variables (PQC_SERVER_IP, SERVER_IP, NEXQOR_SERVER)    │
+│    e.g., export PQC_SERVER_IP="100.104.77.63"                          │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │ (if not set)
+┌──────────────────────────────────▼─────────────────────────────────────┐
+│ 3. System & Local Discovery Files                                      │
+│    Reads /tmp/nexqor_server.ip or ./server_endpoint.info published     │
+│    automatically by the running server.                                │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │ (if running on a remote device)
+┌──────────────────────────────────▼─────────────────────────────────────┐
+│ 4. LAN UDP Broadcast Auto-Discovery Probe                              │
+│    Client sends PKT_DISCOVERY_PROBE to port 9877. Server replies with  │
+│    PKT_DISCOVERY_OFFER, allowing zero-config detection on any LAN.     │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │ (if no response)
+┌──────────────────────────────────▼─────────────────────────────────────┐
+│ 5. Localhost Fallback (127.0.0.1:9877)                                 │
+└────────────────────────────────────────────────────────────────────────┘
 ```
-
-### 2. Formal Security Verification with ProVerif
-Verify the mathematical proofs of the 4-way mutual handshake protocol:
-
-```bash
-# Install ProVerif
-sudo apt-get install -y proverif
-
-# Run mathematical verification
-proverif verification/protocol.pv
-```
-*Proves 21 distinct security properties including Secrecy of Session Keys, Mutual Authentication, Perfect Forward Secrecy (PFS), Replay Protection, and Transcript Binding.*
 
 ---
 
-## 🚀 Operational Usage Guide
-
-### A. Running the Multi-Client Server
-
-Start the core server daemon:
+### Topology 1: Localhost (Same Machine)
+No arguments are required. The server publishes endpoints to `/tmp/nexqor_server.ip` and clients connect automatically:
 ```bash
+# Terminal 1: Server
+./server
+
+# Terminal 2: Client
+./client
+```
+
+---
+
+### Topology 2: Local Network (LAN / Wi-Fi)
+*(e.g., Server on Laptop `10.58.3.114`, Client on Raspberry Pi on the same Wi-Fi)*
+
+- **Zero-Configuration Mode**:
+  ```bash
+  # On Raspberry Pi (ARM64 or ARM32):
+  ./client_arm
+  ```
+  The client sends a UDP broadcast probe (`PKT_DISCOVERY_PROBE`) to port 9877, the server replies (`PKT_DISCOVERY_OFFER`), and the client learns the server IP automatically!
+- **Or Explicit IP**:
+  ```bash
+  ./client_arm 10.58.3.114
+  ```
+
+---
+
+### Topology 3: Cross-Network / External via Tailscale
+For connecting across different networks (e.g., Server at home/office, Client on 4G/5G mobile hotspot or remote Wi-Fi), Tailscale provides secure peer-to-peer WireGuard mesh routing through firewalls without router port forwarding:
+
+1. **Install Tailscale on both machines**:
+   ```bash
+   curl -fsSL https://tailscale.com/install.sh | sh
+   ```
+2. **Start Tailscale**:
+   ```bash
+   sudo tailscale up
+   ```
+3. **Launch Server**:
+   ```bash
+   ./server
+   ```
+   The server automatically detects the `tailscale0` adapter and displays:
+   ```text
+     • Tailscale / VPN Overlay : 100.104.77.63:9877
+   ```
+4. **Connect from Remote Client Anywhere in the World**:
+   ```bash
+   ./client_arm 100.104.77.63
+   # Or using Tailscale MagicDNS:
+   ./client_arm my-laptop-name
+   ```
+
+*(See [NETWORKING_GUIDE.md](NETWORKING_GUIDE.md) for full configuration details).*
+
+---
+
+## 7. Running All Application Workflows
+
+### Workflow 1: Multi-Client Server Relay
+
+```bash
+# Launch server core:
 ./server
 ```
 
@@ -178,29 +499,27 @@ Start the core server daemon:
     • Auto-Discovery Service  : UDP Broadcast Probe on port 9877
 ```
 
-*(Optional decoupled consoles)*:
-- **Receiver Console Display**: `./server_rx`
-- **Transmitter Console**: `./server_tx`
-- **Or launch all 3 terminals automatically**: `./run.sh`
+*(Optional decoupled operator consoles)*:
+- Terminal 2: `./server_rx` (Displays incoming client messages)
+- Terminal 3: `./server_tx` (Allows broadcasting/messaging clients)
+- Or launch all 3 simultaneously: `./run.sh`
 
 ---
 
-### B. Running the Interactive Secure Chat Client
+### Workflow 2: Interactive Secure Chat Client
 
-Connect to the server from an x86 PC or Raspberry Pi with a clean terminal interface. **No IP address is needed for local/LAN connections** — the client discovers the server dynamically!
-
+Connect to the server with a clean terminal interface:
 ```bash
 # On x86_64:
-./client                  # Auto-discovers server
-./client <SERVER_IP>      # Explicit IP, hostname, or Tailscale address
+./client                  # Auto-discovery
+./client 10.58.3.114      # Explicit LAN IP
+./client 100.104.77.63    # Tailscale IP
 
 # On Raspberry Pi (ARM64):
-./client_arm              # Auto-discovers server
-./client_arm <SERVER_IP>
+./client_arm
 
 # On Raspberry Pi (ARM32):
-./client_arm32            # Auto-discovers server
-./client_arm32 <SERVER_IP>
+./client_arm32
 ```
 
 **Terminal Session Output:**
@@ -215,24 +534,24 @@ Connect to the server from an x86 PC or Raspberry Pi with a clean terminal inter
 
 ---
 
-### C. Running Continuous IoT Sensor Broadcaster (`client_broadcast`)
+### Workflow 3: Autonomous IoT Sensor Broadcaster (`client_broadcast`)
 
-Simulates an embedded IoT sensor node (e.g., Raspberry Pi, ESP32 gateway) that establishes a post-quantum session and continuously broadcasts encrypted sensor telemetry (temperature, humidity, barometric pressure, battery voltage):
+Simulates an autonomous sensor node that connects via post-quantum mutual authentication and continuously streams encrypted sensor telemetry:
 
 ```bash
 # Syntax: ./client_broadcast [server_ip] [interval_ms] [device_id]
 
-# Auto-discovery mode (defaults to 500ms interval, ESP32-NODE-01):
+# Auto-discovery (500ms interval, ESP32-NODE-01):
 ./client_broadcast
 
-# Custom rate and device tag:
-./client_broadcast auto 200 "LAB-ENVIRONMENT-SENSOR"
+# High-frequency stream (100ms) with custom ID:
+./client_broadcast auto 100 "PI-SENSOR-NODE"
 
-# On Raspberry Pi across Tailscale:
-./client_broadcast_arm 100.104.77.63 100 "PI-FIELD-NODE"
+# On Raspberry Pi over Tailscale:
+./client_broadcast_arm 100.104.77.63 200 "REMOTE-ENV-MONITOR"
 ```
 
-**Telemetry Output Stream:**
+**Stream Output:**
 ```text
   Server target : 10.58.3.114:9877
 [18:31:49] Connected to 10.58.3.114:9877 (Session ID: d20fec5a0f374489)
@@ -244,67 +563,68 @@ Simulates an embedded IoT sensor node (e.g., Raspberry Pi, ESP32 gateway) that e
 
 ---
 
-### D. Running Concurrent Handshake Benchmark (`bench_nclient`)
+### Workflow 4: High-Concurrency Benchmark (`bench_nclient`)
 
-Simulates $N$ concurrent client threads performing simultaneous post-quantum handshakes and streaming encrypted messages to evaluate server throughput, jitter, and resource usage:
+Simulates $N$ concurrent client threads synchronizing on a thread barrier, performing concurrent post-quantum handshakes, and streaming messages:
 
 ```bash
 # Syntax: ./bench_nclient [num_clients] [num_messages] [server_ip (optional)]
 
-# 64 concurrent clients with auto-discovery:
+# 64 clients, 10 messages each (Auto-discovery):
 ./bench_nclient 64 10
 
 # 256 clients across Tailscale:
 ./bench_nclient 256 5 100.104.77.63
 
 # On Raspberry Pi (ARM64):
-./bench_nclient_arm 32 10
+./bench_nclient_arm 32 5
+```
+
+**Benchmark Output Table:**
+```text
+┌─ System-Wide & Communication Metrics ──────────────────────────────────────────────────┐
+│  Metric                             │    Value              │  Unit                    │
+│  ───────────────────────────────────┼───────────────────────┼──────────────────────────│
+│  Handshake Success Rate             │                 100.0   │  %                       │
+│  Handshake Throughput               │                  35.9   │  handshakes/sec          │
+│  Network Handshake RTT (Average)    │                 4.624   │  ms                      │
+│  Total Handshake Latency (Average)  │                 4.715   │  ms                      │
+│  CPU Utilization                    │                  20.6   │  %                       │
+│  Peak RAM Usage                     │                1334.7   │  MB                      │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### E. AEAD File Encryption & Symmetric Microbenchmark (`bench_aead`)
+### Workflow 5: Cryptographic Microbenchmark & AEAD Utility
 
+#### 1. Standalone Primitives Microbenchmark (`bench_pqc`):
 ```bash
-# 1. Benchmark ChaCha20-Poly1305 throughput across payload sizes (64B to 16KB):
+./bench_pqc [rounds]         # x86_64
+./bench_pqc_arm [rounds]     # ARM64
+./bench_pqc_arm32 [rounds]   # ARM32
+```
+*Example (1,000 iterations)*: `./bench_pqc 1000`
+
+#### 2. AEAD Throughput Benchmark & File Encryption (`bench_aead`):
+```bash
+# Benchmark symmetric throughput across payload sizes (64B to 16KB):
 ./bench_aead 1000
 
-# 2. Encrypt a file (generates random 256-bit key if omitted):
+# Encrypt a file with ChaCha20-Poly1305:
 ./bench_aead encrypt document.pdf document.pdf.enc
 
-# 3. Decrypt the encrypted file:
-./bench_aead decrypt document.pdf.enc decrypted_document.pdf <KEY_HEX>
+# Decrypt the encrypted file:
+./bench_aead decrypt document.pdf.enc document_dec.pdf <KEY_HEX>
 ```
 
 ---
 
-## 🌐 Dynamic Networking & Tailscale Mesh
+## 8. Empirical Performance & Hardware Benchmarks
 
-The transport layer resolves server addresses dynamically through a 5-tier resolution chain:
-1. **CLI Argument** (IPv4, Hostname, or Tailscale MagicDNS name).
-2. **Environment Variable** (`PQC_SERVER_IP="100.x.y.z"`).
-3. **Local Discovery Files** (`/tmp/nexqor_server.ip` and `./server_endpoint.info`).
-4. **LAN UDP Broadcast Probe** (`PKT_DISCOVERY_PROBE` on port 9877).
-5. **Loopback Fallback** (`127.0.0.1:9877`).
+All metrics were captured on bare-metal hardware using high-resolution monotonic timestamps (`clock_gettime(CLOCK_MONOTONIC)`):
 
-### Cross-Network Connection via Tailscale (Bypasses NAT & Firewalls)
-
-For devices on separate networks (e.g., Server at home/office, Client on 4G/5G mobile hotspot or remote Wi-Fi):
-
-1. **Install Tailscale on both machines**: `curl -fsSL https://tailscale.com/install.sh | sh`
-2. **Connect**: `sudo tailscale up`
-3. **Run Server**: `./server` (identifies and displays Tailscale IP `100.x.y.z`).
-4. **Connect Client**: `./client_arm <TAILSCALE_SERVER_IP>`
-
-*(For in-depth networking architecture, discovery internals, and firewall settings, see [NETWORKING_GUIDE.md](NETWORKING_GUIDE.md)).*
-
----
-
-## 📊 Empirical Performance Benchmarks
-
-Measured on physical hardware using high-resolution monotonic timestamps (`clock_gettime(CLOCK_MONOTONIC)`):
-
-### Cryptographic Operation Latency
+### Cryptographic Primitive Latency Breakdown
 
 | Primitive / Operation | Algorithm | x86_64 (AVX2) | ARM64 (NEON Cortex-A72) | ARM32 (NEON Cortex-A53) |
 | :--- | :--- | :---: | :---: | :---: |
@@ -318,7 +638,7 @@ Measured on physical hardware using high-resolution monotonic timestamps (`clock
 
 ### High-Concurrency Server Scaling (`io_uring`)
 
-| Concurrent Clients ($N$) | Total Handshake Time | Success Rate | Peak Server CPU | Memory Usage |
+| Concurrent Clients ($N$) | Total Handshake Time (x86_64) | Success Rate | Peak Server CPU | Memory Usage |
 | :---: | :---: | :---: | :---: | :---: |
 | **10** | 12.8 ms | 100.0% | 4.2% | ~14 MB |
 | **50** | 46.1 ms | 100.0% | 12.8% | ~18 MB |
@@ -328,50 +648,110 @@ Measured on physical hardware using high-resolution monotonic timestamps (`clock
 
 ---
 
-## 📁 Repository Structure
+## 9. Automated Security Testing & Formal Verification
 
-```text
-.
-├── crypto/
-│   ├── aead.c / .h                 # ChaCha20-Poly1305 AEAD with AAD wire header binding
-│   ├── replay_window.c / .h        # 64-packet bitmap sliding replay window (RFC 6479)
-│   └── trust_store.c / .h          # Pinned peer identity key store and verification (TOFU)
-├── wrappers/
-│   ├── kem_wrapper.c / .h          # ML-KEM-768 wrappers & directional SHAKE256 KDF
-│   └── dsa_wrapper.c / .h          # ML-DSA-65 digital signature C wrappers
-├── tests/
-│   └── test_suite.c                # 8-suite automated cryptographic and security regression test
-├── verification/
-│   ├── protocol.pv                 # Formal security verification model in Applied Pi-Calculus
-│   └── README.md                   # ProVerif execution guide and proof breakdown
-├── client.c                        # Interactive PQC chat client (clean UI, auto-discovery)
-├── client_broadcast.c              # Autonomous IoT sensor telemetry broadcaster
-├── server.c                        # Asynchronous io_uring multi-client server
-├── server_rx.c / server_tx.c       # Decoupled server operator console interfaces
-├── transport.c / .h                # Dynamic discovery, packet framing, AAD AEAD, ACKs
-├── bench_pqc.c                     # Standalone cryptographic primitives microbenchmark
-├── bench_nclient.c                 # Multi-client concurrent stress-test harness
-├── bench_aead.c                    # AEAD buffer benchmark & file encryption tool
-├── Makefile                        # Native build system for x86_64 host
-├── Makefile.arm64                  # Build system for ARM64 (Raspberry Pi 4/5)
-├── Makefile.arm32                  # Build system for ARM32 (Raspberry Pi 2/3)
-├── NETWORKING_GUIDE.md             # Dedicated guide for dynamic discovery & Tailscale setup
-├── commands.md                     # Detailed command reference and cheatsheet
-└── README.md                       # Main project documentation
+### A. Automated Security & Cryptographic Regression Test Suite
+
+The repository includes an 8-suite automated regression test validating the cryptographic primitives, directional key separation, replay protection, AEAD tampering resistance, pinned peer authentication, packet fragmentation, and session isolation:
+
+```bash
+make test
 ```
+
+**Automated Test Suite Output:**
+```text
+=== Running NEXQOR Automated Security and Unit Test Suite ===
+./tests/test_suite
+
+╔══════════════════════════════════════════════════════════════╗
+║       NEXQOR — Post-Quantum Security & Cryptographic Tests   ║
+╚══════════════════════════════════════════════════════════════╝
+
+[TEST 01] test_kem_agreement_and_negative                  PASS
+[TEST 02] test_dsa_signing_and_tampering                   PASS
+[TEST 03] test_directional_kdf_separation                  PASS
+[TEST 04] test_aead_aad_binding_and_tampering              PASS
+[TEST 05] test_sliding_replay_window                       PASS
+[TEST 06] test_trust_store_peer_authentication            PASS
+[TEST 07] test_packet_framing_and_reassembly               PASS
+[TEST 08] test_session_isolation_and_cleanup               PASS
+
+════════════════════════════════════════════════════════════════
+Test Results: 8/8 passed (0 failed)
+ALL SECURITY & REGRESSION TESTS PASSED SUCCESSFULLY!
+```
+
+#### Test Suite Descriptions:
+1. **TEST 01 (`test_kem_agreement_and_negative`)**: Tests ML-KEM-768 shared secret agreement and verifies that tampered ciphertexts are rejected.
+2. **TEST 02 (`test_dsa_signing_and_tampering`)**: Verifies ML-DSA-65 signature generation and validates that bit-flipped messages or invalid public keys are rejected.
+3. **TEST 03 (`test_directional_kdf_separation`)**: Validates that derived client-to-server (`tx_key`) and server-to-client (`rx_key`) keys are cryptographically distinct.
+4. **TEST 04 (`test_aead_aad_binding_and_tampering`)**: Verifies that altering any field in the 15-byte packet wire header (AAD) triggers an authentication failure.
+5. **TEST 05 (`test_sliding_replay_window`)**: Validates the 64-packet bitmap replay window against out-of-order, duplicated, and old packets.
+6. **TEST 06 (`test_trust_store_peer_authentication`)**: Verifies that untrusted or substituted server public keys are flagged and rejected (TOFU pinning).
+7. **TEST 07 (`test_packet_framing_and_reassembly`)**: Validates fragmentation and out-of-order reassembly of oversized PQC payloads across UDP boundaries.
+8. **TEST 08 (`test_session_isolation_and_cleanup`)**: Verifies that multiple client sessions maintain isolated states and that sensitive key material is securely zeroized on disconnect.
 
 ---
 
-## 📄 License & Citation
+### B. Formal Security Verification with ProVerif
 
+The 4-way mutual authentication handshake has been modeled and formally verified in **Applied Pi-Calculus** using **[ProVerif](https://proverif.inria.fr/)**, proving mathematical security against an active Dolev-Yao adversary with full network control:
+
+```bash
+# Install ProVerif:
+sudo apt-get install -y proverif
+
+# Run mathematical verification:
+proverif verification/protocol.pv
+```
+
+#### 21 Formally Proven Security Properties:
+
+| # | Security Property | Verification Status | Mathematical Mapping (`verification/protocol.pv`) |
+| :-: | :--- | :-: | :--- |
+| **1** | **Session Key Secrecy** | ✅ **Proven** | `not attacker(session_key_secret)` holds across all execution paths. |
+| **2** | **Client Data Secrecy** | ✅ **Proven** | `not attacker(client_data)` — payload confidential against active adversary. |
+| **3** | **Server Data Secrecy** | ✅ **Proven** | `not attacker(server_data)` — outbound server payload confidential. |
+| **4** | **Client Authentication** | ✅ **Proven** | `inj-event(server_accepts) ==> inj-event(client_initiates)`. |
+| **5** | **Server Authentication** | ✅ **Proven** | `inj-event(client_accepts) ==> inj-event(server_initiates)`. |
+| **6** | **Mutual Authentication** | ✅ **Proven** | Symmetrical injective correspondence verified across both endpoints. |
+| **7** | **Replay Resistance** | ✅ **Proven** | `inj-event` enforces strict 1-to-1 session mapping. |
+| **8** | **Perfect Forward Secrecy (PFS)** | ✅ **Proven** | Compromise of long-term signing keys leaks zero past session keys or data. |
+| **9** | **Key Confirmation** | ✅ **Proven** | Injective agreements guarantee identical derived key $k$ at both sides. |
+| **10** | **Message Integrity** | ✅ **Proven** | AEAD equational reduction: $\text{aead\_decrypt}(\text{aead\_encrypt}(m,k,n),k,n) = m$. |
+| **11** | **Transcript Binding** | ✅ **Proven** | Full transcript agreement binds nonces, session ID, and KEM ciphertext $ct$. |
+| **12** | **Signature Unforgeability** | ✅ **Proven** | Asymmetric signature unforgeable without secret key $sk^{dsa}$. |
+| **13** | **Ciphertext Integrity** | ✅ **Proven** | Tampered AEAD ciphertext fails cryptographic authentication. |
+| **14** | **KEM Substitution Resistance**| ✅ **Proven** | Altering $ct$ invalidates signature and aborts key derivation. |
+| **15** | **Unknown Key-Share (UKS) Protection** | ✅ **Proven** | Explicit binding of identity public keys ($pk^{dsa}$) prevents UKS attacks. |
+| **16** | **Reflection Attack Resistance** | ✅ **Proven** | Asymmetric packet types and transcript headers prevent reflection. |
+| **17** | **Parallel Session Security** | ✅ **Proven** | Modeled via replicated unbounded processes `!client` and `!server`. |
+| **18** | **Session Mix-Up Resistance** | ✅ **Proven** | Cryptographic separation via ephemeral nonces and server session IDs. |
+| **19** | **Identity Binding** | ✅ **Proven** | Signatures bind identity public keys directly into transcript hashes. |
+| **20** | **Nonce Freshness** | ✅ **Proven** | Modeled via `new c_nonce` and `new s_nonce` generation. |
+| **21** | **Session ID Uniqueness** | ✅ **Proven** | Guaranteed by atomic `new session_id` generation on the server. |
+
+---
+
+## 10. Research References, License & Citation
+
+### Key Standards & Academic Literature:
+- **NIST FIPS 203**: *Module-Lattice-Based Key-Encapsulation Mechanism Standard (ML-KEM)*.
+- **NIST FIPS 204**: *Module-Lattice-Based Digital Signature Standard (ML-DSA)*.
+- **RFC 8439**: *ChaCha20 and Poly1305 for IETF Protocols*.
+- **RFC 6479**: *Alternative Replay Window for IPsec*.
+- **Applied Pi-Calculus & ProVerif**: *Automatic Cryptographic Protocol Verifier in the Formal Model*.
+
+### License
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for complete details.
 
+### Citation
 ```bibtex
 @misc{pqc_cross_platform_evaluation_2026,
   author = {Vishal Kumar},
-  title = {Cross-Platform Evaluation of Scalable Post-Quantum Secure Communication},
+  title = {QRYPTONEX: Cross-Platform Evaluation of Scalable Post-Quantum Secure Communication},
   year = {2026},
   publisher = {GitHub},
-  howpublished = {\url{https://github.com/Vshal-Kumar/PQC}}
+  howpublished = {\url{https://github.com/Vshal-Kumar/QRYPTONEX}}
 }
 ```
