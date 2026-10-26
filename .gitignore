@@ -9,6 +9,9 @@
 /bench_pqc_arm
 /bench_nclient_arm
 /client_arm
+/client_broadcast
+/client_broadcast_arm
+/client_broadcast_arm32
 /bench_pqc_arm32
 /bench_nclient_arm32
 /client_arm32

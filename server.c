@@ -1173,9 +1173,10 @@ static void process_completion(const crypto_completion_t *comp) {
     inet_ntop(AF_INET, &peer.sin_addr, ip_str, sizeof(ip_str));
     char ts[16];
     now_hms(ts, sizeof(ts));
-    printf("[%s] \033[1;32m✓ CLIENT-%02d\033[0m  %s:%u  SID=%016llx  HS=%.3fms "
-           " Active=%d\n\n",
-           ts, cid, ip_str, ntohs(peer.sin_port),
+    const char *link_type = (strncmp(ip_str, "100.", 4) == 0) ? "Tailscale VPN" :
+                            (strncmp(ip_str, "127.", 4) == 0) ? "Localhost" : "LAN / Wi-Fi";
+    printf("[%s] \033[1;32m✓ CLIENT-%02d\033[0m [%s] %s:%u  SID=%016llx  HS=%.3fms  Active=%d\n\n",
+           ts, cid, link_type, ip_str, ntohs(peer.sin_port),
            (unsigned long long)s->session_id_val, s->metrics.hs_total_ms,
            registry_count());
   }

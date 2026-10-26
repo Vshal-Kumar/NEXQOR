@@ -349,7 +349,20 @@ int main(int argc, char *argv[])
         close(sock);
         return 1;
     }
-    printf("  Server target : %s:%d\n", server_ip, SERVER_PORT);
+    const char *net_type = "Direct UDP (LAN / Wi-Fi)";
+    if (strncmp(server_ip, "127.", 4) == 0 || strcmp(server_ip, "::1") == 0) {
+        net_type = "Localhost Loopback (IPC)";
+    } else if (strncmp(server_ip, "100.", 4) == 0) {
+        net_type = "Tailscale Mesh VPN (Overlay Routing)";
+    }
+
+    printf("\n\033[1;36m╔══════════════════════════════════════════════════════════════════════════╗\033[0m\n");
+    printf("\033[1;36m║       QRYPTONEX — Post-Quantum Secure Client (NEXQOR Architecture)       ║\033[0m\n");
+    printf("\033[1;36m╚══════════════════════════════════════════════════════════════════════════╝\033[0m\n");
+    printf("  \033[1;33m• Server Target   :\033[0m %s:%d\n", server_ip, SERVER_PORT);
+    printf("  \033[1;33m• Network Link    :\033[0m %s\n", net_type);
+    printf("  \033[1;33m• Transport Layer :\033[0m Raw UDP Datagrams (Zero External Encryption)\n");
+    printf("  \033[1;33m• PQC Stack       :\033[0m ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305\n\n");
 
     /* Serial KEM + DSA key generation */
     kem_warmup();
@@ -372,6 +385,9 @@ int main(int argc, char *argv[])
     }
     g_keys.dsa_keygen_ms = now_ms() - t0;
 
+    printf("  \033[1;32m[PQC KeyGen]\033[0m ML-KEM-768: %.3f ms (1,184 B PK) | ML-DSA-65: %.3f ms (1,952 B PK)\n",
+           g_keys.kem_keygen_ms, g_keys.dsa_keygen_ms);
+
     /* Serial Handshake */
     metrics_t metrics = {0};
     metrics.msg_min_rtt_ms = 1e15;
@@ -386,7 +402,16 @@ int main(int argc, char *argv[])
 
     char ts[16];
     now_hms(ts, sizeof(ts));
-    printf("[%s] Connected to %s:%d (Session ID: %016llx)\n",
+    printf("  \033[1;32m[PQC Handshake]\033[0m Completed in %.3f ms (KEM Decap: %.3f ms, DSA Sign: %.3f ms)\n",
+           metrics.hs_total_ms, metrics.hs_encap_ms, metrics.hs_sign_ms);
+    printf("  \033[1;32m[Session Keys]\033[0m  Client TX Key : %02x%02x%02x%02x%02x%02x%02x%02x... (256-bit)\n",
+           c.tx_key[0], c.tx_key[1], c.tx_key[2], c.tx_key[3],
+           c.tx_key[4], c.tx_key[5], c.tx_key[6], c.tx_key[7]);
+    printf("                  Server RX Key : %02x%02x%02x%02x%02x%02x%02x%02x... (256-bit)\n",
+           c.rx_key[0], c.rx_key[1], c.rx_key[2], c.rx_key[3],
+           c.rx_key[4], c.rx_key[5], c.rx_key[6], c.rx_key[7]);
+    printf("  \033[1;32m[Wire Security]\033[0m Poly1305 15B AAD Header Binding + RFC 6479 Replay Window\n");
+    printf("\n\033[1;32m[%s] Connected to %s:%d (Session ID: %016llx)\033[0m\n",
            ts, server_ip, SERVER_PORT, (unsigned long long)c.session_id);
     printf("[%s] Ready to chat. Type a message and press Enter (Ctrl-C to exit).\n", ts);
 
