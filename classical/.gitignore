@@ -1,0 +1,37 @@
+# Compiled binaries
+server
+server_rx
+server_tx
+client
+client_arm
+client_arm32
+client_broadcast
+client_broadcast_arm
+client_broadcast_arm32
+bench_crypto
+bench_crypto_arm
+bench_crypto_arm32
+bench_pqc
+bench_pqc_arm
+bench_pqc_arm32
+bench_nclient
+bench_nclient_arm
+bench_nclient_arm32
+bench_aead
+bench_aead_arm
+bench_aead_arm32
+tests/test_suite
+tests/test_suite_arm
+tests/test_suite_arm32
+
+# Object files
+*.o
+crypto/*.o
+wrappers/*.o
+
+# Key & trust files generated at runtime
+server_identity.key
+server_identity.pub
+authorized_clients.db
+server_endpoint.info
+test_classical_srv.*

@@ -46,9 +46,10 @@ SHARED_OBJS = transport_arm32.o \
               wrappers/hash_wrapper_arm32.o \
               wrappers/kdf_wrapper_arm32.o
 
-.PHONY: all clean check-cross-deps
+.PHONY: all clean check-cross-deps symlinks \
+        client client_broadcast bench_crypto bench_pqc bench_nclient bench_aead
 
-all: check-cross-deps client_arm32 client_broadcast_arm32 bench_crypto_arm32 bench_nclient_arm32 bench_aead_arm32
+all: check-cross-deps client_arm32 client_broadcast_arm32 bench_crypto_arm32 bench_nclient_arm32 bench_aead_arm32 symlinks
 
 check-cross-deps:
 ifeq ($(findstring arm,$(HOST_ARCH)),)
@@ -105,5 +106,35 @@ bench_aead_arm32: bench_aead.c crypto/aead_arm32.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
 	@echo "Built: bench_aead_arm32 [armv7-a + NEON]"
 
+symlinks: client_arm32 client_broadcast_arm32 bench_crypto_arm32 bench_nclient_arm32 bench_aead_arm32
+	ln -sf client_arm32 client
+	ln -sf client_broadcast_arm32 client_broadcast
+	ln -sf bench_crypto_arm32 bench_crypto
+	ln -sf bench_crypto_arm32 bench_pqc
+	ln -sf bench_nclient_arm32 bench_nclient
+	ln -sf bench_aead_arm32 bench_aead
+	@echo "Created ARM32 binary aliases: client, client_broadcast, bench_crypto, bench_pqc, bench_nclient, bench_aead"
+
+client: client_arm32
+	ln -sf client_arm32 client
+
+client_broadcast: client_broadcast_arm32
+	ln -sf client_broadcast_arm32 client_broadcast
+
+bench_crypto: bench_crypto_arm32
+	ln -sf bench_crypto_arm32 bench_crypto
+
+bench_pqc: bench_crypto_arm32
+	ln -sf bench_crypto_arm32 bench_pqc
+	ln -sf bench_crypto_arm32 bench_crypto
+
+bench_nclient: bench_nclient_arm32
+	ln -sf bench_nclient_arm32 bench_nclient
+
+bench_aead: bench_aead_arm32
+	ln -sf bench_aead_arm32 bench_aead
+
 clean:
 	rm -f client_arm32 client_broadcast_arm32 bench_crypto_arm32 bench_nclient_arm32 bench_aead_arm32 $(SHARED_OBJS)
+	rm -f client client_broadcast bench_crypto bench_pqc bench_nclient bench_aead
+

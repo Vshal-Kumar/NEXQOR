@@ -138,8 +138,13 @@ make clean
 
 ### Build for ARM64 (Raspberry Pi 4 / 5):
 ```bash
-# Native on ARM64 device:
+# Native build on ARM64 device (Raspberry Pi 4 / 5):
 make -f Makefile.arm64 all
+# (Builds client_arm, bench_crypto_arm, bench_nclient_arm, etc., and creates
+#  convenience aliases so you can run either ./bench_nclient or ./bench_nclient_arm)
+
+# Or simply:
+make all
 
 # Cross-compiling from x86_64 host (with target sysroot):
 make -f Makefile.arm64 all ARM64_SYSROOT=/path/to/arm64_sysroot

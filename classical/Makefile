@@ -33,9 +33,15 @@ LIBURING_LOCAL = ../liburing_local
 ifneq ($(wildcard $(LIBURING_LOCAL)/lib/liburing.a),)
   INC_URING = -I$(LIBURING_LOCAL)/include
   LIB_URING = $(LIBURING_LOCAL)/lib/liburing.a
-else ifneq ($(wildcard $(LIBURING_LOCAL)/include/liburing.h),)
+else ifneq ($(wildcard /usr/lib/aarch64-linux-gnu/liburing.so.2),)
+  INC_URING = -I$(LIBURING_LOCAL)/include
+  LIB_URING = /usr/lib/aarch64-linux-gnu/liburing.so.2
+else ifneq ($(wildcard /usr/lib/x86_64-linux-gnu/liburing.so.2),)
   INC_URING = -I$(LIBURING_LOCAL)/include
   LIB_URING = /usr/lib/x86_64-linux-gnu/liburing.so.2
+else ifneq ($(wildcard $(LIBURING_LOCAL)/include/liburing.h),)
+  INC_URING = -I$(LIBURING_LOCAL)/include
+  LIB_URING = -luring
 else
   INC_URING =
   LIB_URING = -luring
