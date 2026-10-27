@@ -8,13 +8,13 @@ HOST_ARCH := $(shell uname -m)
 ifeq ($(findstring arm,$(HOST_ARCH)),arm)
   # Native compilation on 32-bit ARM Raspberry Pi
   CC      = gcc
-  LIBOQS  = liboqs/build
+  LIBOQS  = ../liboqs/build
   INC     = -I. -I$(LIBOQS)/include
   LIBS    = $(LIBOQS)/lib/liboqs.a -lssl -lcrypto -lpthread -lm
 else
   # Cross-compilation on x86_64 host
   CC      = arm-linux-gnueabihf-gcc
-  LIBOQS  = liboqs/build_arm32
+  LIBOQS  = ../liboqs/build_arm32
   INC     = -I. -I$(LIBOQS)/include
   LIBS    = $(LIBOQS)/lib/liboqs.a -lssl -lcrypto -lpthread -lm
 endif
@@ -55,19 +55,27 @@ wrappers/dsa_wrapper_arm32.o: wrappers/dsa_wrapper.c wrappers/dsa_wrapper.h
 
 client_arm32: client.c $(SHARED_OBJS)
 	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
-	@echo "Built: client_arm32  [armv7-a + NEON]"
+	@ln -sf client_arm32 client
+	@echo "Built: client_arm32  [armv7-a + NEON] (symlink: client)"
 
 client_broadcast_arm32: client_broadcast.c $(SHARED_OBJS)
 	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
-	@echo "Built: client_broadcast_arm32  [armv7-a + NEON]"
+	@ln -sf client_broadcast_arm32 client_broadcast
+	@echo "Built: client_broadcast_arm32  [armv7-a + NEON] (symlink: client_broadcast)"
 
 bench_pqc_arm32: bench_pqc.c $(SHARED_OBJS)
 	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
-	@echo "Built: bench_pqc_arm32  [armv7-a + NEON]"
+	@ln -sf bench_pqc_arm32 bench_pqc
+	@echo "Built: bench_pqc_arm32  [armv7-a + NEON] (symlink: bench_pqc)"
 
 bench_nclient_arm32: bench_nclient.c $(SHARED_OBJS)
 	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
-	@echo "Built: bench_nclient_arm32  [armv7-a + NEON]"
+	@ln -sf bench_nclient_arm32 bench_nclient
+	@echo "Built: bench_nclient_arm32  [armv7-a + NEON] (symlink: bench_nclient)"
 
 clean:
-	rm -f bench_pqc_arm32 bench_nclient_arm32 client_arm32 client_broadcast_arm32 $(SHARED_OBJS)
+	rm -f bench_pqc_arm32 bench_nclient_arm32 client_arm32 client_broadcast_arm32 \
+	      bench_pqc bench_nclient client client_broadcast $(SHARED_OBJS)
+
+clean-arm32: clean
+clean-all: clean

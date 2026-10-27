@@ -38,6 +38,7 @@
 #include "include/hybrid_handshake.h"
 #include "include/hybrid_session.h"
 #include "include/hybrid_errors.h"
+#include "perf_monitor.h"
 
 #define DEFAULT_NUM_CLIENTS 32
 #define DEFAULT_NUM_MSGS    5
@@ -308,6 +309,11 @@ int main(int argc, char *argv[]) {
 
     cpu_ticks_t cpu_start, cpu_end;
     get_cpu_ticks(&cpu_start);
+    perf_temp_monitor_t temp_mon;
+    perf_temp_init(&temp_mon);
+    perf_mem_monitor_t mem_mon;
+    perf_mem_init(&mem_mon);
+
     uint64_t bench_start = ns_now();
 
     printf("[bench] Launching %d concurrent client threads...\n", g_num_clients);
@@ -319,6 +325,9 @@ int main(int argc, char *argv[]) {
 
     uint64_t bench_end = ns_now();
     get_cpu_ticks(&cpu_end);
+    perf_temp_finalize(&temp_mon);
+    perf_mem_finalize(&mem_mon);
+
     double total_wall_sec = (double)(bench_end - bench_start) / 1e9;
     double cpu_util = calculate_cpu_utilization(&cpu_start, &cpu_end);
 
@@ -346,6 +355,15 @@ int main(int argc, char *argv[]) {
     printf("║  Average Handshake Time: %.2f ms                                                                              \n", avg_hs_ms);
     printf("║  Throughput            : %.2f handshakes / sec                                                                \n", hs_per_sec);
     printf("║  CPU Utilization       : %.2f%%                                                                               \n", cpu_util);
+    printf("║  Initial Memory RAM    : %.3f MB                                                                              \n", mem_mon.initial_ram_mb);
+    printf("║  Peak Memory RSS       : %.3f MB                                                                              \n", mem_mon.peak_ram_mb);
+    printf("║  Heap Memory Usage     : %.3f MB                                                                              \n", mem_mon.heap_usage_mb);
+    if (temp_mon.available) {
+        printf("║  Hardware Temperature  : Initial: %.2f °C | Final: %.2f °C | Delta: %+.2f °C (%s)                           \n",
+               temp_mon.initial_temp_c, temp_mon.final_temp_c, temp_mon.final_temp_c - temp_mon.initial_temp_c, temp_mon.sensor_type);
+    } else {
+        printf("║  Hardware Temperature  : Unavailable (No sysfs thermal sensor)                                                \n");
+    }
     if (g_num_msgs > 0) {
         printf("║  Encrypted Msgs Exchanged: %d datagrams                                                                       \n", total_msgs);
     }

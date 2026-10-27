@@ -31,8 +31,9 @@
 #include "wrappers/dsa_wrapper.h"
 #include "wrappers/hash_wrapper.h"
 #include "wrappers/kdf_wrapper.h"
+#include "perf_monitor.h"
 
-#define BENCH_ROUNDS_DEFAULT 1000
+#define BENCH_ROUNDS_DEFAULT 500
 
 /* Timer: nanosecond resolution */
 static inline uint64_t ns_now(void) {
@@ -305,40 +306,71 @@ static void print_detailed_row(const char *name, const detailed_stats_t *st) {
 
 int main(int argc, char *argv[]) {
   int rounds = BENCH_ROUNDS_DEFAULT;
+  int runs = 5;
   if (argc > 1) {
     rounds = atoi(argv[1]);
-    if (rounds <= 0)
-      rounds = BENCH_ROUNDS_DEFAULT;
+    if (rounds <= 0) rounds = BENCH_ROUNDS_DEFAULT;
   }
-
-  printf("\n");
-  printf("=========================================================================================\n");
-  printf("  QRYPTONEX Classical IoT Cryptographic Suite Benchmark (%d rounds)\n", rounds);
-  printf("  Suite: X25519 (ECDH) + Ed25519 + AES-128-CCM + SHA-256 + HKDF-SHA-256 + HMAC-SHA-256\n");
-  printf("=========================================================================================\n\n");
+  if (argc > 2) {
+    runs = atoi(argv[2]);
+    if (runs <= 0) runs = 5;
+  }
 
   /* Warmup OpenSSL algorithms */
   kem_warmup();
   dsa_warmup();
 
-  /* 1. X25519 Benchmark */
-  sample_set_t s_x25519_key, s_x25519_ecdh;
-  bench_x25519(rounds, &s_x25519_key, &s_x25519_ecdh);
+  perf_benchmark_session_t session;
+  if (perf_session_init(&session, (size_t)runs, (size_t)rounds) != 0) {
+    fprintf(stderr, "Failed to initialize performance monitor session\n");
+    return 1;
+  }
+
+  perf_ui_print_section_header("QRYPTONEX CLASSICAL IOT SUITE: N-RUN BENCHMARK (X25519 + Ed25519 + AES-128-CCM)");
+  printf("  Benchmark Setup: %d rounds per run across %d completed runs\n", rounds, runs);
+  if (session.temp.available) {
+    printf("  Hardware Sensor: %s (%s) — Initial Temp: %.2f °C\n",
+           session.temp.sensor_path, session.temp.sensor_type, session.temp.initial_temp_c);
+  } else {
+    printf("  Hardware Sensor: Unavailable (No sysfs thermal zone detected)\n");
+  }
+  printf("  Initial Process RAM: %.3f MB | Heap: %.4f MB\n\n",
+         session.mem.initial_ram_mb, session.mem.heap_usage_mb);
+
+  perf_ui_print_run_header();
+
+  sample_set_t s_x25519_key = {0}, s_x25519_ecdh = {0};
+  sample_set_t s_ed_key = {0}, s_ed_sign = {0}, s_ed_ver = {0};
+
+  for (int r = 0; r < runs; r++) {
+    uint64_t t0 = perf_get_nanos();
+
+    if (s_x25519_key.samples) {
+      free(s_x25519_key.samples); free(s_x25519_ecdh.samples);
+      free(s_ed_key.samples); free(s_ed_sign.samples); free(s_ed_ver.samples);
+    }
+
+    bench_x25519(rounds, &s_x25519_key, &s_x25519_ecdh);
+    bench_ed25519(rounds, &s_ed_key, &s_ed_sign, &s_ed_ver);
+
+    double run_time_ms = (double)(perf_get_nanos() - t0) / 1000000.0;
+    perf_session_record_run(&session, (size_t)r, run_time_ms);
+    perf_ui_print_run_row((size_t)r, (size_t)runs, run_time_ms, session.run_temps_c[r],
+                          session.temp.available, session.run_ram_mb[r], session.run_cpu_pct[r]);
+  }
+  perf_ui_print_run_footer();
+  perf_session_finalize(&session);
 
   detailed_stats_t st_x25519_key, st_x25519_ecdh;
   compute_stats(&s_x25519_key, &st_x25519_key);
   compute_stats(&s_x25519_ecdh, &st_x25519_ecdh);
-
-  /* 2. Ed25519 Benchmark */
-  sample_set_t s_ed_key, s_ed_sign, s_ed_ver;
-  bench_ed25519(rounds, &s_ed_key, &s_ed_sign, &s_ed_ver);
 
   detailed_stats_t st_ed_key, st_ed_sign, st_ed_ver;
   compute_stats(&s_ed_key, &st_ed_key);
   compute_stats(&s_ed_sign, &st_ed_sign);
   compute_stats(&s_ed_ver, &st_ed_ver);
 
-  printf("[1] Asymmetric Primitives Execution Time (microseconds µs):\n");
+  printf("\n[1] Asymmetric Primitives Execution Time (microseconds µs):\n");
   printf(" %-22s %9s %9s %9s %9s %9s %7s %9s %9s\n",
          "Operation", "Mean", "Median", "Min", "Max", "StdDev", "CV", "p95", "p99");
   printf("-----------------------------------------------------------------------------------------\n");
@@ -375,10 +407,15 @@ int main(int argc, char *argv[]) {
   printf("[3] AES-128-CCM Authenticated Encryption Throughput (with 15B AAD header binding):\n");
   printf("  Payload Size   Encrypt (µs)   Throughput (MB/s)   Decrypt (µs)   Throughput (MB/s)\n");
   printf("-------------------------------------------------------------------------------------\n");
+  double aead_1kb_enc_us = 0, aead_1kb_dec_us = 0;
   for (int s = 0; s < num_sizes; s++) {
     int sz = sizes[s];
     double enc_us, dec_us;
     bench_aead_size(sz, rounds, &enc_us, &dec_us);
+    if (sz == 1024) {
+      aead_1kb_enc_us = enc_us;
+      aead_1kb_dec_us = dec_us;
+    }
     double enc_mb = (double)sz / enc_us;
     double dec_mb = (double)sz / dec_us;
     printf("  %6d B        %9.2f        %10.2f        %9.2f        %10.2f\n",
@@ -386,12 +423,70 @@ int main(int argc, char *argv[]) {
   }
   printf("=====================================================================================\n\n");
 
+  /* ── COMPREHENSIVE MULTI-METRIC PERFORMANCE REPORT ────────────── */
+  perf_ui_print_section_header("COMPREHENSIVE MULTI-METRIC BENCHMARK REPORT");
+
+  /* 1. Cryptographic Metrics */
+  perf_stats_t stat_x25519_kg = {
+    .mean = st_x25519_key.mean / 1000.0, .min = st_x25519_key.min / 1000.0, .max = st_x25519_key.max / 1000.0,
+    .median = st_x25519_key.median / 1000.0, .stddev = st_x25519_key.stddev / 1000.0, .p95 = st_x25519_key.p95 / 1000.0,
+    .throughput_ops_sec = (st_x25519_key.mean > 0) ? (1000000.0 / st_x25519_key.mean) : 0
+  };
+  perf_ui_print_crypto_summary("X25519 Key Generation (RFC 7748)", &stat_x25519_kg, 32, 32, 0, 0, 0);
+
+  perf_stats_t stat_x25519_ecdh = {
+    .mean = st_x25519_ecdh.mean / 1000.0, .min = st_x25519_ecdh.min / 1000.0, .max = st_x25519_ecdh.max / 1000.0,
+    .median = st_x25519_ecdh.median / 1000.0, .stddev = st_x25519_ecdh.stddev / 1000.0, .p95 = st_x25519_ecdh.p95 / 1000.0,
+    .throughput_ops_sec = (st_x25519_ecdh.mean > 0) ? (1000000.0 / st_x25519_ecdh.mean) : 0
+  };
+  perf_ui_print_crypto_summary("X25519 ECDH Shared Secret Derivation", &stat_x25519_ecdh, 32, 32, 32, 0, 32);
+
+  perf_stats_t stat_ed_kg = {
+    .mean = st_ed_key.mean / 1000.0, .min = st_ed_key.min / 1000.0, .max = st_ed_key.max / 1000.0,
+    .median = st_ed_key.median / 1000.0, .stddev = st_ed_key.stddev / 1000.0, .p95 = st_ed_key.p95 / 1000.0,
+    .throughput_ops_sec = (st_ed_key.mean > 0) ? (1000000.0 / st_ed_key.mean) : 0
+  };
+  perf_ui_print_crypto_summary("Ed25519 Key Generation (RFC 8032)", &stat_ed_kg, 32, 32, 0, 0, 0);
+
+  perf_stats_t stat_ed_sign = {
+    .mean = st_ed_sign.mean / 1000.0, .min = st_ed_sign.min / 1000.0, .max = st_ed_sign.max / 1000.0,
+    .median = st_ed_sign.median / 1000.0, .stddev = st_ed_sign.stddev / 1000.0, .p95 = st_ed_sign.p95 / 1000.0,
+    .throughput_ops_sec = (st_ed_sign.mean > 0) ? (1000000.0 / st_ed_sign.mean) : 0
+  };
+  perf_ui_print_crypto_summary("Ed25519 Signing", &stat_ed_sign, 0, 32, 0, 64, 0);
+
+  perf_stats_t stat_ed_ver = {
+    .mean = st_ed_ver.mean / 1000.0, .min = st_ed_ver.min / 1000.0, .max = st_ed_ver.max / 1000.0,
+    .median = st_ed_ver.median / 1000.0, .stddev = st_ed_ver.stddev / 1000.0, .p95 = st_ed_ver.p95 / 1000.0,
+    .throughput_ops_sec = (st_ed_ver.mean > 0) ? (1000000.0 / st_ed_ver.mean) : 0
+  };
+  perf_ui_print_crypto_summary("Ed25519 Signature Verification", &stat_ed_ver, 32, 0, 0, 64, 0);
+
+  if (aead_1kb_enc_us > 0) {
+    perf_stats_t stat_aead_enc = {
+      .mean = aead_1kb_enc_us / 1000.0, .min = aead_1kb_enc_us / 1000.0, .max = aead_1kb_enc_us / 1000.0,
+      .median = aead_1kb_enc_us / 1000.0, .stddev = 0, .p95 = aead_1kb_enc_us / 1000.0,
+      .throughput_ops_sec = (1000000.0 / aead_1kb_enc_us)
+    };
+    perf_ui_print_crypto_summary("AES-128-CCM Encryption (1KB payload)", &stat_aead_enc, 0, 16, 1024, 16, 0);
+  }
+
+  /* 2. Memory Metrics */
+  perf_ui_print_memory_summary(&session.mem);
+
+  /* 3. CPU Metrics */
+  perf_ui_print_cpu_summary(&session.cpu, (size_t)rounds * (size_t)runs * 5);
+
+  /* 4. Temperature Metrics */
+  perf_ui_print_temp_summary(&session.temp);
+
   /* Clean up */
   free(s_x25519_key.samples);
   free(s_x25519_ecdh.samples);
   free(s_ed_key.samples);
   free(s_ed_sign.samples);
   free(s_ed_ver.samples);
+  perf_session_cleanup(&session);
 
   return 0;
 }

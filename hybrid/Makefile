@@ -37,7 +37,7 @@ else
   LIB_OQS = -loqs
 endif
 
-INC     = -I./include -I. -I.. $(INC_OQS)
+INC     = -I./include -I. $(INC_OQS)
 LIBS    = $(LIB_OQS) -lssl -lcrypto -lpthread -lm
 
 # ── Compiler & Linker Flags ─────────────────────────────────────────
@@ -51,10 +51,11 @@ CFLAGS  = -std=c11 $(OPT) $(LTO) $(WARN) $(DEFS) $(INC)
 LDFLAGS = $(LTO)
 
 # ── Objects ─────────────────────────────────────────────────────────
-ROOT_SHARED_OBJS = ../wrappers/kem_wrapper.o \
-                   ../wrappers/dsa_wrapper.o \
-                   ../crypto/aead.o \
-                   ../crypto/replay_window.o
+LOCAL_SHARED_OBJS = wrappers/kem_wrapper.o \
+                    wrappers/dsa_wrapper.o \
+                    crypto/aead.o \
+                    crypto/replay_window.o \
+                    crypto/trust_store.o
 
 HYBRID_OBJS = src/hybrid_errors.o \
               src/hybrid_crypto.o \
@@ -66,9 +67,9 @@ HYBRID_OBJS = src/hybrid_errors.o \
 
 LIB_STATIC = libhybrid.a
 
-SERVER_OBJS = $(HYBRID_OBJS) $(ROOT_SHARED_OBJS) transport.o client_registry.o
+SERVER_OBJS = $(HYBRID_OBJS) $(LOCAL_SHARED_OBJS) transport.o client_registry.o
 
-SHARED_APP_OBJS = $(HYBRID_OBJS) $(ROOT_SHARED_OBJS) transport.o
+SHARED_APP_OBJS = $(HYBRID_OBJS) $(LOCAL_SHARED_OBJS) transport.o
 
 TEST_BINS = tests/test_hybrid_kex \
             tests/test_hybrid_signatures \
@@ -91,18 +92,11 @@ all: $(LIB_STATIC) server server_rx server_tx client client_broadcast \
 $(LIB_STATIC): $(HYBRID_OBJS)
 	ar rcs $@ $^
 
-# Ensure root objects exist
-../wrappers/kem_wrapper.o:
-	$(MAKE) -C .. wrappers/kem_wrapper.o
+wrappers/%.o: wrappers/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-../wrappers/dsa_wrapper.o:
-	$(MAKE) -C .. wrappers/dsa_wrapper.o
-
-../crypto/aead.o:
-	$(MAKE) -C .. crypto/aead.o
-
-../crypto/replay_window.o:
-	$(MAKE) -C .. crypto/replay_window.o
+crypto/%.o: crypto/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 src/%.o: src/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -117,10 +111,10 @@ client_registry.o: client_registry.c client_registry.h transport.h
 server: server.c $(SERVER_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
 
-server_rx: server_rx.c transport.o $(HYBRID_OBJS) $(ROOT_SHARED_OBJS)
+server_rx: server_rx.c transport.o $(HYBRID_OBJS) $(LOCAL_SHARED_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
 
-server_tx: server_tx.c transport.o $(HYBRID_OBJS) $(ROOT_SHARED_OBJS)
+server_tx: server_tx.c transport.o $(HYBRID_OBJS) $(LOCAL_SHARED_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
 
 client: client.c $(SHARED_APP_OBJS)
@@ -141,12 +135,12 @@ bench_hybrid: bench_crypto
 bench_nclient: bench_nclient.c $(SHARED_APP_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
 
-bench_aead: bench_aead.c $(ROOT_SHARED_OBJS)
+bench_aead: bench_aead.c $(LOCAL_SHARED_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
 
 # ── Test Binaries ───────────────────────────────────────────────────
-tests/%: tests/%.c $(LIB_STATIC) $(ROOT_SHARED_OBJS)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_STATIC) $(ROOT_SHARED_OBJS) $(LIBS) $(LDFLAGS)
+tests/%: tests/%.c $(LIB_STATIC) $(LOCAL_SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_STATIC) $(LOCAL_SHARED_OBJS) $(LIBS) $(LDFLAGS)
 
 test: $(TEST_BINS)
 	@echo "╔════════════════════════════════════════════════════════════════╗"
@@ -161,15 +155,15 @@ test: $(TEST_BINS)
 # ── Example Binaries ────────────────────────────────────────────────
 examples: $(EXAMPLE_BINS)
 
-examples/hybrid_server: examples/hybrid_server.c $(LIB_STATIC) $(ROOT_SHARED_OBJS)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_STATIC) $(ROOT_SHARED_OBJS) $(LIBS) $(LDFLAGS)
+examples/hybrid_server: examples/hybrid_server.c $(LIB_STATIC) $(LOCAL_SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_STATIC) $(LOCAL_SHARED_OBJS) $(LIBS) $(LDFLAGS)
 
-examples/hybrid_client: examples/hybrid_client.c $(LIB_STATIC) $(ROOT_SHARED_OBJS)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_STATIC) $(ROOT_SHARED_OBJS) $(LIBS) $(LDFLAGS)
+examples/hybrid_client: examples/hybrid_client.c $(LIB_STATIC) $(LOCAL_SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_STATIC) $(LOCAL_SHARED_OBJS) $(LIBS) $(LDFLAGS)
 
 # ── Clean ───────────────────────────────────────────────────────────
 clean:
-	rm -f $(HYBRID_OBJS) $(LIB_STATIC) transport.o client_registry.o \
+	rm -f $(HYBRID_OBJS) $(LOCAL_SHARED_OBJS) $(LIB_STATIC) transport.o client_registry.o \
 	      server server_rx server_tx client client_broadcast \
 	      bench_crypto bench_pqc bench_hybrid bench_nclient bench_aead \
 	      $(TEST_BINS) $(EXAMPLE_BINS) server_endpoint.info

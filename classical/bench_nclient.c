@@ -39,6 +39,7 @@
 #include "wrappers/dsa_wrapper.h"
 #include "wrappers/hash_wrapper.h"
 #include "wrappers/kdf_wrapper.h"
+#include "perf_monitor.h"
 
 #include <openssl/rand.h>
 
@@ -409,6 +410,11 @@ int main(int argc, char *argv[]) {
 
   cpu_ticks_t cpu_start, cpu_end;
   get_cpu_ticks(&cpu_start);
+  perf_temp_monitor_t temp_mon;
+  perf_temp_init(&temp_mon);
+  perf_mem_monitor_t mem_mon;
+  perf_mem_init(&mem_mon);
+
   uint64_t bench_start = ns_now();
 
   for (int i = 0; i < g_num_clients; i++) {
@@ -421,6 +427,8 @@ int main(int argc, char *argv[]) {
 
   uint64_t bench_end = ns_now();
   get_cpu_ticks(&cpu_end);
+  perf_temp_finalize(&temp_mon);
+  perf_mem_finalize(&mem_mon);
 
   double total_wall_sec = (double)(bench_end - bench_start) / 1e9;
   double cpu_util = calculate_cpu_utilization(&cpu_start, &cpu_end);
@@ -459,10 +467,6 @@ int main(int argc, char *argv[]) {
     hs_p99 = latencies[(int)(lat_count * 0.99)];
   }
 
-  struct rusage ru;
-  getrusage(RUSAGE_SELF, &ru);
-  long peak_rss_kb = ru.ru_maxrss;
-
   printf("\n========================================================================\n");
   printf("  Benchmark Results Summary\n");
   printf("========================================================================\n");
@@ -471,7 +475,19 @@ int main(int argc, char *argv[]) {
   printf("  Total Wall Time       : %.3f s\n", total_wall_sec);
   printf("  Handshake Throughput  : %.1f handshakes/sec\n", (double)success_count / total_wall_sec);
   printf("  Overall CPU Util      : %.1f%%\n", cpu_util);
-  printf("  Peak Memory RSS       : %ld KB (%.2f MB)\n", peak_rss_kb, (double)peak_rss_kb / 1024.0);
+  printf("  Initial Memory RAM    : %.3f MB\n", mem_mon.initial_ram_mb);
+  printf("  Peak Memory RSS       : %.3f MB\n", mem_mon.peak_ram_mb);
+  printf("  Heap Memory Usage     : %.3f MB\n", mem_mon.heap_usage_mb);
+  if (mem_mon.stack_usage_kb > 0.0) {
+    printf("  Stack Memory Usage    : %.2f KB\n", mem_mon.stack_usage_kb);
+  }
+  if (temp_mon.available) {
+    printf("  Hardware Sensor       : %s (%s)\n", temp_mon.sensor_path, temp_mon.sensor_type);
+    printf("  System Temperature    : Initial: %.2f °C | Final: %.2f °C | Delta: %+.2f °C\n",
+           temp_mon.initial_temp_c, temp_mon.final_temp_c, temp_mon.final_temp_c - temp_mon.initial_temp_c);
+  } else {
+    printf("  System Temperature    : Unavailable (No sysfs thermal sensor)\n");
+  }
   printf("------------------------------------------------------------------------\n");
   printf("  Handshake Latency Distribution (ms):\n");
   printf("    Min: %.2f ms | Median: %.2f ms | Mean: %.2f ms | Max: %.2f ms\n",
