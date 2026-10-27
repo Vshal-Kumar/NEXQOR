@@ -167,3 +167,12 @@ clean:
 	      server server_rx server_tx client client_broadcast \
 	      bench_crypto bench_pqc bench_hybrid bench_nclient bench_aead \
 	      $(TEST_BINS) $(EXAMPLE_BINS) server_endpoint.info
+
+clean-arm64:
+	$(MAKE) -f Makefile.arm64 clean
+
+clean-arm32:
+	$(MAKE) -f Makefile.arm32 clean
+
+clean-all: clean clean-arm64 clean-arm32
+

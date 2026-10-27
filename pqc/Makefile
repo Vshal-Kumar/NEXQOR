@@ -175,3 +175,11 @@ clean:
 	      transport.o client_registry.o \
 	      crypto/aead.o crypto/replay_window.o crypto/trust_store.o \
 	      wrappers/kem_wrapper.o wrappers/dsa_wrapper.o
+
+clean-arm64:
+	$(MAKE) -f Makefile.arm64 clean
+
+clean-arm32:
+	$(MAKE) -f Makefile.arm32 clean
+
+clean-all: clean clean-arm64 clean-arm32

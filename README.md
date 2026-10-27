@@ -183,26 +183,66 @@ cmake --build liboqs/build -j$(nproc)
 
 ## Build Instructions
 
-### Global Makefile Dispatcher
+### Global Makefile with Hardware Architecture Detection
 
-From the project root, use the global dispatcher to control all three implementations simultaneously:
+The root [Makefile](file:///home/vishal-kumar/Desktop/Events/QHack/Makefile) automatically detects the host device CPU architecture (`uname -m`) and dispatches the build to the appropriate sub-Makefiles across **Classical**, **Hybrid**, and **Pure PQC**:
+
+| Host Device / CPU | Detected Platform | Automatically Dispatched Makefiles |
+| :--- | :--- | :--- |
+| **x86_64 / amd64** (Linux Server, Desktop, Laptop) | `x86_64` | `classical/Makefile`, `hybrid/Makefile`, `pqc/Makefile` |
+| **ARM64 / aarch64** (Raspberry Pi 4, Raspberry Pi 5, 64-bit ARM) | `arm64` | `classical/Makefile.arm64`, `hybrid/Makefile.arm64`, `pqc/Makefile.arm64` |
+| **ARM32 / armv7l / armhf** (Raspberry Pi 2, Raspberry Pi 3 32-bit) | `arm32` | `classical/Makefile.arm32`, `hybrid/Makefile.arm32`, `pqc/Makefile.arm32` |
+
+#### Standard Commands from Project Root
 
 ```bash
-# Build all three implementations (classical, hybrid, pqc)
+# 1. Automatic device detection & build for all 3 suites:
+make
+# or
 make all
 
-# Run comprehensive regression and security test suites across all 3 suites
+# 2. Inspect detected hardware and active Makefile mapping:
+make detect
+
+# 3. Run automated regression & security test suites across all 3 implementations:
 make test
 
-# Deep clean build artifacts across the entire repository
+# 4. Clean build artifacts for the active/detected device architecture:
+make clean
+
+# 5. Deep clean across ALL architectures (x86_64, ARM64, ARM32) in all 3 implementations:
 make clean-all
 ```
 
-Target-specific dispatching is also supported:
+#### Explicit Target Architecture Overrides & Cross-Compilation
+
+You can explicitly build or clean for a specific target architecture on any host machine:
+
 ```bash
-make classical         # Build classical IoT suite only
-make hybrid            # Build hybrid suite only
-make pqc               # Build PQC suite only
+# Build all 3 suites for ARM64 (using Makefile.arm64):
+make arm64
+# or: make ARCH=arm64 all
+
+# Build all 3 suites for ARM32 (using Makefile.arm32):
+make arm32
+# or: make ARCH=arm32 all
+
+# Build all 3 suites for x86_64:
+make x86_64
+# or: make ARCH=x86_64 all
+
+# Clean specific architectures across all 3 suites:
+make clean-arm64       # Clean ARM64 binaries and objects
+make clean-arm32       # Clean ARM32 binaries and objects
+make clean-x86_64      # Clean x86_64 binaries and objects
+```
+
+#### Target-Specific Suite Dispatching
+
+```bash
+make classical         # Build classical IoT suite for detected device
+make hybrid            # Build hybrid suite for detected device
+make pqc               # Build PQC suite for detected device
 
 make test-classical    # Run 22-test classical regression suite
 make test-hybrid       # Run 7-suite hybrid regression test
@@ -230,21 +270,18 @@ make clean && make all
 make test
 ```
 
-### Cross-Compilation for ARM64 & ARM32
+### Native ARM Compilation on Raspberry Pi 4 / 5
 
-Each implementation includes dedicated cross-compilation and native ARM build systems (`Makefile.arm64`, `Makefile.arm32`).
+When running directly on ARM hardware (e.g., Raspberry Pi 4, Raspberry Pi 5 running 64-bit Linux), running `make` from the project root automatically selects `Makefile.arm64` across all suites:
 
-#### Native Build on Raspberry Pi 4 / 5 (ARM64)
 ```bash
-# Run directly on the Raspberry Pi:
-make -f Makefile.arm64 all
-```
-Binaries are automatically symlinked (`bench_pqc -> bench_pqc_arm`, `client -> client_arm`), allowing direct execution without alias mismatches.
+# Automatically detects aarch64 and builds ARM64 binaries:
+make all
 
-#### Cleaning ARM Binaries
-```bash
-make -f Makefile.arm64 clean-all
-make -f Makefile.arm32 clean-all
+# Run client binaries with automatic symlinks:
+./classical/client 127.0.0.1 9877
+./hybrid/client 127.0.0.1 9879
+./pqc/client 127.0.0.1 9876
 ```
 
 ---
