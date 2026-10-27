@@ -132,8 +132,11 @@ make test
 # Run formal verification using ProVerif:
 make verify
 
-# Clean build artifacts:
+# Clean x86_64 build artifacts:
 make clean
+
+# Clean all architectures at once (host, ARM64, and ARM32):
+make clean-all
 ```
 
 ### Build for ARM64 (Raspberry Pi 4 / 5):
@@ -148,6 +151,10 @@ make all
 
 # Cross-compiling from x86_64 host (with target sysroot):
 make -f Makefile.arm64 all ARM64_SYSROOT=/path/to/arm64_sysroot
+
+# Clean ARM64 build artifacts and symlinks:
+make -f Makefile.arm64 clean
+# (Or from main makefile: make clean-arm64)
 ```
 
 ### Build for ARM32 (ARMv7-A / Raspberry Pi 2 / 3):
@@ -157,7 +164,20 @@ make -f Makefile.arm32 all
 
 # Cross-compiling from x86_64 host:
 make -f Makefile.arm32 all
+
+# Clean ARM32 build artifacts and symlinks:
+make -f Makefile.arm32 clean
+# (Or from main makefile: make clean-arm32)
 ```
+
+### Cleaning Build Artifacts Across All Architectures:
+| Command | Action |
+| :--- | :--- |
+| `make clean` | Removes host binaries, objects, and test keys |
+| `make -f Makefile.arm64 clean` (or `make clean-arm64`) | Removes ARM64 binaries (`*_arm`), object files (`*_arm64.o`), and aliases |
+| `make -f Makefile.arm32 clean` (or `make clean-arm32`) | Removes ARM32 binaries (`*_arm32`), object files (`*_arm32.o`), and aliases |
+| `make clean-all` | Purges all build outputs across host, ARM64, and ARM32 simultaneously |
+
 
 ---
 

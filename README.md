@@ -391,6 +391,9 @@ make -f Makefile.arm64 all -j2
 
 # Or cross-compiled from x86_64 host:
 make -f Makefile.arm64 all -j$(nproc)
+
+# Clean ARM64 build artifacts:
+make -f Makefile.arm64 clean
 ```
 *Outputs*: `client_arm`, `client_broadcast_arm`, `bench_pqc_arm`, `bench_nclient_arm`.
 
@@ -401,6 +404,9 @@ make -f Makefile.arm32 all -j2
 
 # Or cross-compiled from x86_64 host:
 make -f Makefile.arm32 all -j$(nproc)
+
+# Clean ARM32 build artifacts:
+make -f Makefile.arm32 clean
 ```
 *Outputs*: `client_arm32`, `client_broadcast_arm32`, `bench_pqc_arm32`, `bench_nclient_arm32`.
 

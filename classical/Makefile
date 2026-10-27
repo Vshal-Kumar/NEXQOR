@@ -103,6 +103,7 @@ SERVER_OBJS = $(SHARED_OBJS) client_registry.o
 # ── Primary Targets ─────────────────────────────────────────────────
 .PHONY: all server server_rx server_tx client client_broadcast \
         bench_crypto bench_pqc bench_nclient bench_aead test verify clean \
+        clean-arm64 clean-arm32 clean-all \
         run-server run-rx run-tx run-client run-broadcast run-bench
 
 all: server server_rx server_tx client client_broadcast bench_crypto bench_pqc bench_nclient bench_aead tests/test_suite
@@ -155,3 +156,12 @@ clean:
 	      tests/test_suite *.o crypto/*.o wrappers/*.o \
 	      server_identity.key server_identity.pub authorized_clients.db \
 	      server_endpoint.info test_classical_srv.*
+
+clean-arm64:
+	$(MAKE) -f Makefile.arm64 clean
+
+clean-arm32:
+	$(MAKE) -f Makefile.arm32 clean
+
+clean-all: clean clean-arm64 clean-arm32
+
