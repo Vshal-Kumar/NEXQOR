@@ -1,0 +1,111 @@
+# hybrid/Makefile.arm32 — Hybrid Cryptographic Suite Build for ARM32 / ARMv7-A
+#
+# Target: ARM32 / ARMv7-A (armhf) with NEON / VFPv4 (e.g., Raspberry Pi 2, Raspberry Pi 3)
+# Supported workflows:
+#   1. Native build on 32-bit ARM Linux hardware:
+#        make -f Makefile.arm32 all
+#   2. Cross-compilation from x86_64 host:
+#        make -f Makefile.arm32 all [ARM32_SYSROOT=/path/to/sysroot] [ARM32_LIBOQS=/path/to/liboqs]
+
+HOST_ARCH := $(shell uname -m)
+
+ifeq ($(findstring arm,$(HOST_ARCH)),arm)
+  # Native compilation on 32-bit ARM Linux hardware
+  CC           ?= gcc
+  LIBOQS       ?= ../liboqs/build
+  INC          ?= -I./include -I. -I.. -I$(LIBOQS)/include
+  LIBS         ?= $(LIBOQS)/lib/liboqs.a -lssl -lcrypto -lpthread -lm
+else
+  # Cross-compilation on x86_64 host
+  CROSS_COMPILE ?= arm-linux-gnueabihf-
+  CC            := $(CROSS_COMPILE)gcc
+  
+  ARM32_SYSROOT ?=
+  ARM32_LIBOQS  ?= ../liboqs/build_arm32
+  ARM32_OPENSSL ?=
+  
+  ifneq ($(ARM32_SYSROOT),)
+    SYSROOT_FLAG = --sysroot=$(ARM32_SYSROOT)
+    INC          = -I./include -I. -I.. -I$(ARM32_SYSROOT)/usr/include -I$(ARM32_LIBOQS)/include
+    LIBS         = $(ARM32_LIBOQS)/lib/liboqs.a -L$(ARM32_SYSROOT)/usr/lib/arm-linux-gnueabihf -lssl -lcrypto -lpthread -lm
+  else
+    INC          = -I./include -I. -I.. -I$(ARM32_LIBOQS)/include $(if $(ARM32_OPENSSL),-I$(ARM32_OPENSSL)/include)
+    LIBS         = $(ARM32_LIBOQS)/lib/liboqs.a $(if $(ARM32_OPENSSL),-L$(ARM32_OPENSSL)/lib) -lssl -lcrypto -lpthread -lm
+  endif
+endif
+
+OPT     = -O3 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -funroll-loops -fomit-frame-pointer -fno-plt
+FAST    = $(OPT) -ffast-math
+LTO     = -flto=auto
+WARN    = -Wall -Wextra -Wno-unused-parameter
+DEFS    = -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -D_GNU_SOURCE
+
+CFLAGS  = -std=c11 $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG)
+LDFLAGS = $(LTO) $(SYSROOT_FLAG)
+
+HYBRID_OBJS = src/hybrid_errors_arm32.o \
+              src/hybrid_crypto_arm32.o \
+              src/hybrid_kdf_arm32.o \
+              src/hybrid_kex_arm32.o \
+              src/hybrid_signature_arm32.o \
+              src/hybrid_handshake_arm32.o \
+              src/hybrid_session_arm32.o
+
+WRAPPER_OBJS = ../wrappers/kem_wrapper_arm32.o \
+               ../wrappers/dsa_wrapper_arm32.o \
+               ../crypto/aead_arm32.o \
+               ../crypto/replay_window_arm32.o
+
+SHARED_OBJS = $(HYBRID_OBJS) $(WRAPPER_OBJS) transport_arm32.o
+
+.PHONY: all clean check-cross-deps
+
+all: check-cross-deps client_arm32 client_broadcast_arm32 bench_crypto_arm32 bench_nclient_arm32 bench_aead_arm32
+
+check-cross-deps:
+ifeq ($(findstring arm,$(HOST_ARCH)),)
+	@if ! command -v $(CC) >/dev/null 2>&1; then \
+	    echo "=========================================================================="; \
+	    echo "Notice: ARM32 toolchain '$(CC)' not found on host."; \
+	    echo "Install via: sudo apt-get install gcc-arm-linux-gnueabihf"; \
+	    echo "Or run natively on a 32-bit ARM device: make -f Makefile.arm32 all"; \
+	    echo "=========================================================================="; \
+	fi
+endif
+
+src/%_arm32.o: src/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+../wrappers/%_arm32.o: ../wrappers/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+../crypto/%_arm32.o: ../crypto/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+transport_arm32.o: transport.c transport.h
+	$(CC) $(FAST) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+client_arm32: client.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: client_arm32 [armv7-a + NEON]"
+
+client_broadcast_arm32: client_broadcast.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: client_broadcast_arm32 [armv7-a + NEON]"
+
+bench_crypto_arm32: bench_crypto.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	ln -sf bench_crypto_arm32 bench_pqc_arm32
+	ln -sf bench_crypto_arm32 bench_hybrid_arm32
+	@echo "Built: bench_crypto_arm32 [armv7-a + NEON]"
+
+bench_nclient_arm32: bench_nclient.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_nclient_arm32 [armv7-a + NEON]"
+
+bench_aead_arm32: bench_aead.c $(WRAPPER_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_aead_arm32 [armv7-a + NEON]"
+
+clean:
+	rm -f $(SHARED_OBJS) client_arm32 client_broadcast_arm32 bench_crypto_arm32 bench_pqc_arm32 bench_hybrid_arm32 bench_nclient_arm32 bench_aead_arm32

@@ -1,0 +1,226 @@
+(* 
+   Formal Verification of the QRYPTONEX Classical IoT Protocol
+   Suite: X25519 (ECDH) + Ed25519 + AES-128-CCM + SHA-256 + HKDF-SHA-256
+*)
+
+(* --- Channels --- *)
+free ch: channel.
+
+(* --- Types --- *)
+type G.
+type exponent.
+type ed25519_pkey.
+type ed25519_skey.
+
+(* --- Cryptographic Primitives --- *)
+
+(* 1. Diffie-Hellman Key Agreement (X25519 RFC 7748) *)
+const g: G.
+fun exp(G, exponent): G.
+equation forall x: exponent, y: exponent;
+    exp(exp(g, x), y) = exp(exp(g, y), x).
+
+(* 2. Digital Signatures (Ed25519 RFC 8032) *)
+fun ed_pk(ed25519_skey): ed25519_pkey.
+fun ed_sign(bitstring, ed25519_skey): bitstring.
+reduc forall m: bitstring, sk: ed25519_skey;
+    ed_verify(m, ed_sign(m, sk), ed_pk(sk)) = true.
+
+(* 3. Cryptographic Hash (SHA-256 FIPS 180-4) *)
+fun sha256(bitstring): bitstring.
+
+(* 4. HKDF-SHA-256 Key Derivation Functions with Domain Separation *)
+(* Arguments: shared_secret (G), c_nonce, s_nonce, session_id *)
+fun hkdf_c2s(G, bitstring, bitstring, bitstring): bitstring.
+fun hkdf_s2c(G, bitstring, bitstring, bitstring): bitstring.
+
+(* 5. AES-128-CCM Authenticated Encryption with Associated Data (AAD) *)
+fun aes_ccm_encrypt(bitstring, bitstring, bitstring, bitstring): bitstring. (* msg, key, nonce, aad *)
+reduc forall m: bitstring, k: bitstring, n: bitstring, aad: bitstring;
+    aes_ccm_decrypt(aes_ccm_encrypt(m, k, n, aad), k, n, aad) = m.
+
+(* --- Transcript Concatenation Functions --- *)
+(* Server Transcript: c_nonce, s_nonce, session_id, c_eph_pk, c_id_pk, s_id_pk, s_eph_pk *)
+fun concat7(bitstring, bitstring, bitstring, G, ed25519_pkey, ed25519_pkey, G): bitstring.
+
+(* Client Transcript: srv_transcript, srv_sig *)
+fun concat2(bitstring, bitstring): bitstring.
+
+(* Wire Header AAD *)
+fun make_aad(bitstring, bitstring, bitstring): bitstring. (* seq, type, session_id *)
+
+(* --- Global Long-Term Identity Keys --- *)
+free c_ed_sk: ed25519_skey [private].
+free s_ed_sk: ed25519_skey [private].
+
+(* --- Authentication & Binding Events --- *)
+event client_initiates(ed25519_pkey, ed25519_pkey, bitstring, bitstring, bitstring, bitstring, G).
+event client_accepts(ed25519_pkey, ed25519_pkey, bitstring, bitstring, bitstring, bitstring, G).
+event server_initiates(ed25519_pkey, ed25519_pkey, bitstring, bitstring, bitstring, bitstring, G).
+event server_accepts(ed25519_pkey, ed25519_pkey, bitstring, bitstring, bitstring, bitstring, G).
+
+(* --- Security Queries --- *)
+
+(* 1. Directional Traffic Key Secrecy *)
+free c2s_key_secret: bitstring [private].
+free s2c_key_secret: bitstring [private].
+query attacker(c2s_key_secret).
+query attacker(s2c_key_secret).
+
+(* 2. Secrecy of Application Payload Data *)
+free client_data: bitstring [private].
+free server_data: bitstring [private].
+query attacker(client_data).
+query attacker(server_data).
+
+(* 3. Injective Mutual Authentication: Server authenticates Client *)
+query s: ed25519_pkey, cn: bitstring, sn: bitstring, sess_id: bitstring, k: bitstring, eph: G;
+    inj-event(server_accepts(ed_pk(c_ed_sk), s, cn, sn, sess_id, k, eph)) ==> inj-event(client_initiates(ed_pk(c_ed_sk), s, cn, sn, sess_id, k, eph)).
+
+(* 4. Injective Mutual Authentication: Client authenticates Server *)
+query c: ed25519_pkey, s: ed25519_pkey, cn: bitstring, sn: bitstring, sess_id: bitstring, k: bitstring, eph: G;
+    inj-event(client_accepts(c, s, cn, sn, sess_id, k, eph)) ==> inj-event(server_initiates(c, s, cn, sn, sess_id, k, eph)).
+
+(* --- Process Definitions --- *)
+
+(* Client Process (pinned server identity) *)
+let client(c_sk: ed25519_skey, s_pk: ed25519_pkey) =
+    let c_pk = ed_pk(c_sk) in
+    
+    (* 1. Generate Ephemeral X25519 Keypair *)
+    new c_eph_priv: exponent;
+    let c_eph_pub = exp(g, c_eph_priv) in
+    
+    (* 2. Generate Client Nonce *)
+    new c_nonce: bitstring;
+    
+    (* Phase 1: Send PKT_CLIENT_HELLO *)
+    out(ch, (c_eph_pub, c_pk, c_nonce));
+    
+    (* Phase 2: Receive PKT_SERVER_HELLO — verified against pinned s_pk *)
+    in(ch, (=s_pk, s_eph_pub: G, session_id: bitstring, s_nonce: bitstring, srv_sig: bitstring));
+    
+    (* Reconstruct and verify server signature over canonical SHA-256 transcript *)
+    let tx = concat7(c_nonce, s_nonce, session_id, c_eph_pub, c_pk, s_pk, s_eph_pub) in
+    let tx_digest = sha256(tx) in
+    if ed_verify(tx_digest, srv_sig, s_pk) = true then
+    
+    (* Compute X25519 Shared Secret: (g^y)^x = g^(xy) *)
+    let ss = exp(s_eph_pub, c_eph_priv) in
+    
+    (* Derive Directional Traffic Keys via HKDF-SHA-256 *)
+    let client_write_key = hkdf_c2s(ss, c_nonce, s_nonce, session_id) in
+    let server_write_key = hkdf_s2c(ss, c_nonce, s_nonce, session_id) in
+    
+    (* Record initiation event *)
+    event client_initiates(c_pk, s_pk, c_nonce, s_nonce, session_id, client_write_key, s_eph_pub);
+    
+    (* Phase 3: Send PKT_CLIENT_AUTH *)
+    let cl_tx = concat2(tx, srv_sig) in
+    let cl_tx_digest = sha256(cl_tx) in
+    let cl_sig = ed_sign(cl_tx_digest, c_sk) in
+    out(ch, cl_sig);
+    
+    (* Handshake complete event *)
+    event client_accepts(c_pk, s_pk, c_nonce, s_nonce, session_id, client_write_key, s_eph_pub);
+    
+    (* Phase 4: Session Active - Encrypted Traffic over AES-128-CCM with AAD *)
+    new c_seq: bitstring;
+    new c_type: bitstring;
+    let c_aad = make_aad(c_seq, c_type, session_id) in
+    new ae_nonce_c: bitstring;
+    let ct_client = aes_ccm_encrypt(client_data, client_write_key, ae_nonce_c, c_aad) in
+    out(ch, (c_seq, c_type, ae_nonce_c, ct_client));
+    
+    in(ch, (s_seq: bitstring, s_type: bitstring, ae_nonce_s: bitstring, ct_server: bitstring));
+    let s_aad = make_aad(s_seq, s_type, session_id) in
+    let decrypted_server_data = aes_ccm_decrypt(ct_server, server_write_key, ae_nonce_s, s_aad) in
+    
+    (* Export test secrets to verify traffic key secrecy *)
+    if s_pk = ed_pk(s_ed_sk) then (
+        new ae_nonce_sk1: bitstring;
+        new ae_nonce_sk2: bitstring;
+        let ct_sk1 = aes_ccm_encrypt(c2s_key_secret, client_write_key, ae_nonce_sk1, c_aad) in
+        let ct_sk2 = aes_ccm_encrypt(s2c_key_secret, server_write_key, ae_nonce_sk2, s_aad) in
+        out(ch, (ct_sk1, ct_sk2))
+    ) else 0.
+
+(* Server Process (authorized client registry) *)
+let server(s_sk: ed25519_skey, c_pk: ed25519_pkey) =
+    let s_pk = ed_pk(s_sk) in
+    
+    (* Phase 1: Receive PKT_CLIENT_HELLO *)
+    in(ch, (c_eph_pub: G, =c_pk, c_nonce: bitstring));
+    
+    (* Generate Server Nonce and Session ID *)
+    new s_nonce: bitstring;
+    new session_id: bitstring;
+    
+    (* Generate Ephemeral X25519 Keypair *)
+    new s_eph_priv: exponent;
+    let s_eph_pub = exp(g, s_eph_priv) in
+    
+    (* Compute X25519 Shared Secret: (g^x)^y = g^(xy) *)
+    let ss = exp(c_eph_pub, s_eph_priv) in
+    
+    (* Derive Directional Traffic Keys via HKDF-SHA-256 *)
+    let client_write_key = hkdf_c2s(ss, c_nonce, s_nonce, session_id) in
+    let server_write_key = hkdf_s2c(ss, c_nonce, s_nonce, session_id) in
+    
+    (* Reconstruct Server Transcript *)
+    let tx = concat7(c_nonce, s_nonce, session_id, c_eph_pub, c_pk, s_pk, s_eph_pub) in
+    let tx_digest = sha256(tx) in
+    
+    (* Record initiation event *)
+    event server_initiates(c_pk, s_pk, c_nonce, s_nonce, session_id, client_write_key, s_eph_pub);
+    
+    (* Sign the transcript *)
+    let srv_sig = ed_sign(tx_digest, s_sk) in
+    
+    (* Phase 2: Send PKT_SERVER_HELLO *)
+    out(ch, (s_pk, s_eph_pub, session_id, s_nonce, srv_sig));
+    
+    (* Phase 3: Receive PKT_CLIENT_AUTH *)
+    in(ch, cl_sig: bitstring);
+    
+    (* Reconstruct and verify client signature *)
+    let cl_tx = concat2(tx, srv_sig) in
+    let cl_tx_digest = sha256(cl_tx) in
+    if ed_verify(cl_tx_digest, cl_sig, c_pk) = true then
+    
+    (* Handshake complete event *)
+    event server_accepts(c_pk, s_pk, c_nonce, s_nonce, session_id, client_write_key, s_eph_pub);
+    
+    (* Phase 4: Session Active - Exchange Application Data *)
+    in(ch, (c_seq: bitstring, c_type: bitstring, ae_nonce_c: bitstring, ct_client: bitstring));
+    let c_aad = make_aad(c_seq, c_type, session_id) in
+    let decrypted_client_data = aes_ccm_decrypt(ct_client, client_write_key, ae_nonce_c, c_aad) in
+    
+    if c_pk = ed_pk(c_ed_sk) then (
+        new s_seq: bitstring;
+        new s_type: bitstring;
+        let s_aad = make_aad(s_seq, s_type, session_id) in
+        new ae_nonce_s: bitstring;
+        let ct_server = aes_ccm_encrypt(server_data, server_write_key, ae_nonce_s, s_aad) in
+        out(ch, (s_seq, s_type, ae_nonce_s, ct_server));
+        0
+    ) else 0.
+
+(* --- Main Process --- *)
+process
+    (* Publish the server and client public identity keys to public channel *)
+    out(ch, ed_pk(s_ed_sk));
+    out(ch, ed_pk(c_ed_sk));
+    
+    (
+        (* Replicated Client and Server sessions in Phase 0 *)
+        (!client(c_ed_sk, ed_pk(s_ed_sk))) |
+        (!server(s_ed_sk, ed_pk(c_ed_sk))) |
+        
+        (* Phase 1: Long-term signing key compromise (Forward Secrecy Verification) *)
+        (
+            phase 1;
+            out(ch, s_ed_sk);
+            out(ch, c_ed_sk)
+        )
+    )

@@ -1,0 +1,200 @@
+================================================================================
+  QRYPTONEX — HYBRID CRYPTOGRAPHIC SUITE SPECIFICATION & WIRE FORMAT
+  (X25519 + ML-KEM-768 + Ed25519 + ML-DSA-65 + ChaCha20-Poly1305)
+================================================================================
+Document Type   : Technical Cryptographic Architecture & Wire Protocol Specification
+Standard Bases  : RFC 7748 (X25519), FIPS 203 (ML-KEM-768 / Kyber-768),
+                  RFC 8032 (Ed25519), FIPS 204 (ML-DSA-65 / Dilithium-3),
+                  RFC 8439 (ChaCha20-Poly1305), FIPS 180-4 (SHA-384),
+                  RFC 5869 (HKDF), NIST SP 800-56C, RFC 6479 (Replay Window)
+Target Codebase : QRYPTONEX Hybrid Suite (C11 Systems Framework)
+Author          : Senior Cryptographic Systems Engineering Team
+================================================================================
+
+TABLE OF CONTENTS:
+  1. System Architecture & Hybrid Operational Objectives
+  2. Cryptographic Suite & Algorithm Profiles
+  3. Memory Buffer Sizing & Key Inventory (Comparison: PQC vs Classical vs Hybrid)
+  4. The 4-Phase Mutual Authentication Handshake Protocol
+  5. Dual Key Encapsulation & Shared Secret Combiner
+  6. Dual Digital Signatures & Non-Separable Composite Authentication
+  7. Canonical Transcripts & SHA-384 Hashing Specifications
+  8. Directional Key Derivation (HKDF-SHA-384 with Domain Separation)
+  9. ChaCha20-Poly1305 Authenticated Encryption & Wire Header AAD Binding
+  10. Nonce Construction, Monotonicity & Anti-Exhaustion Guards
+  11. Wire Packet Formats & Wire Layout Specifications
+  12. RFC 6479 64-Packet Sliding Replay Window
+  13. Fail-Closed Principles & Security Boundaries
+
+================================================================================
+1. SYSTEM ARCHITECTURE & HYBRID OPERATIONAL OBJECTIVES
+================================================================================
+
+1.1 High-Level Purpose
+The QRYPTONEX Hybrid Suite implements a dual-layer cryptographic defense
+designed to provide Post-Quantum Forward Secrecy and Post-Quantum Authenticity
+while preserving the battle-tested classical security guarantees of Curve25519.
+
+Even if an adversary possesses a cryptanalytically relevant quantum computer
+(CRQC) capable of breaking discrete logarithms (Shor's algorithm), the post-
+quantum primitives (ML-KEM-768 and ML-DSA-65) ensure confidentiality and
+authenticity remain intact. Conversely, if an unforeseen mathematical flaw is
+discovered in lattice-based cryptography, the classical primitives (X25519 and
+Ed25519) guarantee full 128-bit classical security.
+
+1.2 Fail-Closed Core Principle
+The hybrid suite adheres strictly to fail-closed semantics:
+  - Both key exchanges (X25519 and ML-KEM-768) must succeed and contribute to
+    the final shared secret. No single-mechanism fallback is ever permitted.
+  - Both signatures (Ed25519 and ML-DSA-65) must verify cleanly against the
+    peer identity keys. If either signature verification fails, the connection
+    aborts instantly with zero key material derived.
+
+================================================================================
+2. CRYPTOGRAPHIC SUITE & ALGORITHM PROFILES
+================================================================================
+
+Component                 Algorithm                  Standard           Key / Buffer Size
+-----------------------------------------------------------------------------------------
+Classical KEX             X25519                     RFC 7748           32-byte PK, 32-byte SS
+Post-Quantum KEM          ML-KEM-768 (Kyber)         FIPS 203           1184-byte PK, 1088-byte CT, 32-byte SS
+Classical Signature       Ed25519                    RFC 8032           32-byte PK, 64-byte Sig
+Post-Quantum Signature    ML-DSA-65 (Dilithium)      FIPS 204           1952-byte PK, 3309-byte Sig
+Key Combiner              HKDF-SHA-384 Extract/Exp   RFC 5869 / SP800   Two 32-byte SS -> 48-byte Master
+Traffic Cipher            ChaCha20-Poly1305          RFC 8439           32-byte Key, 12-byte Nonce, 16-byte Tag
+Transcript Digest         SHA-384                    FIPS 180-4         48-byte Transcript Hash
+Replay Defense            RFC 6479 Sliding Window    RFC 6479           64-packet Bitmask Window
+Transport Protocol        Custom UDP Datagram Core   RFC 768            Port 9879 with Discovery & IPC
+
+================================================================================
+3. MEMORY BUFFER SIZING & KEY INVENTORY (COMPARISON)
+================================================================================
+
+Metric / Buffer                     Classical (Port 9877)  PQC (Port 9877)    Hybrid (Port 9879)
+-----------------------------------------------------------------------------------------
+Ephemeral KEX Public Key Size       32 bytes (X25519)      1184 B (ML-KEM)    1216 bytes (32 + 1184)
+Ephemeral Ciphertext / Response     32 bytes (X25519 PK)   1088 B (ML-KEM CT) 1120 bytes (32 + 1088)
+Identity Public Key Size            32 bytes (Ed25519)     1952 B (ML-DSA)    1984 bytes (32 + 1952)
+Digital Signature Size              64 bytes (Ed25519)     3309 B (ML-DSA)    3373 bytes (64 + 3309)
+Combined Raw Shared Secret          32 bytes (X25519)      32 bytes (ML-KEM)  64 bytes (32 + 32)
+Transcript Digest Size              32 bytes (SHA-256)     64 bytes (SHAKE)   48 bytes (SHA-384)
+Traffic Symmetric Key Size          16 bytes (AES-128)     32 bytes (ChaCha)  32 bytes (ChaCha)
+Client Hello Wire Payload           80 bytes               3152 bytes         3216 bytes
+Server Hello Wire Payload           184 bytes              4505 bytes         4569 bytes
+Client Auth Wire Payload            64 bytes               3309 bytes         3373 bytes
+
+================================================================================
+4. THE 4-PHASE MUTUAL AUTHENTICATION HANDSHAKE PROTOCOL
+================================================================================
+
+Client                                                        Server
+  |                                                             |
+  | 1. PKT_CLIENT_HELLO (3216 bytes)                            |
+  |    [client_nonce(16) || x25519_pk(32) || mlkem_pk(1184)     |
+  |     || ed25519_pk(32) || mldsa_pk(1952)]                    |
+  | ──────────────────────────────────────────────────────────> |
+  |                                                             | (Server decapsulates
+  |                                                             |  ML-KEM, derives
+  |                                                             |  X25519, computes
+  |                                                             |  Dual Signatures)
+  | 2. PKT_SERVER_HELLO (4569 bytes)                            |
+  |    [server_nonce(16) || session_id(8)                       |
+  |     || x25519_srv_pk(32) || mlkem_ct(1088)                  |
+  |     || ed25519_sig(64) || mldsa_sig(3309)]                  |
+  | <────────────────────────────────────────────────────────── |
+  |                                                             |
+  | (Client verifies dual signature, decapsulates ML-KEM,       |
+  |  computes X25519, combines secrets, signs transcript)       |
+  |                                                             |
+  | 3. PKT_CLIENT_AUTH (3373 bytes)                             |
+  |    [ed25519_sig(64) || mldsa_sig(3309)]                     |
+  | ──────────────────────────────────────────────────────────> |
+  |                                                             | (Server verifies
+  |                                                             |  dual client sig)
+  | 4. PKT_SERVER_FINISH (16 bytes confirmation)                |
+  | <────────────────────────────────────────────────────────── |
+  |                                                             |
+  | <======= SECURE BI-DIRECTIONAL CHACHA20-POLY1305 ========> |
+
+================================================================================
+5. DUAL KEY ENCAPSULATION & SHARED SECRET COMBINER
+================================================================================
+
+Let SS_c = X25519(sk_client_eph, pk_server_eph)   [32 bytes]
+Let SS_pq = ML-KEM-768-Decap(ct, sk_client_kem)   [32 bytes]
+
+The raw combined secret is concatenated:
+  Raw_SS = SS_c (32 bytes) || SS_pq (32 bytes)    [64 bytes]
+
+To protect against pre-computation and multi-target attacks, domain-separated
+HKDF-SHA-384 is used to extract the Master Shared Secret:
+
+  Master_Secret = HKDF-Extract(
+      salt = client_nonce (16 bytes) || server_nonce (16 bytes),
+      IKM  = Raw_SS (64 bytes)
+  )  --> 48 bytes (SHA-384 output length)
+
+================================================================================
+6. DUAL DIGITAL SIGNATURES & NON-SEPARABLE COMPOSITE AUTHENTICATION
+================================================================================
+
+To guarantee non-repudiation and prevent stripped-primitive attacks:
+1. The transcript digest H_transcript is computed over the cumulative handshake
+   messages using SHA-384.
+2. The sender computes BOTH:
+   - Sig_c  = Ed25519_Sign(H_transcript, sk_ed25519)   [64 bytes]
+   - Sig_pq = ML-DSA-65_Sign(H_transcript, sk_mldsa65) [3309 bytes]
+3. The composite signature is:
+   Sig_hybrid = Sig_c (64 bytes) || Sig_pq (3309 bytes) [3373 bytes]
+4. The receiver verifies:
+   - Ed25519_Verify(H_transcript, Sig_c, pk_ed25519) == VALID
+   - ML-DSA-65_Verify(H_transcript, Sig_pq, pk_mldsa65) == VALID
+   If either verification returns non-zero, the connection is instantly rejected.
+
+================================================================================
+7. DIRECTIONAL KEY DERIVATION (HKDF-SHA-384)
+================================================================================
+
+Independent directional keys are derived from Master_Secret:
+
+  Client_Write_Key (32B) = HKDF-Expand(
+      PRK  = Master_Secret,
+      info = "QRYPTONEX-HYBRID-c2s" || session_id (8 bytes),
+      L    = 32 bytes
+  )
+
+  Server_Write_Key (32B) = HKDF-Expand(
+      PRK  = Master_Secret,
+      info = "QRYPTONEX-HYBRID-s2c" || session_id (8 bytes),
+      L    = 32 bytes
+  )
+
+================================================================================
+8. CHACHA20-POLY1305 & WIRE HEADER AAD BINDING
+================================================================================
+
+All post-handshake packets (PKT_DATA) are encrypted with ChaCha20-Poly1305.
+The 15-byte packet wire header is bound as Additional Authenticated Data (AAD):
+
+  AAD = [ seq (4B, big-endian) || type (1B) || len (2B, big-endian) || session_id (8B, big-endian) ]
+
+Wire Payload:
+  [ Nonce (12B) || Poly1305 Tag (16B) || Ciphertext (N bytes) ]
+
+Total Wire Size = 15 (Header) + 12 (Nonce) + 16 (Tag) + Plaintext_Length bytes.
+
+Nonce Construction:
+  Nonce = [ Little-Endian 64-bit Counter (8B) || 0x00000000 (4B) ]
+  Guarantees strict monotonicity without nonce-reuse risks.
+
+================================================================================
+9. RFC 6479 SLIDING REPLAY WINDOW
+================================================================================
+
+Each session maintains an independent 64-packet bitmap replay window:
+  - Any packet sequence number seq < max_seq - 64 is dropped immediately.
+  - Any packet sequence number whose bit in the window mask is set is dropped
+    as a duplicate.
+  - State is committed to the window only AFTER successful Poly1305 tag
+    verification (pre-auth check prevents state corruption; post-auth update
+    prevents replay attacks).

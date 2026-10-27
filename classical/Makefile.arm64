@@ -1,0 +1,119 @@
+# classical/Makefile.arm64 — Classical IoT Client Build for ARM64 / AArch64
+#
+# Target: ARM64 (AArch64) with NEON SIMD (e.g., Raspberry Pi 4, Raspberry Pi 5)
+# Supported workflows:
+#   1. Native build on ARM64 Linux hardware:
+#        make -f Makefile.arm64 all
+#   2. Cross-compilation from x86_64 host:
+#        make -f Makefile.arm64 all [ARM64_SYSROOT=/path/to/sysroot]
+
+HOST_ARCH := $(shell uname -m)
+
+ifeq ($(HOST_ARCH),aarch64)
+  # Native compilation on ARM64 Linux
+  CC      ?= gcc
+  INC     ?= -I.
+  LIBS    ?= -lssl -lcrypto -lpthread -lm
+else
+  # Cross-compilation on x86_64 host
+  CROSS_COMPILE ?= aarch64-linux-gnu-
+  CC            := $(CROSS_COMPILE)gcc
+  
+  ARM64_SYSROOT ?=
+  ARM64_OPENSSL ?=
+  
+  ifneq ($(ARM64_SYSROOT),)
+    SYSROOT_FLAG = --sysroot=$(ARM64_SYSROOT)
+    INC          = -I. -I$(ARM64_SYSROOT)/usr/include
+    LIBS         = -L$(ARM64_SYSROOT)/usr/lib/aarch64-linux-gnu -lssl -lcrypto -lpthread -lm
+  else
+    INC          = -I. $(if $(ARM64_OPENSSL),-I$(ARM64_OPENSSL)/include)
+    LIBS         = $(if $(ARM64_OPENSSL),-L$(ARM64_OPENSSL)/lib) -lssl -lcrypto -lpthread -lm
+  endif
+endif
+
+OPT     = -O3 -funroll-loops -fomit-frame-pointer -fno-plt
+FAST    = $(OPT) -ffast-math
+LTO     = -flto=auto
+WARN    = -Wall -Wextra -Wno-unused-parameter
+DEFS    = -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -D_GNU_SOURCE
+
+CFLAGS  = -std=c11 $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG)
+LDFLAGS = $(LTO) $(SYSROOT_FLAG)
+
+SHARED_OBJS = transport_arm64.o \
+              crypto/aead_arm64.o \
+              crypto/replay_window_arm64.o \
+              crypto/trust_store_arm64.o \
+              wrappers/kem_wrapper_arm64.o \
+              wrappers/dsa_wrapper_arm64.o \
+              wrappers/hash_wrapper_arm64.o \
+              wrappers/kdf_wrapper_arm64.o
+
+.PHONY: all clean objects-arm check-cross-deps
+
+all: check-cross-deps client_arm client_broadcast_arm bench_crypto_arm bench_nclient_arm bench_aead_arm
+
+check-cross-deps:
+ifneq ($(HOST_ARCH),aarch64)
+	@if ! echo "#include <openssl/evp.h>" | $(CC) $(CFLAGS) -E - >/dev/null 2>&1; then \
+	    echo "=========================================================================="; \
+	    echo "ARM64 Cross-Compilation Notice:"; \
+	    echo "Host is x86_64, targeting aarch64. Target OpenSSL headers were not found"; \
+	    echo "in the default search path. Please supply the target sysroot:"; \
+	    echo "  make -f Makefile.arm64 all ARM64_SYSROOT=/path/to/arm64_sysroot"; \
+	    echo "Or run natively on the ARM64 device (e.g., Raspberry Pi 4/5):"; \
+	    echo "  make -f Makefile.arm64 all"; \
+	    echo "=========================================================================="; \
+	fi
+endif
+
+objects-arm: $(SHARED_OBJS)
+	@echo "Compiled ARM64 object files: $(SHARED_OBJS)"
+
+transport_arm64.o: transport.c transport.h
+	$(CC) $(FAST) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+crypto/aead_arm64.o: crypto/aead.c crypto/aead.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+crypto/replay_window_arm64.o: crypto/replay_window.c crypto/replay_window.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+crypto/trust_store_arm64.o: crypto/trust_store.c crypto/trust_store.h wrappers/dsa_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+wrappers/kem_wrapper_arm64.o: wrappers/kem_wrapper.c wrappers/kem_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+wrappers/dsa_wrapper_arm64.o: wrappers/dsa_wrapper.c wrappers/dsa_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+wrappers/hash_wrapper_arm64.o: wrappers/hash_wrapper.c wrappers/hash_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+wrappers/kdf_wrapper_arm64.o: wrappers/kdf_wrapper.c wrappers/kdf_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+client_arm: client.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: client_arm [aarch64 + NEON]"
+
+client_broadcast_arm: client_broadcast.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: client_broadcast_arm [aarch64 + NEON]"
+
+bench_crypto_arm: bench_crypto.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_crypto_arm [aarch64 + NEON]"
+
+bench_nclient_arm: bench_nclient.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_nclient_arm [aarch64 + NEON]"
+
+bench_aead_arm: bench_aead.c crypto/aead_arm64.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_aead_arm [aarch64 + NEON]"
+
+clean:
+	rm -f client_arm client_broadcast_arm bench_crypto_arm bench_nclient_arm bench_aead_arm $(SHARED_OBJS)

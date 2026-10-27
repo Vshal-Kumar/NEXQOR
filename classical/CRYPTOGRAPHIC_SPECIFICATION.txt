@@ -1,0 +1,312 @@
+================================================================================
+  QRYPTONEX (NEXQOR) — CLASSICAL IOT CRYPTOGRAPHIC SPECIFICATION & WIRE FORMAT
+================================================================================
+Document Type   : Technical Cryptographic Architecture & Wire Protocol Specification
+Standard Bases  : RFC 7748 (X25519), RFC 8032 / FIPS 186-5 (Ed25519), 
+                  NIST SP 800-38C / RFC 3610 (AES-CCM), FIPS 180-4 (SHA-256),
+                  RFC 5869 (HKDF), RFC 2104 (HMAC), RFC 6479 (Replay Window)
+Target Codebase : QRYPTONEX Classical IoT Implementation (C11 Systems Framework)
+Author          : Senior Cryptographic Systems Engineering Team
+================================================================================
+
+TABLE OF CONTENTS:
+  1. System Architecture & IoT Operational Objectives
+  2. Cryptographic Suite & Algorithm Profiles
+  3. Memory Buffer Sizing & Key Inventory (PQC vs Classical Comparison)
+  4. The 4-Phase Mutual Authentication Handshake Protocol
+  5. Canonical Transcripts & SHA-256 Hashing Specifications
+  6. Directional Key Derivation (HKDF-SHA-256 with Domain Separation)
+  7. AES-128-CCM Authenticated Encryption & Wire Header AAD Binding
+  8. Nonce Construction, Monotonicity & Anti-Exhaustion Guards
+  9. Wire Packet Formats & Layout Hex Dumps
+  10. RFC 6479 64-Packet Sliding Replay Window
+  11. Peer Identity Management & Trust Store Security Model
+  12. Formal Protocol Verification (ProVerif Applied Pi-Calculus Model)
+  13. Security Limitations & Operational Boundaries
+
+================================================================================
+1. SYSTEM ARCHITECTURE & IOT OPERATIONAL OBJECTIVES
+================================================================================
+
+1.1 High-Level Purpose
+The classical IoT implementation of QRYPTONEX (NEXQOR) provides a secure,
+low-latency, memory-efficient communication framework tailored for resource-
+constrained IoT devices, embedded microcontrollers, and edge gateways (such
+as ARM Cortex-A and Cortex-M devices, Raspberry Pi 4/5, and embedded Linux).
+
+While the primary QRYPTONEX codebase employs post-quantum lattice primitives
+(ML-KEM-768 and ML-DSA-65) with larger public keys and signature buffers, the
+classical suite optimizes network packet sizes, memory footprint, and execution
+cycles using battle-tested elliptic-curve and block-cipher standards.
+
+1.2 Design Principles
+  - Minimal Packet Sizing: Entire handshake phases fit in standard unfragmented
+    UDP datagrams (well below typical Internet 1500-byte and 576-byte MTUs).
+  - Hardware Acceleration: Leverages CPU instruction extensions (ARMv8 Crypto
+    Extensions, Intel AES-NI) via OpenSSL 3.x EVP abstractions.
+  - Zero Plaintext Leakage: Unauthenticated decrypt operations discard buffers
+    prior to caller return upon any authentication tag mismatch.
+  - Directional Cryptographic Isolation: Strict domain separation guarantees
+    client-to-server and server-to-client traffic use independent traffic keys.
+  - Wire Header Authentication: The 15-byte packet wire header is cryptographically
+    bound as Authenticated Associated Data (AAD), preventing undetectable replay,
+    reordering, or session hijacking.
+
+================================================================================
+2. CRYPTOGRAPHIC SUITE & ALGORITHM PROFILES
+================================================================================
+
+Component                 Algorithm         Standard           Key / Tag Size
+--------------------------------------------------------------------------------
+Key Establishment         ECDH (X25519)     RFC 7748           32-byte shared secret
+Digital Signatures        Ed25519           RFC 8032           64-byte signature
+Authenticated Encryption  AES-128-CCM       NIST SP 800-38C    16B key, 12B nonce, 16B tag
+Cryptographic Hash        SHA-256           FIPS 180-4         32-byte digest
+Key Derivation            HKDF-SHA-256      RFC 5869           Extract-and-Expand
+Message Authentication    HMAC-SHA-256      RFC 2104           32-byte MAC tag
+
+Implementation Library: OpenSSL 3.x EVP (High-level cryptographic API)
+
+================================================================================
+3. MEMORY BUFFER SIZING & KEY INVENTORY (PQC VS CLASSICAL COMPARISON)
+================================================================================
+
+Parameter                         Post-Quantum (ML-KEM / ML-DSA)    Classical IoT (X25519 / Ed25519)
+----------------------------------------------------------------------------------------------------
+Ephemeral Public Key (KEM/ECDH)   1,184 bytes (ML-KEM-768)          32 bytes (X25519)
+Ephemeral Private Key             2,400 bytes (ML-KEM-768)          32 bytes (X25519)
+Ciphertext / Peer Ephemeral PK    1,088 bytes (ML-KEM-768 CT)       32 bytes (X25519 PK)
+Shared Secret Output              32 bytes                          32 bytes
+Identity Public Key               1,952 bytes (ML-DSA-65)           32 bytes (Ed25519)
+Identity Private Key              4,032 bytes (ML-DSA-65)           32 bytes (Ed25519 seed)
+Digital Signature                 3,309 bytes (ML-DSA-65)           64 bytes (Ed25519 detached)
+AEAD Traffic Key                  32 bytes (ChaCha20-Poly1305)      16 bytes (AES-128-CCM)
+AEAD Nonce Size                   12 bytes                          12 bytes
+AEAD Authentication Tag           16 bytes                          16 bytes
+----------------------------------------------------------------------------------------------------
+Handshake Wire Size (Phases 1-3)  12,834 bytes (Fragmented)         296 bytes (Unfragmented!)
+
+================================================================================
+4. THE 4-PHASE MUTUAL AUTHENTICATION HANDSHAKE PROTOCOL
+================================================================================
+
+Communication operates over UDP port 9877 using a 4-phase sequential handshake:
+
+      Client                                                Server
+        │                                                     │
+        │ [Phase 1: PKT_CLIENT_HELLO (80 bytes payload)]      │
+        ├────────────────────────────────────────────────────>│
+        │   c_eph_pk(32) || c_id_pk(32) || c_nonce(16)        │ [Verify Client Protocol]
+        │                                                     │ [Derive ECDH ss]
+        │                                                     │ [Build Server Transcript]
+        │ [Phase 2: PKT_SERVER_HELLO (152 bytes payload)]     │ [Ed25519 Sign Transcript]
+        │<────────────────────────────────────────────────────┤
+        │   s_id_pk(32) || s_eph_pk(32) || session_id(8)      │
+        │   || s_nonce(16) || srv_sig(64)                     │
+        │                                                     │
+        │ [Verify Server Key vs Pinning Trust Store]          │
+        │ [Verify Server Ed25519 Signature]                   │
+        │ [Compute ECDH ss]                                   │
+        │ [Build Client Transcript]                           │
+        │ [Ed25519 Sign Client Transcript]                    │
+        │ [Derive Traffic Keys via HKDF-SHA-256]              │
+        │                                                     │
+        │ [Phase 3: PKT_CLIENT_AUTH (64 bytes payload)]       │
+        ├────────────────────────────────────────────────────>│
+        │   client_sig(64)                                    │ [Verify Client Signature]
+        │                                                     │ [Derive Traffic Keys]
+        │ [Phase 4: Active Session Confirmation (PKT_ACK)]    │
+        │<────────────────────────────────────────────────────┤
+        │                                                     │
+        *═══════════════ Secure AEAD Channel Active ══════════*
+        │                                                     │
+        ├────────── PKT_DATA (AES-128-CCM Encrypted) ─────────>│
+        │   [ Nonce (12B) | Tag (16B) | Ciphertext (n bytes) ]│
+        │<───────── PKT_DATA (AES-128-CCM Encrypted) ─────────┤
+
+================================================================================
+5. CANONICAL TRANSCRIPTS & SHA-256 HASHING SPECIFICATIONS
+================================================================================
+
+Handshake transcripts are serialized in deterministic, canonical network byte
+order to eliminate malleability or ambiguity across heterogeneous architectures:
+
+5.1 Server Handshake Transcript (168 bytes total):
+  Offset   Length   Field Name           Description
+  ----------------------------------------------------------------------------
+  0        16       c_nonce              Client 16-byte cryptographically secure nonce
+  16       16       s_nonce              Server 16-byte cryptographically secure nonce
+  32       8        session_id           64-bit session identifier (big-endian)
+  40       32       c_eph_pk             Client ephemeral X25519 public key
+  72       32       c_id_pk              Client identity Ed25519 public key
+  104      32       s_id_pk              Server identity Ed25519 public key
+  136      32       s_eph_pk             Server ephemeral X25519 public key
+  ----------------------------------------------------------------------------
+  Total = 168 bytes.
+  Hashed with SHA-256 -> 32-byte digest `srv_tx_digest`.
+  Signed by Server identity private key using `ed25519_sign()` -> `srv_sig` (64 bytes).
+
+5.2 Client Handshake Transcript (232 bytes total):
+  Offset   Length   Field Name           Description
+  ----------------------------------------------------------------------------
+  0        168      server_transcript    Exact 168-byte server transcript above
+  168      64       srv_sig              Server 64-byte Ed25519 signature
+  ----------------------------------------------------------------------------
+  Total = 232 bytes.
+  Hashed with SHA-256 -> 32-byte digest `cl_tx_digest`.
+  Signed by Client identity private key using `ed25519_sign()` -> `client_sig` (64 bytes).
+
+================================================================================
+6. DIRECTIONAL KEY DERIVATION (HKDF-SHA-256 WITH DOMAIN SEPARATION)
+================================================================================
+
+Traffic keys are derived using RFC 5869 HKDF-SHA-256 (extract-and-expand):
+
+6.1 HKDF-Extract:
+  Input Keying Material (IKM) = X25519 shared secret (32 bytes)
+  Salt                        = client_nonce || server_nonce (32 bytes)
+  PRK                         = HMAC-SHA-256(Salt, IKM) -> 32 bytes
+
+6.2 HKDF-Expand:
+  - Client-to-Server Traffic Key (16 bytes):
+    Info = "QRYPTONEX classical client-to-server traffic key" || session_id (64-bit BE)
+    K_c2s = HKDF-Expand(PRK, Info, 16)
+
+  - Server-to-Client Traffic Key (16 bytes):
+    Info = "QRYPTONEX classical server-to-client traffic key" || session_id (64-bit BE)
+    K_s2c = HKDF-Expand(PRK, Info, 16)
+
+6.3 Directional Invariant:
+  Because the domain separation labels differ, K_c2s != K_s2c under all conditions,
+  guaranteeing that even if identical nonces are used in opposing directions,
+  ciphertext stream collisions cannot occur.
+
+================================================================================
+7. AES-128-CCM AUTHENTICATED ENCRYPTION & WIRE HEADER AAD BINDING
+================================================================================
+
+Every application data packet is protected using AES-128-CCM (Counter with CBC-MAC):
+
+Parameters:
+  - Cipher: AES-128
+  - Key Length: 16 bytes (128 bits)
+  - Nonce Length: 12 bytes (96 bits)
+  - Tag Length: 16 bytes (128 bits)
+  - Associated Authenticated Data (AAD): 15-byte canonical wire header (`pkt_hdr_t`)
+
+Wire Header as AAD:
+  Field          Bytes  Endianness  Description
+  ----------------------------------------------------------------------------
+  seq            4      Big-endian  32-bit packet sequence number
+  type           1      Byte        Packet type indicator (e.g., PKT_DATA 0x10)
+  len            2      Big-endian  16-bit total payload length
+  session_id     8      Big-endian  64-bit active session identifier
+  ----------------------------------------------------------------------------
+  Total AAD = 15 bytes.
+
+Security Implication:
+  Tampering with packet sequence, packet type, length, or session ID in transit
+  causes CBC-MAC tag verification to fail immediately. The payload is never decrypted
+  or leaked to the application layer.
+
+================================================================================
+8. NONCE CONSTRUCTION, MONOTONICITY & ANTI-EXHAUSTION GUARDS
+================================================================================
+
+AES-CCM is catastrophically vulnerable to key compromise if a nonce is reused
+under the same traffic key. QRYPTONEX enforces strict uniqueness:
+
+8.1 Nonce Construction:
+  Bytes 0..3:  Session ID lowest 32 bits (little-endian)
+  Bytes 4..11: Monotonically increasing 64-bit counter `tx_nonce_ctr` (little-endian)
+
+8.2 Exhaustion Threshold:
+  If `tx_nonce_ctr >= 0xFFFFFFFFFFFFFF00ULL`, the connection terminates transmission
+  and forces session renegotiation with fresh ephemeral X25519 keys.
+
+================================================================================
+9. WIRE PACKET FORMATS & LAYOUT HEX DUMPS
+================================================================================
+
+9.1 Canonical 15-Byte Wire Header:
+  [ seq (4B) | type (1B) | len (2B) | session_id (8B) ]
+
+9.2 Phase 1: PKT_CLIENT_HELLO (Header: 15B, Payload: 80B, Total: 95B)
+  Payload:
+    [ c_eph_pk (32B) | c_id_pk (32B) | c_nonce (16B) ]
+
+9.3 Phase 2: PKT_SERVER_HELLO (Header: 15B, Payload: 152B, Total: 167B)
+  Payload:
+    [ s_id_pk (32B) | s_eph_pk (32B) | session_id (8B) | s_nonce (16B) | srv_sig (64B) ]
+
+9.4 Phase 3: PKT_CLIENT_AUTH (Header: 15B, Payload: 64B, Total: 79B)
+  Payload:
+    [ client_sig (64B) ]
+
+9.5 Phase 4 / Application Data: PKT_DATA (Header: 15B, Payload: 28B + n)
+  Payload:
+    [ Nonce (12B) | Auth Tag (16B) | Ciphertext (n bytes) ]
+
+================================================================================
+10. RFC 6479 64-PACKET SLIDING REPLAY WINDOW
+================================================================================
+
+To counter packet replay, duplicate injection, and network packet reordering over
+unreliable UDP transport, each session maintains an RFC 6479 64-bit sliding window:
+
+Window State:
+  - `last_seq` (uint32_t): Highest validated sequence number received.
+  - `bitmap` (uint64_t): Bitmask tracking arrival of the past 64 packets.
+  - `lock` (pthread_mutex_t): Serializes concurrent multi-thread packet processing.
+
+Verification Lifecycle:
+  1. Pre-Authentication Check (`replay_window_check`):
+     - Drops duplicate sequence numbers and stale packets older than (last_seq - 64).
+     - Does NOT advance window state (prevents attacker from desyncing window).
+  2. Cryptographic AEAD Decryption:
+     - Verifies AES-128-CCM tag and wire header AAD.
+  3. Post-Authentication Commit (`replay_window_update`):
+     - Commits verified sequence number into window bitmap upon successful MAC check.
+
+================================================================================
+11. PEER IDENTITY MANAGEMENT & TRUST STORE SECURITY MODEL
+================================================================================
+
+Identity Management implements public-key pinning and Trust-On-First-Use (TOFU)
+for Ed25519 identity keys:
+
+  - Server Identity: Persisted in `server_identity.key` (0600 mode) and `server_identity.pub`.
+  - Client Pinning: The client pins the server's Ed25519 public key. If the received key
+    differs from the pinned key, a `SECURITY ALERT: Server public key mismatch! Potential MITM attack intercepted!`
+    is emitted and the connection is aborted immediately.
+  - Client Authorization: The server maintains an enrolled client table (`authorized_clients.db`).
+    Testing mode supports permissive enrollment via `NEXQOR_PERMISSIVE_ENROLLMENT=1`.
+
+================================================================================
+12. FORMAL PROTOCOL VERIFICATION (PROVERIF APPLIED PI-CALCULUS MODEL)
+================================================================================
+
+The protocol was formally verified using ProVerif 2.05 under the Dolev-Yao attacker
+model (`classical/verification/protocol.pv`).
+
+Formally Proven Invariants:
+  1. Directional Traffic Key Secrecy: Proved TRUE (`not attacker_p1(c2s_key_secret)`).
+  2. Directional Server Traffic Key Secrecy: Proved TRUE (`not attacker_p1(s2c_key_secret)`).
+  3. Client Application Payload Secrecy: Proved TRUE (`not attacker_p1(client_data)`).
+  4. Server Application Payload Secrecy: Proved TRUE (`not attacker_p1(server_data)`).
+  5. Injective Server-to-Client Authentication: Proved TRUE (`server_accepts ==> client_initiates`).
+  6. Injective Client-to-Server Authentication: Proved TRUE (`client_accepts ==> server_initiates`).
+  7. Perfect Forward Secrecy: Proved TRUE under Phase 1 long-term key disclosure.
+
+================================================================================
+13. SECURITY LIMITATIONS & OPERATIONAL BOUNDARIES
+================================================================================
+
+  - Quantum Resistance: The classical suite uses X25519 and Ed25519, which are
+    classical elliptic-curve algorithms vulnerable to Shor's algorithm on a CRQC.
+    For post-quantum quantum resistance against Store-Now-Decrypt-Later (SNDL)
+    attacks, use the root QRYPTONEX implementation (ML-KEM-768 + ML-DSA-65).
+  - UDP Packet Drops: High network packet loss requires transport-level ACK retransmission.
+  - Ephemeral Key Zeroization: Ephemeral private keys are wiped via `explicit_bzero()`
+    immediately following shared secret derivation.
+================================================================================

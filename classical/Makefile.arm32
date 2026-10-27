@@ -1,0 +1,109 @@
+# classical/Makefile.arm32 — Classical IoT Client Build for ARM32 / ARMv7-A
+#
+# Target: ARM32 / ARMv7-A (armhf) with NEON / VFPv4
+# Toolchain: arm-linux-gnueabihf-gcc
+
+HOST_ARCH := $(shell uname -m)
+
+ifeq ($(findstring arm,$(HOST_ARCH)),arm)
+  # Native compilation on 32-bit ARM Linux hardware
+  CC      ?= gcc
+  INC     ?= -I.
+  LIBS    ?= -lssl -lcrypto -lpthread -lm
+else
+  # Cross-compilation on x86_64 host
+  CROSS_COMPILE ?= arm-linux-gnueabihf-
+  CC            := $(CROSS_COMPILE)gcc
+  
+  ARM32_SYSROOT ?=
+  ARM32_OPENSSL ?=
+  
+  ifneq ($(ARM32_SYSROOT),)
+    SYSROOT_FLAG = --sysroot=$(ARM32_SYSROOT)
+    INC          = -I. -I$(ARM32_SYSROOT)/usr/include
+    LIBS         = -L$(ARM32_SYSROOT)/usr/lib/arm-linux-gnueabihf -lssl -lcrypto -lpthread -lm
+  else
+    INC          = -I. $(if $(ARM32_OPENSSL),-I$(ARM32_OPENSSL)/include)
+    LIBS         = $(if $(ARM32_OPENSSL),-L$(ARM32_OPENSSL)/lib) -lssl -lcrypto -lpthread -lm
+  endif
+endif
+
+OPT     = -O3 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -funroll-loops -fomit-frame-pointer -fno-plt
+FAST    = $(OPT) -ffast-math
+LTO     = -flto=auto
+WARN    = -Wall -Wextra -Wno-unused-parameter
+DEFS    = -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -D_GNU_SOURCE
+
+CFLAGS  = -std=c11 $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG)
+LDFLAGS = $(LTO) $(SYSROOT_FLAG)
+
+SHARED_OBJS = transport_arm32.o \
+              crypto/aead_arm32.o \
+              crypto/replay_window_arm32.o \
+              crypto/trust_store_arm32.o \
+              wrappers/kem_wrapper_arm32.o \
+              wrappers/dsa_wrapper_arm32.o \
+              wrappers/hash_wrapper_arm32.o \
+              wrappers/kdf_wrapper_arm32.o
+
+.PHONY: all clean check-cross-deps
+
+all: check-cross-deps client_arm32 client_broadcast_arm32 bench_crypto_arm32 bench_nclient_arm32 bench_aead_arm32
+
+check-cross-deps:
+ifeq ($(findstring arm,$(HOST_ARCH)),)
+	@if ! command -v $(CC) >/dev/null 2>&1; then \
+	    echo "=========================================================================="; \
+	    echo "Notice: ARM32 toolchain '$(CC)' not found on host."; \
+	    echo "Install via: sudo apt-get install gcc-arm-linux-gnueabihf"; \
+	    echo "Or run natively on a 32-bit ARM device: make -f Makefile.arm32 all"; \
+	    echo "=========================================================================="; \
+	fi
+endif
+
+transport_arm32.o: transport.c transport.h
+	$(CC) $(FAST) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+crypto/aead_arm32.o: crypto/aead.c crypto/aead.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+crypto/replay_window_arm32.o: crypto/replay_window.c crypto/replay_window.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+crypto/trust_store_arm32.o: crypto/trust_store.c crypto/trust_store.h wrappers/dsa_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+wrappers/kem_wrapper_arm32.o: wrappers/kem_wrapper.c wrappers/kem_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+wrappers/dsa_wrapper_arm32.o: wrappers/dsa_wrapper.c wrappers/dsa_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+wrappers/hash_wrapper_arm32.o: wrappers/hash_wrapper.c wrappers/hash_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+wrappers/kdf_wrapper_arm32.o: wrappers/kdf_wrapper.c wrappers/kdf_wrapper.h
+	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) $(SYSROOT_FLAG) -c -o $@ $<
+
+client_arm32: client.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: client_arm32 [armv7-a + NEON]"
+
+client_broadcast_arm32: client_broadcast.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: client_broadcast_arm32 [armv7-a + NEON]"
+
+bench_crypto_arm32: bench_crypto.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_crypto_arm32 [armv7-a + NEON]"
+
+bench_nclient_arm32: bench_nclient.c $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_nclient_arm32 [armv7-a + NEON]"
+
+bench_aead_arm32: bench_aead.c crypto/aead_arm32.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(LDFLAGS)
+	@echo "Built: bench_aead_arm32 [armv7-a + NEON]"
+
+clean:
+	rm -f client_arm32 client_broadcast_arm32 bench_crypto_arm32 bench_nclient_arm32 bench_aead_arm32 $(SHARED_OBJS)

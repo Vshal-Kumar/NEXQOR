@@ -19,6 +19,12 @@ Modern public-key cryptography (RSA, ECDH, ECDSA) relies on mathematical problem
 
 QRYPTONEX addresses this paradigm shift by establishing a secure communication channel between high-throughput **x86_64 servers** (accelerated via **AVX2 / BMI2**) and resource-constrained **ARM edge devices** (Raspberry Pi 4/5 via **ARM64 NEON** and Raspberry Pi 2/3 via **ARM32 NEON / VFPv4**). The framework combines NIST-standardized lattice cryptography (**ML-KEM-768**, **ML-DSA-65**), authenticated symmetric encryption (**ChaCha20-Poly1305**), and directional session key derivation (**SHAKE256**) over an asynchronous Linux **`io_uring`** engine with application-level reliability and dynamic zero-configuration network discovery.
 
+> [!NOTE]
+> **Heterogeneous Cryptographic Implementations Available in this Repository**:
+> - **Post-Quantum Cryptography (PQC)** (Root): ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305 on UDP Port `9877`.
+> - **Classical Cryptography** (`classical/`): X25519 + Ed25519 + AES-128-CCM on UDP Port `9877`/`9878`. See [classical/README.md](classical/README.md).
+> - **Hybrid Cryptography** (`hybrid/`): X25519 + ML-KEM-768 + Ed25519 + ML-DSA-65 + ChaCha20-Poly1305 on UDP Port `9879`. See [hybrid/README.md](hybrid/README.md).
+
 ---
 
 ## 📋 Table of Contents
@@ -254,6 +260,19 @@ The server process decouples network packet processing from console interaction 
 ├── bench_pqc.c                     # Standalone cryptographic primitives microbenchmark
 ├── bench_nclient.c                 # Multi-client concurrent stress-test harness
 ├── bench_aead.c                    # AEAD buffer benchmark & file encryption tool
+├── classical/                      # Standalone Classical IoT Suite (X25519, Ed25519, AES-128-CCM)
+│   ├── README.md                   # Complete documentation for Classical IoT Suite
+│   ├── NETWORKING_GUIDE.md         # Classical networking and Tailscale guide
+│   ├── CRYPTOGRAPHIC_SPECIFICATION.txt # Classical wire and mathematical specification
+│   ├── Makefile, Makefile.arm64, Makefile.arm32
+│   └── (server, client, client_broadcast, server_rx, server_tx, benchmarks)
+├── hybrid/                         # Standalone Hybrid Cryptographic Suite (X25519+ML-KEM, Ed25519+ML-DSA)
+│   ├── README.md                   # Complete documentation for Hybrid Suite
+│   ├── NETWORKING_GUIDE.md         # Hybrid networking and Tailscale guide
+│   ├── CRYPTOGRAPHIC_SPECIFICATION.txt # Hybrid wire and mathematical specification
+│   ├── Makefile, Makefile.arm64, Makefile.arm32
+│   ├── include/ & src/             # Dual KEX, Dual Signatures, Combiner, Handshake
+│   └── (server, client, client_broadcast, server_rx, server_tx, benchmarks)
 ├── Makefile                        # Native build system for x86_64 host
 ├── Makefile.arm64                  # Build system for ARM64 (Raspberry Pi 4/5)
 ├── Makefile.arm32                  # Build system for ARM32 (Raspberry Pi 2/3)
