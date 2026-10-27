@@ -50,7 +50,6 @@ QRYPTONEX/
 ├── LICENSE                      # MIT Open Source License
 ├── liboqs/                      # Shared Open Quantum Safe library (git submodule)
 ├── liburing_local/              # Shared Linux io_uring kernel headers
-├── libouring_local -> liburing_local  # Compatibility symlink alias
 │
 ├── classical/                   # 100% Independent Classical IoT Suite
 │   ├── crypto/                  # AES-128-CCM AEAD, sliding replay window, trust store

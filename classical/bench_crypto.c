@@ -250,6 +250,96 @@ static void bench_aead_size(int size, int rounds, double *enc_us_out,
   free(rt);
 }
 
+static void bench_aead_detailed(int size, int rounds, sample_set_t *s_enc, sample_set_t *s_dec) {
+  uint8_t key[AEAD_KEY_BYTES];
+  uint8_t nonce[AEAD_NONCE_BYTES];
+  uint8_t *pt = malloc(size);
+  uint8_t *ct = malloc(size);
+  uint8_t tag[AEAD_TAG_BYTES];
+  uint8_t *rt = malloc(size);
+  uint8_t aad[15] = {0x00, 0x01, 0x02, 0x03, 0x10, 0x00, 0x20, 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0x00, 0x01};
+
+  memset(key, 0x42, AEAD_KEY_BYTES);
+  memset(nonce, 0x17, AEAD_NONCE_BYTES);
+  memset(pt, 0xCC, size);
+
+  s_enc->samples = malloc(rounds * sizeof(double));
+  s_dec->samples = malloc(rounds * sizeof(double));
+  s_enc->count = rounds;
+  s_dec->count = rounds;
+
+  for (int i = 0; i < rounds; i++) {
+    nonce[0] = (uint8_t)(i & 0xFF);
+    nonce[1] = (uint8_t)((i >> 8) & 0xFF);
+
+    uint64_t t0 = ns_now();
+    int ct_len = aes128_ccm_encrypt(pt, size, aad, sizeof(aad), key, nonce, ct, tag);
+    s_enc->samples[i] = (double)(ns_now() - t0) / 1000.0; /* µs */
+
+    t0 = ns_now();
+    int pt_len = aes128_ccm_decrypt(ct, ct_len, aad, sizeof(aad), key, nonce, tag, rt);
+    s_dec->samples[i] = (double)(ns_now() - t0) / 1000.0; /* µs */
+
+    (void)pt_len;
+  }
+
+  free(pt);
+  free(ct);
+  free(rt);
+}
+
+static void bench_classical_handshake(int rounds, sample_set_t *s_hs) {
+  uint8_t c_xpk[X25519_PK_BYTES], c_xsk[X25519_SK_BYTES];
+  uint8_t c_idpk[ED25519_PK_BYTES], c_idsk[ED25519_SK_BYTES];
+  uint8_t s_xpk[X25519_PK_BYTES], s_xsk[X25519_SK_BYTES];
+  uint8_t s_idpk[ED25519_PK_BYTES], s_idsk[ED25519_SK_BYTES];
+  uint8_t s_ss[X25519_SS_BYTES], c_ss[X25519_SS_BYTES];
+  uint8_t s_sig[ED25519_SIG_BYTES], c_sig[ED25519_SIG_BYTES];
+  size_t s_siglen = 0, c_siglen = 0;
+  uint8_t transcript_s[168], transcript_c[168];
+  memset(transcript_s, 0x11, sizeof(transcript_s));
+  memset(transcript_c, 0x22, sizeof(transcript_c));
+  uint8_t k_c2s[16], k_s2c[16];
+
+  s_hs->samples = malloc(rounds * sizeof(double));
+  s_hs->count = rounds;
+
+  for (int i = 0; i < rounds; i++) {
+    uint64_t t0 = ns_now();
+
+    /* 1. Client key generation */
+    x25519_generate_keypair(c_xpk, c_xsk);
+    ed25519_generate_keypair(c_idpk, c_idsk);
+
+    /* 2. Server keygen & response */
+    x25519_generate_keypair(s_xpk, s_xsk);
+    ed25519_generate_keypair(s_idpk, s_idsk);
+    x25519_derive_shared_secret(s_ss, s_xsk, c_xpk);
+    ed25519_sign(s_sig, &s_siglen, transcript_s, sizeof(transcript_s), s_idsk);
+
+    /* 3. Client process server message & auth */
+    x25519_derive_shared_secret(c_ss, c_xsk, s_xpk);
+    ed25519_verify(s_sig, s_siglen, transcript_s, sizeof(transcript_s), s_idpk);
+    ed25519_sign(c_sig, &c_siglen, transcript_c, sizeof(transcript_c), c_idsk);
+
+    /* 4. Server verify client auth */
+    ed25519_verify(c_sig, c_siglen, transcript_c, sizeof(transcript_c), c_idpk);
+
+    /* 5. Directional traffic key derivation */
+    uint8_t c_nonce[16] = {0x01}, s_nonce[16] = {0x02};
+    kdf_derive_directional_keys(k_c2s, k_s2c, c_ss, c_nonce, s_nonce, 12345ULL);
+
+    s_hs->samples[i] = (double)(ns_now() - t0) / 1000.0; /* µs */
+  }
+
+  explicit_bzero(c_xsk, sizeof(c_xsk));
+  explicit_bzero(s_xsk, sizeof(s_xsk));
+  explicit_bzero(c_idsk, sizeof(c_idsk));
+  explicit_bzero(s_idsk, sizeof(s_idsk));
+  explicit_bzero(s_ss, sizeof(s_ss));
+  explicit_bzero(c_ss, sizeof(c_ss));
+}
+
 /* ── SHA-256 Digest Benchmark ────────────────────────────────────── */
 static void bench_sha256(int size, int rounds, double *us_out) {
   uint8_t *buf = malloc(size);
@@ -353,9 +443,9 @@ int main(int argc, char *argv[]) {
     bench_x25519(rounds, &s_x25519_key, &s_x25519_ecdh);
     bench_ed25519(rounds, &s_ed_key, &s_ed_sign, &s_ed_ver);
 
-    double run_time_ms = (double)(perf_get_nanos() - t0) / 1000000.0;
-    perf_session_record_run(&session, (size_t)r, run_time_ms);
-    perf_ui_print_run_row((size_t)r, (size_t)runs, run_time_ms, session.run_temps_c[r],
+    double run_time_us = (double)(perf_get_nanos() - t0) / 1000.0;
+    perf_session_record_run(&session, (size_t)r, run_time_us);
+    perf_ui_print_run_row((size_t)r, (size_t)runs, run_time_us, session.run_temps_c[r],
                           session.temp.available, session.run_ram_mb[r], session.run_cpu_pct[r]);
   }
   perf_ui_print_run_footer();
@@ -407,15 +497,10 @@ int main(int argc, char *argv[]) {
   printf("[3] AES-128-CCM Authenticated Encryption Throughput (with 15B AAD header binding):\n");
   printf("  Payload Size   Encrypt (µs)   Throughput (MB/s)   Decrypt (µs)   Throughput (MB/s)\n");
   printf("-------------------------------------------------------------------------------------\n");
-  double aead_1kb_enc_us = 0, aead_1kb_dec_us = 0;
   for (int s = 0; s < num_sizes; s++) {
     int sz = sizes[s];
     double enc_us, dec_us;
     bench_aead_size(sz, rounds, &enc_us, &dec_us);
-    if (sz == 1024) {
-      aead_1kb_enc_us = enc_us;
-      aead_1kb_dec_us = dec_us;
-    }
     double enc_mb = (double)sz / enc_us;
     double dec_mb = (double)sz / dec_us;
     printf("  %6d B        %9.2f        %10.2f        %9.2f        %10.2f\n",
@@ -423,53 +508,82 @@ int main(int argc, char *argv[]) {
   }
   printf("=====================================================================================\n\n");
 
+  /* Detailed 1KB AEAD and Handshake samples */
+  sample_set_t s_aead_enc = {0}, s_aead_dec = {0}, s_hs = {0};
+  bench_aead_detailed(1024, rounds, &s_aead_enc, &s_aead_dec);
+  bench_classical_handshake(rounds, &s_hs);
+
+  detailed_stats_t st_aead_enc, st_aead_dec, st_hs;
+  compute_stats(&s_aead_enc, &st_aead_enc);
+  compute_stats(&s_aead_dec, &st_aead_dec);
+  compute_stats(&s_hs, &st_hs);
+
   /* ── COMPREHENSIVE MULTI-METRIC PERFORMANCE REPORT ────────────── */
   perf_ui_print_section_header("COMPREHENSIVE MULTI-METRIC BENCHMARK REPORT");
 
-  /* 1. Cryptographic Metrics */
+  /* 1. Cryptographic Metrics (Values in µs and ms) */
   perf_stats_t stat_x25519_kg = {
-    .mean = st_x25519_key.mean / 1000.0, .min = st_x25519_key.min / 1000.0, .max = st_x25519_key.max / 1000.0,
-    .median = st_x25519_key.median / 1000.0, .stddev = st_x25519_key.stddev / 1000.0, .p95 = st_x25519_key.p95 / 1000.0,
+    .mean = st_x25519_key.mean, .min = st_x25519_key.min, .max = st_x25519_key.max,
+    .median = st_x25519_key.median, .stddev = st_x25519_key.stddev, .p95 = st_x25519_key.p95,
     .throughput_ops_sec = (st_x25519_key.mean > 0) ? (1000000.0 / st_x25519_key.mean) : 0
   };
-  perf_ui_print_crypto_summary("X25519 Key Generation (RFC 7748)", &stat_x25519_kg, 32, 32, 0, 0, 0);
+  perf_ui_print_crypto_summary("1. X25519 Key Generation (RFC 7748)", &stat_x25519_kg, 32, 32, 0, 0, 0);
 
-  perf_stats_t stat_x25519_ecdh = {
-    .mean = st_x25519_ecdh.mean / 1000.0, .min = st_x25519_ecdh.min / 1000.0, .max = st_x25519_ecdh.max / 1000.0,
-    .median = st_x25519_ecdh.median / 1000.0, .stddev = st_x25519_ecdh.stddev / 1000.0, .p95 = st_x25519_ecdh.p95 / 1000.0,
+  perf_stats_t stat_x25519_agree = {
+    .mean = st_x25519_ecdh.mean, .min = st_x25519_ecdh.min, .max = st_x25519_ecdh.max,
+    .median = st_x25519_ecdh.median, .stddev = st_x25519_ecdh.stddev, .p95 = st_x25519_ecdh.p95,
     .throughput_ops_sec = (st_x25519_ecdh.mean > 0) ? (1000000.0 / st_x25519_ecdh.mean) : 0
   };
-  perf_ui_print_crypto_summary("X25519 ECDH Shared Secret Derivation", &stat_x25519_ecdh, 32, 32, 32, 0, 32);
+  perf_ui_print_crypto_summary("2. X25519 ECDH Shared Secret Agreement", &stat_x25519_agree, 32, 32, 0, 0, 32);
+
+  perf_stats_t stat_x25519_ecdh = {
+    .mean = st_x25519_ecdh.mean, .min = st_x25519_ecdh.min, .max = st_x25519_ecdh.max,
+    .median = st_x25519_ecdh.median, .stddev = st_x25519_ecdh.stddev, .p95 = st_x25519_ecdh.p95,
+    .throughput_ops_sec = (st_x25519_ecdh.mean > 0) ? (1000000.0 / st_x25519_ecdh.mean) : 0
+  };
+  perf_ui_print_crypto_summary("3. X25519 ECDH Shared Secret Derivation", &stat_x25519_ecdh, 0, 32, 32, 0, 32);
 
   perf_stats_t stat_ed_kg = {
-    .mean = st_ed_key.mean / 1000.0, .min = st_ed_key.min / 1000.0, .max = st_ed_key.max / 1000.0,
-    .median = st_ed_key.median / 1000.0, .stddev = st_ed_key.stddev / 1000.0, .p95 = st_ed_key.p95 / 1000.0,
+    .mean = st_ed_key.mean, .min = st_ed_key.min, .max = st_ed_key.max,
+    .median = st_ed_key.median, .stddev = st_ed_key.stddev, .p95 = st_ed_key.p95,
     .throughput_ops_sec = (st_ed_key.mean > 0) ? (1000000.0 / st_ed_key.mean) : 0
   };
-  perf_ui_print_crypto_summary("Ed25519 Key Generation (RFC 8032)", &stat_ed_kg, 32, 32, 0, 0, 0);
+  perf_ui_print_crypto_summary("4. Ed25519 Key Generation (RFC 8032)", &stat_ed_kg, 32, 32, 0, 0, 0);
 
   perf_stats_t stat_ed_sign = {
-    .mean = st_ed_sign.mean / 1000.0, .min = st_ed_sign.min / 1000.0, .max = st_ed_sign.max / 1000.0,
-    .median = st_ed_sign.median / 1000.0, .stddev = st_ed_sign.stddev / 1000.0, .p95 = st_ed_sign.p95 / 1000.0,
+    .mean = st_ed_sign.mean, .min = st_ed_sign.min, .max = st_ed_sign.max,
+    .median = st_ed_sign.median, .stddev = st_ed_sign.stddev, .p95 = st_ed_sign.p95,
     .throughput_ops_sec = (st_ed_sign.mean > 0) ? (1000000.0 / st_ed_sign.mean) : 0
   };
-  perf_ui_print_crypto_summary("Ed25519 Signing", &stat_ed_sign, 0, 32, 0, 64, 0);
+  perf_ui_print_crypto_summary("5. Ed25519 Signing", &stat_ed_sign, 0, 32, 0, 64, 0);
 
   perf_stats_t stat_ed_ver = {
-    .mean = st_ed_ver.mean / 1000.0, .min = st_ed_ver.min / 1000.0, .max = st_ed_ver.max / 1000.0,
-    .median = st_ed_ver.median / 1000.0, .stddev = st_ed_ver.stddev / 1000.0, .p95 = st_ed_ver.p95 / 1000.0,
+    .mean = st_ed_ver.mean, .min = st_ed_ver.min, .max = st_ed_ver.max,
+    .median = st_ed_ver.median, .stddev = st_ed_ver.stddev, .p95 = st_ed_ver.p95,
     .throughput_ops_sec = (st_ed_ver.mean > 0) ? (1000000.0 / st_ed_ver.mean) : 0
   };
-  perf_ui_print_crypto_summary("Ed25519 Signature Verification", &stat_ed_ver, 32, 0, 0, 64, 0);
+  perf_ui_print_crypto_summary("6. Ed25519 Signature Verification", &stat_ed_ver, 32, 0, 0, 64, 0);
 
-  if (aead_1kb_enc_us > 0) {
-    perf_stats_t stat_aead_enc = {
-      .mean = aead_1kb_enc_us / 1000.0, .min = aead_1kb_enc_us / 1000.0, .max = aead_1kb_enc_us / 1000.0,
-      .median = aead_1kb_enc_us / 1000.0, .stddev = 0, .p95 = aead_1kb_enc_us / 1000.0,
-      .throughput_ops_sec = (1000000.0 / aead_1kb_enc_us)
-    };
-    perf_ui_print_crypto_summary("AES-128-CCM Encryption (1KB payload)", &stat_aead_enc, 0, 16, 1024, 16, 0);
-  }
+  perf_stats_t stat_aead_enc = {
+    .mean = st_aead_enc.mean, .min = st_aead_enc.min, .max = st_aead_enc.max,
+    .median = st_aead_enc.median, .stddev = st_aead_enc.stddev, .p95 = st_aead_enc.p95,
+    .throughput_ops_sec = (st_aead_enc.mean > 0) ? (1000000.0 / st_aead_enc.mean) : 0
+  };
+  perf_ui_print_crypto_summary("7. AES-128-CCM Encryption (1KB payload)", &stat_aead_enc, 0, 16, 1024, 16, 0);
+
+  perf_stats_t stat_aead_dec = {
+    .mean = st_aead_dec.mean, .min = st_aead_dec.min, .max = st_aead_dec.max,
+    .median = st_aead_dec.median, .stddev = st_aead_dec.stddev, .p95 = st_aead_dec.p95,
+    .throughput_ops_sec = (st_aead_dec.mean > 0) ? (1000000.0 / st_aead_dec.mean) : 0
+  };
+  perf_ui_print_crypto_summary("8. AES-128-CCM Decryption (1KB payload)", &stat_aead_dec, 0, 16, 1024, 16, 0);
+
+  perf_stats_t stat_hs_full = {
+    .mean = st_hs.mean, .min = st_hs.min, .max = st_hs.max,
+    .median = st_hs.median, .stddev = st_hs.stddev, .p95 = st_hs.p95,
+    .throughput_ops_sec = (st_hs.mean > 0) ? (1000000.0 / st_hs.mean) : 0
+  };
+  perf_ui_print_crypto_summary("9. Full 4-Way Classical Handshake Simulation", &stat_hs_full, 32, 32, 32, 64, 32);
 
   /* 2. Memory Metrics */
   perf_ui_print_memory_summary(&session.mem);
@@ -480,12 +594,29 @@ int main(int argc, char *argv[]) {
   /* 4. Temperature Metrics */
   perf_ui_print_temp_summary(&session.temp);
 
+  /* 5. Unified Comparative Operations Summary Table */
+  perf_op_comparison_t comparison_ops[] = {
+    {"1. KEM/KEX Key Generation", stat_x25519_kg.mean, stat_x25519_kg.p95, stat_x25519_kg.throughput_ops_sec, 32, "pk"},
+    {"2. KEM/KEX Encapsulation / Agreement", stat_x25519_agree.mean, stat_x25519_agree.p95, stat_x25519_agree.throughput_ops_sec, 32, "ss"},
+    {"3. KEM/KEX Decapsulation / Derivation", stat_x25519_ecdh.mean, stat_x25519_ecdh.p95, stat_x25519_ecdh.throughput_ops_sec, 32, "ss"},
+    {"4. Digital Signature Key Generation", stat_ed_kg.mean, stat_ed_kg.p95, stat_ed_kg.throughput_ops_sec, 32, "pk"},
+    {"5. Digital Signature Signing", stat_ed_sign.mean, stat_ed_sign.p95, stat_ed_sign.throughput_ops_sec, 64, "sig"},
+    {"6. Digital Signature Verification", stat_ed_ver.mean, stat_ed_ver.p95, stat_ed_ver.throughput_ops_sec, 64, "sig"},
+    {"7. AEAD Symmetric Encryption (1KB)", stat_aead_enc.mean, stat_aead_enc.p95, stat_aead_enc.throughput_ops_sec, 1024, "ct"},
+    {"8. AEAD Symmetric Decryption (1KB)", stat_aead_dec.mean, stat_aead_dec.p95, stat_aead_dec.throughput_ops_sec, 1024, "pt"},
+    {"9. Full 4-Way Handshake Simulation", stat_hs_full.mean, stat_hs_full.p95, stat_hs_full.throughput_ops_sec, 296, "net"}
+  };
+  perf_ui_print_unified_comparison_table("QRYPTONEX Classical IoT Suite (X25519 + Ed25519 + AES-128-CCM)", comparison_ops, 9);
+
   /* Clean up */
   free(s_x25519_key.samples);
   free(s_x25519_ecdh.samples);
   free(s_ed_key.samples);
   free(s_ed_sign.samples);
   free(s_ed_ver.samples);
+  free(s_aead_enc.samples);
+  free(s_aead_dec.samples);
+  free(s_hs.samples);
   perf_session_cleanup(&session);
 
   return 0;

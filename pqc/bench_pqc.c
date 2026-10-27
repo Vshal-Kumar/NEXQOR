@@ -308,9 +308,9 @@ int main(int argc, char *argv[]) {
     bench_kem(rounds, &kem_keygen, &kem_encaps, &kem_decaps);
     bench_dsa(rounds, &dsa_keygen, &dsa_sign, &dsa_verify);
 
-    double run_time_ms = (double)(perf_get_nanos() - t0) / 1000000.0;
-    perf_session_record_run(&session, (size_t)r, run_time_ms);
-    perf_ui_print_run_row((size_t)r, (size_t)runs, run_time_ms, session.run_temps_c[r],
+    double run_time_us = (double)(perf_get_nanos() - t0) / 1000.0;
+    perf_session_record_run(&session, (size_t)r, run_time_us);
+    perf_ui_print_run_row((size_t)r, (size_t)runs, run_time_us, session.run_temps_c[r],
                           session.temp.available, session.run_ram_mb[r], session.run_cpu_pct[r]);
   }
   perf_ui_print_run_footer();
@@ -371,6 +371,29 @@ int main(int argc, char *argv[]) {
            enc_us, dec_us, enc_throughput, dec_throughput);
   }
   printf("└─────────────┴──────────────────┴──────────────────┴─────────────────────┘\n\n");
+
+  /* Detailed 1KB AEAD sample collection */
+  sample_set_t s_aead_enc = { .samples = malloc(rounds * sizeof(double)), .count = rounds };
+  sample_set_t s_aead_dec = { .samples = malloc(rounds * sizeof(double)), .count = rounds };
+  uint8_t *plain_1k = malloc(1024); uint8_t *cipher_1k = malloc(1024); uint8_t *decrypted_1k = malloc(1024);
+  uint8_t aead_key[32], aead_nonce[12], aead_tag[16], aead_aad[15] = {0};
+  memset(aead_key, 0x11, sizeof(aead_key));
+  memset(aead_nonce, 0x22, sizeof(aead_nonce));
+  memset(plain_1k, 0x44, 1024);
+
+  for (int i = 0; i < rounds; i++) {
+    uint64_t t_op = ns_now();
+    aead_encrypt(plain_1k, 1024, aead_aad, sizeof(aead_aad), aead_key, aead_nonce, cipher_1k, aead_tag);
+    s_aead_enc.samples[i] = (double)(ns_now() - t_op) / 1000.0;
+
+    t_op = ns_now();
+    aead_decrypt(cipher_1k, 1024, aead_aad, sizeof(aead_aad), aead_key, aead_nonce, aead_tag, decrypted_1k);
+    s_aead_dec.samples[i] = (double)(ns_now() - t_op) / 1000.0;
+  }
+  detailed_stats_t d_aead_enc, d_aead_dec;
+  compute_stats(&s_aead_enc, &d_aead_enc);
+  compute_stats(&s_aead_dec, &d_aead_dec);
+  free(plain_1k); free(cipher_1k); free(decrypted_1k);
 
   /* ── TABLE 7: Handshake Phase Breakdown (CPU Execution) ────────── */
   sample_set_t s_hs_ser;
@@ -463,55 +486,69 @@ int main(int argc, char *argv[]) {
   /* ── COMPREHENSIVE MULTI-METRIC PERFORMANCE REPORT ────────────── */
   perf_ui_print_section_header("COMPREHENSIVE MULTI-METRIC BENCHMARK REPORT");
 
-  /* 1. Cryptographic Metrics */
+  /* 1. Cryptographic Metrics (Values in µs and ms) */
   perf_stats_t stat_kem_kg = {
-    .mean = d_kem_kg.mean / 1000.0, .min = d_kem_kg.min / 1000.0, .max = d_kem_kg.max / 1000.0,
-    .median = d_kem_kg.median / 1000.0, .stddev = d_kem_kg.stddev / 1000.0, .p95 = d_kem_kg.p95 / 1000.0,
+    .mean = d_kem_kg.mean, .min = d_kem_kg.min, .max = d_kem_kg.max,
+    .median = d_kem_kg.median, .stddev = d_kem_kg.stddev, .p95 = d_kem_kg.p95,
     .throughput_ops_sec = (d_kem_kg.mean > 0) ? (1000000.0 / d_kem_kg.mean) : 0
   };
-  perf_ui_print_crypto_summary("ML-KEM-768 Key Generation", &stat_kem_kg, KEM_PK_BYTES, KEM_SK_BYTES, 0, 0, 0);
+  perf_ui_print_crypto_summary("1. ML-KEM-768 Key Generation", &stat_kem_kg, KEM_PK_BYTES, KEM_SK_BYTES, 0, 0, 0);
 
   perf_stats_t stat_kem_enc = {
-    .mean = d_kem_enc.mean / 1000.0, .min = d_kem_enc.min / 1000.0, .max = d_kem_enc.max / 1000.0,
-    .median = d_kem_enc.median / 1000.0, .stddev = d_kem_enc.stddev / 1000.0, .p95 = d_kem_enc.p95 / 1000.0,
+    .mean = d_kem_enc.mean, .min = d_kem_enc.min, .max = d_kem_enc.max,
+    .median = d_kem_enc.median, .stddev = d_kem_enc.stddev, .p95 = d_kem_enc.p95,
     .throughput_ops_sec = (d_kem_enc.mean > 0) ? (1000000.0 / d_kem_enc.mean) : 0
   };
-  perf_ui_print_crypto_summary("ML-KEM-768 Encapsulation", &stat_kem_enc, KEM_PK_BYTES, 0, KEM_CT_BYTES, 0, KEM_SS_BYTES);
+  perf_ui_print_crypto_summary("2. ML-KEM-768 Encapsulation", &stat_kem_enc, KEM_PK_BYTES, 0, KEM_CT_BYTES, 0, KEM_SS_BYTES);
 
   perf_stats_t stat_kem_dec = {
-    .mean = d_kem_dec.mean / 1000.0, .min = d_kem_dec.min / 1000.0, .max = d_kem_dec.max / 1000.0,
-    .median = d_kem_dec.median / 1000.0, .stddev = d_kem_dec.stddev / 1000.0, .p95 = d_kem_dec.p95 / 1000.0,
+    .mean = d_kem_dec.mean, .min = d_kem_dec.min, .max = d_kem_dec.max,
+    .median = d_kem_dec.median, .stddev = d_kem_dec.stddev, .p95 = d_kem_dec.p95,
     .throughput_ops_sec = (d_kem_dec.mean > 0) ? (1000000.0 / d_kem_dec.mean) : 0
   };
-  perf_ui_print_crypto_summary("ML-KEM-768 Decapsulation", &stat_kem_dec, 0, KEM_SK_BYTES, KEM_CT_BYTES, 0, KEM_SS_BYTES);
+  perf_ui_print_crypto_summary("3. ML-KEM-768 Decapsulation", &stat_kem_dec, 0, KEM_SK_BYTES, KEM_CT_BYTES, 0, KEM_SS_BYTES);
 
   perf_stats_t stat_dsa_kg = {
-    .mean = d_dsa_kg.mean / 1000.0, .min = d_dsa_kg.min / 1000.0, .max = d_dsa_kg.max / 1000.0,
-    .median = d_dsa_kg.median / 1000.0, .stddev = d_dsa_kg.stddev / 1000.0, .p95 = d_dsa_kg.p95 / 1000.0,
+    .mean = d_dsa_kg.mean, .min = d_dsa_kg.min, .max = d_dsa_kg.max,
+    .median = d_dsa_kg.median, .stddev = d_dsa_kg.stddev, .p95 = d_dsa_kg.p95,
     .throughput_ops_sec = (d_dsa_kg.mean > 0) ? (1000000.0 / d_dsa_kg.mean) : 0
   };
-  perf_ui_print_crypto_summary("ML-DSA-65 Key Generation", &stat_dsa_kg, DSA_PK_BYTES, DSA_SK_BYTES, 0, 0, 0);
+  perf_ui_print_crypto_summary("4. ML-DSA-65 Key Generation", &stat_dsa_kg, DSA_PK_BYTES, DSA_SK_BYTES, 0, 0, 0);
 
   perf_stats_t stat_dsa_sig = {
-    .mean = d_dsa_sig.mean / 1000.0, .min = d_dsa_sig.min / 1000.0, .max = d_dsa_sig.max / 1000.0,
-    .median = d_dsa_sig.median / 1000.0, .stddev = d_dsa_sig.stddev / 1000.0, .p95 = d_dsa_sig.p95 / 1000.0,
+    .mean = d_dsa_sig.mean, .min = d_dsa_sig.min, .max = d_dsa_sig.max,
+    .median = d_dsa_sig.median, .stddev = d_dsa_sig.stddev, .p95 = d_dsa_sig.p95,
     .throughput_ops_sec = (d_dsa_sig.mean > 0) ? (1000000.0 / d_dsa_sig.mean) : 0
   };
-  perf_ui_print_crypto_summary("ML-DSA-65 Signing", &stat_dsa_sig, 0, DSA_SK_BYTES, 0, 3309, 0);
+  perf_ui_print_crypto_summary("5. ML-DSA-65 Signing", &stat_dsa_sig, 0, DSA_SK_BYTES, 0, 3309, 0);
 
   perf_stats_t stat_dsa_ver = {
-    .mean = d_dsa_ver.mean / 1000.0, .min = d_dsa_ver.min / 1000.0, .max = d_dsa_ver.max / 1000.0,
-    .median = d_dsa_ver.median / 1000.0, .stddev = d_dsa_ver.stddev / 1000.0, .p95 = d_dsa_ver.p95 / 1000.0,
+    .mean = d_dsa_ver.mean, .min = d_dsa_ver.min, .max = d_dsa_ver.max,
+    .median = d_dsa_ver.median, .stddev = d_dsa_ver.stddev, .p95 = d_dsa_ver.p95,
     .throughput_ops_sec = (d_dsa_ver.mean > 0) ? (1000000.0 / d_dsa_ver.mean) : 0
   };
-  perf_ui_print_crypto_summary("ML-DSA-65 Signature Verification", &stat_dsa_ver, DSA_PK_BYTES, 0, 0, 3309, 0);
+  perf_ui_print_crypto_summary("6. ML-DSA-65 Signature Verification", &stat_dsa_ver, DSA_PK_BYTES, 0, 0, 3309, 0);
+
+  perf_stats_t stat_aead_enc = {
+    .mean = d_aead_enc.mean, .min = d_aead_enc.min, .max = d_aead_enc.max,
+    .median = d_aead_enc.median, .stddev = d_aead_enc.stddev, .p95 = d_aead_enc.p95,
+    .throughput_ops_sec = (d_aead_enc.mean > 0) ? (1000000.0 / d_aead_enc.mean) : 0
+  };
+  perf_ui_print_crypto_summary("7. ChaCha20-Poly1305 Encryption (1KB payload)", &stat_aead_enc, 0, 32, 1024, 16, 0);
+
+  perf_stats_t stat_aead_dec = {
+    .mean = d_aead_dec.mean, .min = d_aead_dec.min, .max = d_aead_dec.max,
+    .median = d_aead_dec.median, .stddev = d_aead_dec.stddev, .p95 = d_aead_dec.p95,
+    .throughput_ops_sec = (d_aead_dec.mean > 0) ? (1000000.0 / d_aead_dec.mean) : 0
+  };
+  perf_ui_print_crypto_summary("8. ChaCha20-Poly1305 Decryption (1KB payload)", &stat_aead_dec, 0, 32, 1024, 16, 0);
 
   perf_stats_t stat_hs = {
-    .mean = d_hs_ser.mean / 1000.0, .min = d_hs_ser.min / 1000.0, .max = d_hs_ser.max / 1000.0,
-    .median = d_hs_ser.median / 1000.0, .stddev = d_hs_ser.stddev / 1000.0, .p95 = d_hs_ser.p95 / 1000.0,
+    .mean = d_hs_ser.mean, .min = d_hs_ser.min, .max = d_hs_ser.max,
+    .median = d_hs_ser.median, .stddev = d_hs_ser.stddev, .p95 = d_hs_ser.p95,
     .throughput_ops_sec = (d_hs_ser.mean > 0) ? (1000000.0 / d_hs_ser.mean) : 0
   };
-  perf_ui_print_crypto_summary("Full 4-Way PQC Handshake Simulation", &stat_hs, 0, 0, 0, 0, 0);
+  perf_ui_print_crypto_summary("9. Full 4-Way PQC Handshake Simulation", &stat_hs, KEM_PK_BYTES, DSA_SK_BYTES, KEM_CT_BYTES, 3309, KEM_SS_BYTES);
 
   /* 2. Memory Metrics */
   perf_ui_print_memory_summary(&session.mem);
@@ -522,6 +559,20 @@ int main(int argc, char *argv[]) {
   /* 4. Temperature Metrics */
   perf_ui_print_temp_summary(&session.temp);
 
+  /* 5. Unified Comparative Operations Summary Table */
+  perf_op_comparison_t comparison_ops[] = {
+    {"1. KEM/KEX Key Generation", stat_kem_kg.mean, stat_kem_kg.p95, stat_kem_kg.throughput_ops_sec, KEM_PK_BYTES, "pk"},
+    {"2. KEM/KEX Encapsulation", stat_kem_enc.mean, stat_kem_enc.p95, stat_kem_enc.throughput_ops_sec, KEM_CT_BYTES, "ct"},
+    {"3. KEM/KEX Decapsulation", stat_kem_dec.mean, stat_kem_dec.p95, stat_kem_dec.throughput_ops_sec, KEM_SS_BYTES, "ss"},
+    {"4. Digital Signature Key Generation", stat_dsa_kg.mean, stat_dsa_kg.p95, stat_dsa_kg.throughput_ops_sec, DSA_PK_BYTES, "pk"},
+    {"5. Digital Signature Signing", stat_dsa_sig.mean, stat_dsa_sig.p95, stat_dsa_sig.throughput_ops_sec, 3309, "sig"},
+    {"6. Digital Signature Verification", stat_dsa_ver.mean, stat_dsa_ver.p95, stat_dsa_ver.throughput_ops_sec, 3309, "sig"},
+    {"7. AEAD Symmetric Encryption (1KB)", stat_aead_enc.mean, stat_aead_enc.p95, stat_aead_enc.throughput_ops_sec, 1024, "ct"},
+    {"8. AEAD Symmetric Decryption (1KB)", stat_aead_dec.mean, stat_aead_dec.p95, stat_aead_dec.throughput_ops_sec, 1024, "pt"},
+    {"9. Full 4-Way Handshake Simulation", stat_hs.mean, stat_hs.p95, stat_hs.throughput_ops_sec, 12834, "net"}
+  };
+  perf_ui_print_unified_comparison_table("QRYPTONEX Pure Post-Quantum Suite (ML-KEM-768 + ML-DSA-65)", comparison_ops, 9);
+
   // Free allocated arrays
   free(kem_keygen.samples);
   free(kem_encaps.samples);
@@ -529,6 +580,8 @@ int main(int argc, char *argv[]) {
   free(dsa_keygen.samples);
   free(dsa_sign.samples);
   free(dsa_verify.samples);
+  free(s_aead_enc.samples);
+  free(s_aead_dec.samples);
   free(s_hs_ser.samples);
   perf_session_cleanup(&session);
 

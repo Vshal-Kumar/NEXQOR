@@ -398,8 +398,9 @@ static inline void perf_stats_calculate(perf_stats_t *s, size_t ops_per_run) {
     s->variance = sum_sq_diff / (double)n;
     s->stddev = sqrt(s->variance);
 
-    /* Throughput (ops/second) = (ops_per_run) / (mean_time_in_seconds) */
-    double mean_sec = s->mean / 1000.0;
+    /* Throughput (ops/second) = (ops_per_run) / (mean_time_in_seconds)
+       Since mean is in microseconds (µs): mean_sec = mean / 1,000,000.0 */
+    double mean_sec = s->mean / 1000000.0;
     if (mean_sec > 0.0) {
         s->throughput_ops_sec = (double)ops_per_run / mean_sec;
     } else {
@@ -416,7 +417,7 @@ typedef struct {
     perf_temp_monitor_t temp;
     perf_mem_monitor_t mem;
     perf_cpu_monitor_t cpu;
-    double *run_latencies_ms;
+    double *run_latencies_ms; /* in microseconds (µs) */
     double *run_temps_c;
     double *run_ram_mb;
     double *run_cpu_pct;
@@ -444,13 +445,13 @@ static inline int perf_session_init(perf_benchmark_session_t *sess, size_t total
 }
 
 static inline void perf_session_record_run(perf_benchmark_session_t *sess, size_t run_idx,
-                                           double run_time_ms) {
+                                           double run_time_us) {
     if (run_idx >= sess->total_runs) return;
 
     perf_temp_sample(&sess->temp);
     perf_mem_sample(&sess->mem);
 
-    sess->run_latencies_ms[run_idx] = run_time_ms;
+    sess->run_latencies_ms[run_idx] = run_time_us;
     sess->run_temps_c[run_idx] = (sess->temp.available) ? sess->temp.current_temp_c : -1000.0;
     sess->run_ram_mb[run_idx] = sess->mem.current_ram_mb;
 
@@ -492,41 +493,40 @@ static inline void perf_ui_print_section_header(const char *title) {
 }
 
 static inline void perf_ui_print_run_header(void) {
-    printf("┌──────┬──────────────────┬─────────────────┬─────────────────┬────────────────────┐\n");
-    printf("│ Run  │ Exec Time (ms)   │ Temperature (°C)│ RAM Usage (MB)  │ CPU Utilization (%%)│\n");
-    printf("├──────┼──────────────────┼─────────────────┼─────────────────┼────────────────────┤\n");
+    printf("┌──────┬──────────────────────────────┬──────────────────┬─────────────────┬────────────────────┐\n");
+    printf("│ Run  │ Exec Time: µs (ms)           │ Temperature (°C) │ RAM Usage (MB)  │ CPU Utilization (%%)│\n");
+    printf("├──────┼──────────────────────────────┼──────────────────┼─────────────────┼────────────────────┤\n");
 }
 
-static inline void perf_ui_print_run_row(size_t run_idx, size_t total_runs, double time_ms,
+static inline void perf_ui_print_run_row(size_t run_idx, size_t total_runs, double time_us,
                                         double temp_c, int temp_avail, double ram_mb, double cpu_pct) {
-    char temp_buf[32];
     if (temp_avail && temp_c > -900.0) {
-        snprintf(temp_buf, sizeof(temp_buf), "%7.2f °C", temp_c);
+        printf("│ %4zu │ %10.2f µs (%8.3f ms)   │ %11.2f °C   │ %15.3f │ %17.2f%% │\n",
+               run_idx + 1, time_us, time_us / 1000.0, temp_c, ram_mb, cpu_pct);
     } else {
-        snprintf(temp_buf, sizeof(temp_buf), "Unavailable");
+        printf("│ %4zu │ %10.2f µs (%8.3f ms)   │ %15s  │ %15.3f │ %17.2f%% │\n",
+               run_idx + 1, time_us, time_us / 1000.0, "Unavailable", ram_mb, cpu_pct);
     }
-    printf("│ %4zu │ %16.4f │ %15s │ %15.3f │ %17.2f%% │\n",
-           run_idx + 1, time_ms, temp_buf, ram_mb, cpu_pct);
 }
 
 static inline void perf_ui_print_run_footer(void) {
-    printf("└──────┴──────────────────┴─────────────────┴─────────────────┴────────────────────┘\n");
+    printf("└──────┴──────────────────────────────┴──────────────────┴─────────────────┴────────────────────┘\n");
 }
 
 static inline void perf_ui_print_crypto_summary(const char *op_name, const perf_stats_t *s,
                                                size_t pk_size, size_t sk_size, size_t ct_size,
                                                size_t sig_size, size_t ss_size) {
     printf("\n┌──────────────────────────────────────────────────────────────────────────────────┐\n");
-    printf("│ 1. CRYPTOGRAPHIC METRICS: %-53s │\n", op_name);
+    printf("│ 1. CRYPTOGRAPHIC METRICS: %-54s │\n", op_name);
     printf("├────────────────────────────────────────┬─────────────────────────────────────────┤\n");
     printf("│ Metric                                 │ Value                                   │\n");
     printf("├────────────────────────────────────────┼─────────────────────────────────────────┤\n");
-    printf("│ Average Execution Time                 │ %18.4f ms                 │\n", s->mean);
-    printf("│ Minimum Execution Time                 │ %18.4f ms                 │\n", s->min);
-    printf("│ Maximum Execution Time                 │ %18.4f ms                 │\n", s->max);
-    printf("│ Median Execution Time                  │ %18.4f ms                 │\n", s->median);
-    printf("│ Standard Deviation                     │ %18.4f ms                 │\n", s->stddev);
-    printf("│ P95 Latency                            │ %18.4f ms                 │\n", s->p95);
+    printf("│ Average Execution Time                 │ %12.3f µs  (%9.4f ms)       │\n", s->mean, s->mean / 1000.0);
+    printf("│ Minimum Execution Time                 │ %12.3f µs  (%9.4f ms)       │\n", s->min, s->min / 1000.0);
+    printf("│ Maximum Execution Time                 │ %12.3f µs  (%9.4f ms)       │\n", s->max, s->max / 1000.0);
+    printf("│ Median Execution Time                  │ %12.3f µs  (%9.4f ms)       │\n", s->median, s->median / 1000.0);
+    printf("│ Standard Deviation                     │ %12.3f µs  (%9.4f ms)       │\n", s->stddev, s->stddev / 1000.0);
+    printf("│ P95 Latency                            │ %12.3f µs  (%9.4f ms)       │\n", s->p95, s->p95 / 1000.0);
     printf("│ Throughput                             │ %18.2f ops/sec            │\n", s->throughput_ops_sec);
 
     if (pk_size > 0)
@@ -541,6 +541,39 @@ static inline void perf_ui_print_crypto_summary(const char *op_name, const perf_
         printf("│ Shared Secret Size                     │ %18zu bytes              │\n", ss_size);
 
     printf("└────────────────────────────────────────┴─────────────────────────────────────────┘\n");
+}
+
+/* ── Unified Comparative Operations Summary Table ────────────────── */
+typedef struct {
+    const char *op_name;
+    double mean_us;
+    double p95_us;
+    double throughput_ops_sec;
+    size_t key_or_artifact_size;
+    const char *size_label;
+} perf_op_comparison_t;
+
+static inline void perf_ui_print_unified_comparison_table(const char *suite_name,
+                                                         const perf_op_comparison_t *ops,
+                                                         size_t op_count) {
+    printf("\n╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║ UNIFIED METRICS SUMMARY: %-81s ║\n", suite_name);
+    printf("╠═════════════════════════════════════════╦══════════════╦══════════════╦══════════════════╦════════════════╣\n");
+    printf("│ Cryptographic Operation                 │ Mean Latency │ P95 Latency  │ Throughput       │ Size           │\n");
+    printf("├─────────────────────────────────────────┼──────────────┼──────────────┼──────────────────┼────────────────┤\n");
+    for (size_t i = 0; i < op_count; i++) {
+        char size_buf[32];
+        if (ops[i].key_or_artifact_size > 0 && ops[i].size_label) {
+            snprintf(size_buf, sizeof(size_buf), "%zu B (%s)", ops[i].key_or_artifact_size, ops[i].size_label);
+        } else if (ops[i].key_or_artifact_size > 0) {
+            snprintf(size_buf, sizeof(size_buf), "%zu B", ops[i].key_or_artifact_size);
+        } else {
+            snprintf(size_buf, sizeof(size_buf), "N/A");
+        }
+        printf("│ %-39s │ %8.3f µs  │ %8.3f µs  │ %10.1f ops/s │ %-14s │\n",
+               ops[i].op_name, ops[i].mean_us, ops[i].p95_us, ops[i].throughput_ops_sec, size_buf);
+    }
+    printf("└─────────────────────────────────────────┴──────────────┴──────────────┴──────────────────┴────────────────┘\n\n");
 }
 
 static inline void perf_ui_print_memory_summary(const perf_mem_monitor_t *m) {
