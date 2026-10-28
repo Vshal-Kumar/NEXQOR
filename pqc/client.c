@@ -267,6 +267,7 @@ static int do_handshake(conn_t *c, metrics_t *m,
         free(tx);
         return -1;
     }
+    m->hs_verify_ms = now_ms() - t0;
 
     /* KEM decapsulate */
     t0 = now_ms();
@@ -447,8 +448,9 @@ int main(int argc, char *argv[])
     pthread_join(rx_tid, NULL);
 
     pkt_send(&c, PKT_DISCONNECT, NULL, 0);
+    metrics_print(&metrics);
     close(sock);
     conn_destroy(&c);
-    printf("\n[client] Disconnected.\n");
+    printf("\n[client] Session cleanly closed.\n");
     return 0;
 }

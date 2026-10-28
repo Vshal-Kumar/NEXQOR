@@ -565,15 +565,14 @@ void metrics_print(const metrics_t *m) {
 
   printf("║  PQC HANDSHAKE BREAKDOWN                     ║\n");
   printf("║  ─────────────────────────────────────────── ║\n");
-  printf("║  KEM keygen        : %8.3f ms             ║\n",
-         m->hs_kem_keygen_ms);
-  printf("║  DSA keygen        : %8.3f ms             ║\n",
-         m->hs_dsa_keygen_ms);
-  printf("║  KEM Encap/Decap   : %8.3f ms             ║\n", m->hs_encap_ms);
-  printf("║  DSA Sign          : %8.3f ms             ║\n", m->hs_sign_ms);
-  printf("║  DSA Verify        : %8.3f ms             ║\n", m->hs_verify_ms);
-  printf("║  Handshake Total   : %8.3f ms  %s        ║\n", m->hs_total_ms,
-         m->hs_total_ms <= 1.0 ? "✓ <1ms" : "⚠ >1ms");
+  printf("║  KEM keygen        : %8.2f µs             ║\n",
+         m->hs_kem_keygen_ms * 1000.0);
+  printf("║  DSA keygen        : %8.2f µs             ║\n",
+         m->hs_dsa_keygen_ms * 1000.0);
+  printf("║  KEM Encap/Decap   : %8.2f µs             ║\n", m->hs_encap_ms * 1000.0);
+  printf("║  DSA Sign          : %8.2f µs             ║\n", m->hs_sign_ms * 1000.0);
+  printf("║  DSA Verify        : %8.2f µs             ║\n", m->hs_verify_ms * 1000.0);
+  printf("║  Handshake Total   : %8.2f ms             ║\n", m->hs_total_ms);
   printf("║                                              ║\n");
 
   printf("║  AEAD (ChaCha20-Poly1305 + AAD)              ║\n");

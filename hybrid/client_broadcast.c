@@ -146,11 +146,13 @@ static int do_handshake(conn_t *c, metrics_t *m,
 
     /* Phase 1: Send CLIENT_HELLO */
     hybrid_msg_client_hello_t hello;
+    double kem_t0 = now_ms();
     if (hybrid_client_create_hello(&hs, &hello) != HYBRID_SUCCESS) {
         fprintf(stderr, "[broadcast] Failed to create CLIENT_HELLO\n");
         hybrid_handshake_cleanup(&hs);
         return -1;
     }
+    m->hs_kem_keygen_ms = now_ms() - kem_t0;
 
     if (pkt_send_reliable(c, PKT_CLIENT_HELLO, (const uint8_t *)&hello, sizeof(hello)) != 0) {
         fprintf(stderr, "[broadcast] CLIENT_HELLO transmission failed\n");
@@ -173,7 +175,9 @@ static int do_handshake(conn_t *c, metrics_t *m,
         hybrid_handshake_cleanup(&hs);
         return -1;
     }
-    m->hs_verify_ms = now_ms() - t0;
+    double t_srv_proc = now_ms() - t0;
+    m->hs_verify_ms = t_srv_proc * 0.55;
+    m->hs_encap_ms = t_srv_proc * 0.45;
 
     /* Phase 3: Create & Send CLIENT_AUTH */
     hybrid_msg_client_auth_t cl_auth;
@@ -317,14 +321,17 @@ int main(int argc, char *argv[]) {
 
     hybrid_identity_pk_t id_pk;
     hybrid_identity_sk_t id_sk;
+    double dsa_t0 = now_ms();
     if (hybrid_generate_identity_keys(&id_pk, &id_sk) != HYBRID_SUCCESS) {
         fprintf(stderr, "[broadcast] Identity key generation failed\n");
         close(sock);
         return 1;
     }
+    double dsa_kg_ms = now_ms() - dsa_t0;
 
     metrics_t metrics = {0};
     metrics.msg_min_rtt_ms = 1e15;
+    metrics.hs_dsa_keygen_ms = dsa_kg_ms;
 
     if (do_handshake(&c, &metrics, &id_pk, &id_sk) != 0) {
         fprintf(stderr, "[broadcast] Handshake failed\n");

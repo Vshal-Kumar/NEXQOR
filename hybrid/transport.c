@@ -481,15 +481,71 @@ int server_publish_endpoints(char *lan_ip, size_t lan_len,
 
 void metrics_print(const metrics_t *m) {
     if (!m) return;
-    printf("\n── Telemetry Metrics ───────────────────────────────\n");
-    printf("  Packets Received:       %lu\n", m->msg_count);
-    printf("  Bytes Sent / Recv:      %lu / %lu\n", m->bytes_sent, m->bytes_recv);
-    printf("  Avg Round-Trip Time:    %.2f ms (min: %.2f ms, max: %.2f ms)\n",
-           m->msg_avg_rtt_ms, m->msg_min_rtt_ms, m->msg_max_rtt_ms);
-    printf("  RFC 3550 Jitter:        %.2f ms\n", m->jitter_ms);
-    printf("  Avg Decrypt Duration:   %.1f µs\n",
-           m->decrypt_count > 0 ? (m->total_decrypt_us / (double)m->decrypt_count) : 0.0);
-    printf("────────────────────────────────────────────────────\n");
+    char ts[16];
+    now_hms(ts, sizeof(ts));
+
+    double elapsed_s = 0.0;
+    if (m->session_start_ns > 0)
+        elapsed_s = (double)(now_ns() - m->session_start_ns) / 1e9;
+
+    printf("\n╔══════════════════════════════════════════════╗\n");
+    printf("║     SESSION METRICS  [%s]          ║\n", ts);
+    printf("╠══════════════════════════════════════════════╣\n");
+
+    printf("║  HYBRID HANDSHAKE BREAKDOWN                  ║\n");
+    printf("║  ─────────────────────────────────────────── ║\n");
+    printf("║  Dual KEM keygen   : %8.2f µs             ║\n",
+           m->hs_kem_keygen_ms * 1000.0);
+    printf("║  Dual DSA keygen   : %8.2f µs             ║\n",
+           m->hs_dsa_keygen_ms * 1000.0);
+    printf("║  Dual KEM Encap    : %8.2f µs             ║\n", m->hs_encap_ms * 1000.0);
+    printf("║  Dual DSA Sign     : %8.2f µs             ║\n", m->hs_sign_ms * 1000.0);
+    printf("║  Dual DSA Verify   : %8.2f µs             ║\n", m->hs_verify_ms * 1000.0);
+    printf("║  Handshake Total   : %8.2f ms             ║\n", m->hs_total_ms);
+    printf("║                                              ║\n");
+
+    printf("║  AEAD (ChaCha20-Poly1305 + AAD)              ║\n");
+    printf("║  ─────────────────────────────────────────── ║\n");
+    if (m->encrypt_count > 0)
+        printf("║  Avg encrypt       : %8.2f µs             ║\n",
+               m->total_encrypt_us / (double)m->encrypt_count);
+    if (m->decrypt_count > 0)
+        printf("║  Avg decrypt       : %8.2f µs             ║\n",
+               m->total_decrypt_us / (double)m->decrypt_count);
+    printf("║                                              ║\n");
+
+    printf("║  NETWORK                                     ║\n");
+    printf("║  ─────────────────────────────────────────── ║\n");
+    printf("║  Messages sent     : %8llu                ║\n",
+           (unsigned long long)m->msg_count);
+    printf("║  Bytes sent        : %8llu B              ║\n",
+           (unsigned long long)m->bytes_sent);
+    printf("║  Bytes received    : %8llu B              ║\n",
+           (unsigned long long)m->bytes_recv);
+
+    if (elapsed_s > 0.01) {
+        double tx_kbps = (double)m->bytes_sent * 8.0 / elapsed_s / 1000.0;
+        double rx_kbps = (double)m->bytes_recv * 8.0 / elapsed_s / 1000.0;
+        printf("║  TX bandwidth      : %8.2f kbps           ║\n", tx_kbps);
+        printf("║  RX bandwidth      : %8.2f kbps           ║\n", rx_kbps);
+        printf("║  Session duration  : %8.3f s              ║\n", elapsed_s);
+    }
+
+    printf("║  Retransmissions   : %8llu                ║\n",
+           (unsigned long long)m->retransmissions);
+
+    if (m->decrypt_count > 1) {
+        double ia_min = (m->msg_min_rtt_ms >= 1e14) ? 0.0 : m->msg_min_rtt_ms;
+        printf("║  Inter-arrival avg : %7.3f ms              ║\n",
+               m->msg_avg_rtt_ms);
+        printf("║  Inter-arrival min : %7.3f ms              ║\n", ia_min);
+        printf("║  Inter-arrival max : %7.3f ms              ║\n",
+               m->msg_max_rtt_ms);
+        printf("║  Jitter (RFC3550)  : %7.3f ms              ║\n", m->jitter_ms);
+    } else {
+        printf("║  Jitter            :   N/A (need 2+ msgs)  ║\n");
+    }
+    printf("╚══════════════════════════════════════════════╝\n\n");
 }
 
 void metrics_update_rtt(metrics_t *m, uint64_t recv_ns) {

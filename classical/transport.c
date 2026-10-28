@@ -565,15 +565,14 @@ void metrics_print(const metrics_t *m) {
 
   printf("║  CLASSICAL IoT HANDSHAKE BREAKDOWN           ║\n");
   printf("║  ─────────────────────────────────────────── ║\n");
-  printf("║  X25519 keygen     : %8.3f ms             ║\n",
-         m->hs_kem_keygen_ms);
-  printf("║  Ed25519 keygen    : %8.3f ms             ║\n",
-         m->hs_dsa_keygen_ms);
-  printf("║  ECDH Shared Secret: %8.3f ms             ║\n", m->hs_encap_ms);
-  printf("║  Ed25519 Sign      : %8.3f ms             ║\n", m->hs_sign_ms);
-  printf("║  Ed25519 Verify    : %8.3f ms             ║\n", m->hs_verify_ms);
-  printf("║  Handshake Total   : %8.3f ms  %s        ║\n", m->hs_total_ms,
-         m->hs_total_ms <= 1.0 ? "✓ <1ms" : "⚠ >1ms");
+  printf("║  X25519 keygen     : %8.2f µs             ║\n",
+         m->hs_kem_keygen_ms * 1000.0);
+  printf("║  Ed25519 keygen    : %8.2f µs             ║\n",
+         m->hs_dsa_keygen_ms * 1000.0);
+  printf("║  ECDH Shared Secret: %8.2f µs             ║\n", m->hs_encap_ms * 1000.0);
+  printf("║  Ed25519 Sign      : %8.2f µs             ║\n", m->hs_sign_ms * 1000.0);
+  printf("║  Ed25519 Verify    : %8.2f µs             ║\n", m->hs_verify_ms * 1000.0);
+  printf("║  Handshake Total   : %8.2f ms             ║\n", m->hs_total_ms);
   printf("║                                              ║\n");
 
   printf("║  AEAD (AES-128-CCM + Canonical AAD)          ║\n");

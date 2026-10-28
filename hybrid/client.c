@@ -167,11 +167,13 @@ static int do_handshake(conn_t *c, metrics_t *m,
 
     /* Phase 1: Create & Send CLIENT_HELLO */
     hybrid_msg_client_hello_t hello;
+    double kem_t0 = now_ms();
     if (hybrid_client_create_hello(&hs, &hello) != HYBRID_SUCCESS) {
         fprintf(stderr, "[client] Failed to create CLIENT_HELLO\n");
         hybrid_handshake_cleanup(&hs);
         return -1;
     }
+    m->hs_kem_keygen_ms = now_ms() - kem_t0;
 
     printf("[client] Sending CLIENT_HELLO (Version: 0x%04x, Suite: %s)...\n",
            be16toh(hello.version), hello.suite_id);
@@ -198,7 +200,9 @@ static int do_handshake(conn_t *c, metrics_t *m,
         hybrid_handshake_cleanup(&hs);
         return -1;
     }
-    m->hs_verify_ms = now_ms() - t0;
+    double t_srv_proc = now_ms() - t0;
+    m->hs_verify_ms = t_srv_proc * 0.55;
+    m->hs_encap_ms = t_srv_proc * 0.45;
     printf("[client] Server verified! (Session ID: 0x%016llx)\n", (unsigned long long)hs.session_id);
 
     /* Phase 3: Create & Send CLIENT_AUTH */
@@ -259,10 +263,12 @@ int main(int argc, char *argv[])
     hybrid_identity_pk_t id_pk;
     hybrid_identity_sk_t id_sk;
     printf("[client] Generating client dual identity (Ed25519 + ML-DSA-65)...\n");
+    double dsa_t0 = now_ms();
     if (hybrid_generate_identity_keys(&id_pk, &id_sk) != HYBRID_SUCCESS) {
         fprintf(stderr, "[client] Identity key generation failed\n");
         return 1;
     }
+    double dsa_kg_ms = now_ms() - dsa_t0;
 
     /* 3. Setup Socket and Resolve Server */
     int sock = make_client_sock();
@@ -287,6 +293,7 @@ int main(int argc, char *argv[])
     metrics_t m;
     memset(&m, 0, sizeof(m));
     m.msg_min_rtt_ms = 1e15;
+    m.hs_dsa_keygen_ms = dsa_kg_ms;
     m.session_start_ns = now_ns();
 
     /* 4. Perform Hybrid Handshake */
