@@ -7,6 +7,9 @@
 **/client
 **/client_broadcast
 **/bench_pqc
+**/benchpqc
+bench_pqc
+benchpqc
 **/bench_crypto
 **/bench_hybrid
 **/bench_nclient

@@ -645,6 +645,69 @@ static inline void perf_ui_print_temp_summary(const perf_temp_monitor_t *t) {
     printf("└────────────────────────────────────────┴─────────────────────────────────────────┘\n");
 }
 
+static inline int perf_export_json(const char *filepath,
+                                  const char *suite_name,
+                                  const perf_op_comparison_t *ops,
+                                  size_t op_count,
+                                  const perf_mem_monitor_t *m,
+                                  const perf_cpu_monitor_t *c,
+                                  const perf_temp_monitor_t *t,
+                                  size_t total_ops) {
+    if (!filepath) return -1;
+    FILE *f = fopen(filepath, "w");
+    if (!f) return -1;
+
+    double avg_ram = (m->sample_count > 0) ? (m->sum_ram_mb / (double)m->sample_count) : m->initial_ram_mb;
+    double cycles_per_op = (c->cycles_available && total_ops > 0 && c->total_cycles > 0)
+                               ? ((double)c->total_cycles / (double)total_ops) : 0.0;
+    double avg_temp = (t->available && t->sample_count > 0) ? (t->sum_temp_c / (double)t->sample_count) : 0.0;
+    double delta_temp = (t->available) ? (t->final_temp_c - t->initial_temp_c) : 0.0;
+
+    fprintf(f, "{\n");
+    fprintf(f, "  \"suite_name\": \"%s\",\n", suite_name);
+    fprintf(f, "  \"operations\": [\n");
+    for (size_t i = 0; i < op_count; i++) {
+        fprintf(f, "    {\n");
+        fprintf(f, "      \"name\": \"%s\",\n", ops[i].op_name);
+        fprintf(f, "      \"mean_us\": %.3f,\n", ops[i].mean_us);
+        fprintf(f, "      \"p95_us\": %.3f,\n", ops[i].p95_us);
+        fprintf(f, "      \"throughput_ops_sec\": %.2f,\n", ops[i].throughput_ops_sec);
+        fprintf(f, "      \"size_bytes\": %zu,\n", ops[i].key_or_artifact_size);
+        fprintf(f, "      \"size_label\": \"%s\"\n", ops[i].size_label ? ops[i].size_label : "");
+        fprintf(f, "    }%s\n", (i + 1 < op_count) ? "," : "");
+    }
+    fprintf(f, "  ],\n");
+    fprintf(f, "  \"memory\": {\n");
+    fprintf(f, "    \"initial_ram_mb\": %.4f,\n", m->initial_ram_mb);
+    fprintf(f, "    \"avg_ram_mb\": %.4f,\n", avg_ram);
+    fprintf(f, "    \"peak_ram_mb\": %.4f,\n", m->peak_ram_mb);
+    fprintf(f, "    \"final_ram_mb\": %.4f,\n", m->final_ram_mb);
+    fprintf(f, "    \"ram_increase_mb\": %.4f,\n", m->ram_increase_mb);
+    fprintf(f, "    \"heap_mb\": %.4f,\n", m->heap_usage_mb);
+    fprintf(f, "    \"stack_kb\": %.2f\n", m->stack_usage_kb);
+    fprintf(f, "  },\n");
+    fprintf(f, "  \"cpu\": {\n");
+    fprintf(f, "    \"avg_cpu_pct\": %.2f,\n", c->avg_cpu_utilization_pct);
+    fprintf(f, "    \"peak_cpu_pct\": %.2f,\n", c->peak_cpu_utilization_pct);
+    fprintf(f, "    \"total_cpu_time_ms\": %.4f,\n", c->total_cpu_time_ms);
+    fprintf(f, "    \"cycles_per_op\": %.1f\n", cycles_per_op);
+    fprintf(f, "  },\n");
+    fprintf(f, "  \"temperature\": {\n");
+    fprintf(f, "    \"available\": %s,\n", t->available ? "true" : "false");
+    fprintf(f, "    \"sensor_path\": \"%s\",\n", t->available ? t->sensor_path : "");
+    fprintf(f, "    \"sensor_type\": \"%s\",\n", t->available ? t->sensor_type : "");
+    fprintf(f, "    \"initial_temp_c\": %.2f,\n", t->initial_temp_c);
+    fprintf(f, "    \"avg_temp_c\": %.2f,\n", avg_temp);
+    fprintf(f, "    \"min_temp_c\": %.2f,\n", t->min_temp_c);
+    fprintf(f, "    \"max_temp_c\": %.2f,\n", t->max_temp_c);
+    fprintf(f, "    \"final_temp_c\": %.2f,\n", t->final_temp_c);
+    fprintf(f, "    \"delta_temp_c\": %.2f\n", delta_temp);
+    fprintf(f, "  }\n");
+    fprintf(f, "}\n");
+    fclose(f);
+    return 0;
+}
+
 #ifdef __cplusplus
 }
 #endif

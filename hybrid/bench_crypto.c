@@ -125,10 +125,26 @@ static void print_stat_row(const char *name, const detailed_stats_t *st) {
 }
 
 int main(int argc, char *argv[]) {
-    int rounds = (argc > 1) ? atoi(argv[1]) : BENCH_ROUNDS_DEFAULT;
-    int runs = (argc > 2) ? atoi(argv[2]) : 5;
-    if (rounds < 10) rounds = BENCH_ROUNDS_DEFAULT;
-    if (runs < 1) runs = 5;
+    int rounds = BENCH_ROUNDS_DEFAULT;
+    int runs = 5;
+    const char *export_path = NULL;
+    int pos_arg = 0;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--export") == 0 && i + 1 < argc) {
+            export_path = argv[++i];
+        } else if (argv[i][0] != '-') {
+            if (pos_arg == 0) {
+                rounds = atoi(argv[i]);
+                if (rounds <= 0) rounds = BENCH_ROUNDS_DEFAULT;
+                pos_arg++;
+            } else if (pos_arg == 1) {
+                runs = atoi(argv[i]);
+                if (runs <= 0) runs = 5;
+                pos_arg++;
+            }
+        }
+    }
 
     if (hybrid_crypto_init() != HYBRID_SUCCESS) {
         fprintf(stderr, "Crypto init failed\n");
@@ -469,6 +485,11 @@ int main(int argc, char *argv[]) {
         {"9. Full 4-Way Handshake Simulation", stat_hs_full.mean, stat_hs_full.p95, stat_hs_full.throughput_ops_sec, 13090, "net"}
     };
     perf_ui_print_unified_comparison_table("QRYPTONEX Hybrid Suite (X25519+MLKEM768, Ed25519+MLDSA65)", comparison_ops, 9);
+
+    if (export_path) {
+        perf_export_json(export_path, "Hybrid Cryptographic Suite (X25519+MLKEM768, Ed25519+MLDSA65)",
+                         comparison_ops, 9, &session.mem, &session.cpu, &session.temp, (size_t)rounds * (size_t)runs * 6);
+    }
 
     free(s_kex_gen.samples); free(s_kex_enc.samples); free(s_kex_dec.samples);
     free(s_sig_gen.samples); free(s_sig_sgn.samples); free(s_sig_ver.samples);

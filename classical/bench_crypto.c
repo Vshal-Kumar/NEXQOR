@@ -397,13 +397,23 @@ static void print_detailed_row(const char *name, const detailed_stats_t *st) {
 int main(int argc, char *argv[]) {
   int rounds = BENCH_ROUNDS_DEFAULT;
   int runs = 5;
-  if (argc > 1) {
-    rounds = atoi(argv[1]);
-    if (rounds <= 0) rounds = BENCH_ROUNDS_DEFAULT;
-  }
-  if (argc > 2) {
-    runs = atoi(argv[2]);
-    if (runs <= 0) runs = 5;
+  const char *export_path = NULL;
+  int pos_arg = 0;
+
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--export") == 0 && i + 1 < argc) {
+      export_path = argv[++i];
+    } else if (argv[i][0] != '-') {
+      if (pos_arg == 0) {
+        rounds = atoi(argv[i]);
+        if (rounds <= 0) rounds = BENCH_ROUNDS_DEFAULT;
+        pos_arg++;
+      } else if (pos_arg == 1) {
+        runs = atoi(argv[i]);
+        if (runs <= 0) runs = 5;
+        pos_arg++;
+      }
+    }
   }
 
   /* Warmup OpenSSL algorithms */
@@ -607,6 +617,11 @@ int main(int argc, char *argv[]) {
     {"9. Full 4-Way Handshake Simulation", stat_hs_full.mean, stat_hs_full.p95, stat_hs_full.throughput_ops_sec, 296, "net"}
   };
   perf_ui_print_unified_comparison_table("QRYPTONEX Classical IoT Suite (X25519 + Ed25519 + AES-128-CCM)", comparison_ops, 9);
+
+  if (export_path) {
+    perf_export_json(export_path, "Classical IoT Suite (X25519 + Ed25519 + AES-128-CCM)",
+                     comparison_ops, 9, &session.mem, &session.cpu, &session.temp, (size_t)rounds * (size_t)runs * 5);
+  }
 
   /* Clean up */
   free(s_x25519_key.samples);

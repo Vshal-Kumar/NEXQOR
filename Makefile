@@ -67,12 +67,13 @@ endif
         classical-arm64 classical-arm32 classical-x86_64 \
         hybrid-arm64 hybrid-arm32 hybrid-x86_64 \
         pqc-arm64 pqc-arm32 pqc-x86_64 \
+        bench bench_pqc benchpqc \
         detect info help banner
 
-all: banner classical hybrid pqc
+all: banner classical hybrid pqc bench_pqc
 	@echo ""
 	@echo "╔══════════════════════════════════════════════════════════════════════════════════╗"
-	@echo "║       SUCCESS: All 3 Suites Built for Target: $(TARGET_DESC)"
+	@echo "║       SUCCESS: All 3 Suites & bench_pqc Built for Target: $(TARGET_DESC)"
 	@echo "╚══════════════════════════════════════════════════════════════════════════════════╝"
 
 banner:
@@ -136,6 +137,15 @@ pqc-arm64:
 pqc-arm32:
 	$(MAKE) -C pqc -f Makefile.arm32 all
 
+# ── Unified Comparative Benchmarking ─────────────────────────────────
+bench_pqc benchpqc: bench_pqc.c
+	$(CC) -O3 -Wall -Wextra -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -o bench_pqc bench_pqc.c -lm
+	@ln -sf bench_pqc benchpqc
+	@echo "Built: bench_pqc & benchpqc (Unified Master Comparative Benchmark Runner)"
+
+bench: bench_pqc
+	./bench_pqc
+
 # ── Testing Targets ──────────────────────────────────────────────────
 test: test-classical test-hybrid test-pqc
 	@echo ""
@@ -158,6 +168,7 @@ clean:
 	$(MAKE) -C classical -f $(TARGET_MAKEFILE) clean
 	$(MAKE) -C hybrid -f $(TARGET_MAKEFILE) clean
 	$(MAKE) -C pqc -f $(TARGET_MAKEFILE) clean
+	rm -f bench_pqc benchpqc /tmp/pqc_bench_*.json
 
 clean-arm64:
 	@echo "==> Cleaning ARM64 artifacts across all suites..."
@@ -176,12 +187,14 @@ clean-x86_64:
 	$(MAKE) -C classical -f Makefile clean
 	$(MAKE) -C hybrid -f Makefile clean
 	$(MAKE) -C pqc -f Makefile clean
+	rm -f bench_pqc benchpqc /tmp/pqc_bench_*.json
 
 clean-all:
 	@echo "==> Deep cleaning all suites across all architectures (x86_64, arm64, arm32)..."
 	$(MAKE) -C classical clean-all
 	$(MAKE) -C hybrid clean-all
 	$(MAKE) -C pqc clean-all
+	rm -f bench_pqc benchpqc /tmp/pqc_bench_*.json
 	@echo "All build artifacts, objects, libraries, and binaries removed."
 
 # ── Information & Help ───────────────────────────────────────────────
@@ -228,6 +241,10 @@ help:
 	@echo "  make test-classical - Run classical 22-test automated regression suite"
 	@echo "  make test-hybrid    - Run hybrid 7-suite automated regression suite"
 	@echo "  make test-pqc       - Run PQC 8-test security and regression suite"
+	@echo ""
+	@echo "Benchmarking Targets:"
+	@echo "  make bench          - Run unified comparative benchmark runner (bench_pqc)"
+	@echo "  make bench_pqc      - Build master benchmark runner (bench_pqc & benchpqc)"
 	@echo ""
 	@echo "Clean Targets (Device-Aware & Multi-Arch):"
 	@echo "  make clean          - Clean build artifacts for detected device architecture"

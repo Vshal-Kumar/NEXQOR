@@ -339,7 +339,42 @@ In separate terminals, start clients:
 
 ## Benchmarking & Empirical Evaluation
 
-### Microbenchmark Engine (N Runs)
+### Unified Comparative Benchmark Program (`bench_pqc` / `benchpqc`)
+
+A master comparative benchmarking program is located in the root folder: **`bench_pqc`** (aliased as **`benchpqc`**). Running this single executable benchmarks **all three cryptographic suites** under identical environmental conditions and generates an empirical side-by-side evaluation across six master analytical tables.
+
+```bash
+# Execute master comparison (default: 50 rounds, 3 runs):
+./benchpqc
+# or
+./bench_pqc
+# or via Makefile
+make bench
+
+# Specify custom rounds per run and number of runs:
+./benchpqc 100 5
+
+# Verbose mode (displays intermediate sub-suite runs):
+./benchpqc 50 3 -v
+```
+
+#### Comprehensive Evaluation Tables Generated:
+1. **Table I: Cryptographic Operations Latency Comparison (`µs`)**  
+   Measures and compares execution latencies across all 9 primitive operations (Keygen, Encaps/Decaps, Sign/Verify, Symmetric Encrypt/Decrypt, Session Key Derivation, Handshake Transcript Hashing). Highlights the fastest approach and speedup factor for each operation.
+2. **Table II: Cryptographic Operations Throughput Comparison (`ops/s`)**  
+   Evaluates sustainable computational throughput and operations per second across identical CPU cores.
+3. **Table III: Cryptographic Artifact & Network Wire Overhead (`bytes`)**  
+   Quantifies public keys, private keys, ciphertexts, signatures, and complete 4-way mutual authentication handshake sizes, calculating exact network bandwidth multiplier overhead.
+4. **Table IV: Hardware Resources & Environmental Telemetry**  
+   Reads real Linux kernel statistics and hardware sensors: Process Resident Set Size (RSS), Heap allocation via `mallinfo2`, Process Stack usage, CPU core utilization, total CPU time, CPU cycles/op, and system thermal sensor temperatures (`°C`).
+5. **Table V: Security Posture, Cryptanalysis & NIST Standardization Matrix**  
+   Contrasts post-quantum resilience, classic vs quantum security bits, Harvest-Now-Decrypt-Later (HNDL) risk, and NIST FIPS 203/204 standardization status.
+6. **Table VI: Architectural Synthesis & Trade-Off Verdict**  
+   Provides system engineering conclusions, compute-vs-wire trade-off analysis, and targeted deployment recommendations (constrained IoT vs gateway hub vs secure cloud).
+
+---
+
+### Per-Suite Microbenchmark Engine (N Runs)
 
 Microbenchmarks measure cryptographic operations, system memory, CPU utilization, and real-time sensor temperature across $N$ runs:
 

@@ -261,13 +261,23 @@ static void print_stat_row(const char *op, const detailed_stats_t *d,
 int main(int argc, char *argv[]) {
   int rounds = BENCH_ROUNDS_DEFAULT;
   int runs = 5;
-  if (argc > 1) {
-    rounds = atoi(argv[1]);
-    if (rounds < 10 || rounds > 100000) rounds = BENCH_ROUNDS_DEFAULT;
-  }
-  if (argc > 2) {
-    runs = atoi(argv[2]);
-    if (runs < 1 || runs > 1000) runs = 5;
+  const char *export_path = NULL;
+  int pos_arg = 0;
+
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--export") == 0 && i + 1 < argc) {
+      export_path = argv[++i];
+    } else if (argv[i][0] != '-') {
+      if (pos_arg == 0) {
+        rounds = atoi(argv[i]);
+        if (rounds < 10 || rounds > 100000) rounds = BENCH_ROUNDS_DEFAULT;
+        pos_arg++;
+      } else if (pos_arg == 1) {
+        runs = atoi(argv[i]);
+        if (runs < 1 || runs > 1000) runs = 5;
+        pos_arg++;
+      }
+    }
   }
 
   printf("\n[Warmup] Initializing and seeding cryptographic modules...\n");
@@ -572,6 +582,11 @@ int main(int argc, char *argv[]) {
     {"9. Full 4-Way Handshake Simulation", stat_hs.mean, stat_hs.p95, stat_hs.throughput_ops_sec, 12834, "net"}
   };
   perf_ui_print_unified_comparison_table("QRYPTONEX Pure Post-Quantum Suite (ML-KEM-768 + ML-DSA-65)", comparison_ops, 9);
+
+  if (export_path) {
+    perf_export_json(export_path, "Pure Post-Quantum Suite (ML-KEM-768 + ML-DSA-65)",
+                     comparison_ops, 9, &session.mem, &session.cpu, &session.temp, (size_t)rounds * (size_t)runs * 6);
+  }
 
   // Free allocated arrays
   free(kem_keygen.samples);
