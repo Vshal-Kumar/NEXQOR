@@ -31,8 +31,22 @@
 #   Terminal 3:  make run-tx
 #   Benchmark:   make run-bench
 
+HOST_ARCH := $(shell uname -m)
+
+ifneq ($(filter aarch64 arm64,$(HOST_ARCH)),)
+all:
+	@$(MAKE) -f Makefile.arm64 all
+%:
+	@$(MAKE) -f Makefile.arm64 $@
+else ifneq ($(filter arm% aarch32%,$(HOST_ARCH)),)
+all:
+	@$(MAKE) -f Makefile.arm32 all
+%:
+	@$(MAKE) -f Makefile.arm32 $@
+else
+
 CC      ?= gcc
-ARCH    ?= $(shell uname -m)
+ARCH    ?= $(HOST_ARCH)
 LIBOQS  ?= ../liboqs/build
 
 LIBURING_LOCAL ?= ../liburing_local
@@ -183,3 +197,5 @@ clean-arm32:
 	$(MAKE) -f Makefile.arm32 clean
 
 clean-all: clean clean-arm64 clean-arm32
+
+endif

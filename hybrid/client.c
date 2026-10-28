@@ -330,14 +330,24 @@ int main(int argc, char *argv[])
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
             line[--len] = '\0';
         }
-        if (len == 0) continue;
-        if (strcmp(line, "exit") == 0 || strcmp(line, "quit") == 0) break;
+        if (strcmp(line, "exit") == 0 || strcmp(line, "/exit") == 0 ||
+            strcmp(line, "quit") == 0 || strcmp(line, "/quit") == 0) {
+            break;
+        }
+
+        if (strcmp(line, "/stats") == 0) {
+            metrics_print(&m);
+            printf("\033[1;35m> \033[0m");
+            fflush(stdout);
+            continue;
+        }
 
         if (data_send(&c, &m, (const uint8_t *)line, (uint32_t)len) != 0) {
             printf("\033[1;31m[client] Send failed / ACK timeout\033[0m\n");
         }
     }
 
+    signal(SIGINT, SIG_IGN);
     rxa.stop = 1;
     pthread_join(rxt, NULL);
 

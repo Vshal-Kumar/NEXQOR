@@ -489,6 +489,7 @@ int main(int argc, char *argv[]) {
   pthread_join(rx_tid, NULL);
 
   pkt_send(&c, PKT_DISCONNECT, NULL, 0);
+  metrics_print(&metrics);
   close(sock);
   conn_destroy(&c);
 

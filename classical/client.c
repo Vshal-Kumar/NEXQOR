@@ -397,7 +397,8 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        if (strcmp(line, "/quit") == 0 || strcmp(line, "/exit") == 0) {
+        if (strcmp(line, "exit") == 0 || strcmp(line, "/exit") == 0 ||
+            strcmp(line, "quit") == 0 || strcmp(line, "/quit") == 0) {
             break;
         }
 
@@ -410,6 +411,7 @@ int main(int argc, char *argv[])
         fflush(stdout);
     }
 
+    signal(SIGINT, SIG_IGN);
     rx_args.stop = 1;
     pthread_cancel(rx_tid);
     pthread_join(rx_tid, NULL);
