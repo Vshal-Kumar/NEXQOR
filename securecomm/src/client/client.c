@@ -435,47 +435,85 @@ int securecomm_client_run_interactive(securecomm_client_t *client) {
     if (!client || !client->connected) return SECURECOMM_ERR_INVALID_ARG;
 
     printf("\n╔═══════════════════════════════════════════════════════════════╗\n");
-    printf("║             SECURECOMM INTERACTIVE SECURE CHAT                ║\n");
+    printf("║             NEXQOR INTERACTIVE SECURE CHAT                    ║\n");
     printf("║ Type messages to send encrypted over UDP. Type /quit to exit.  ║\n");
+    printf("║ Real-Time 2-Way: Inbound server commands display instantly.   ║\n");
     printf("║ Commands: /status, /metrics, /ping, /quit                     ║\n");
     printf("╚═══════════════════════════════════════════════════════════════╝\n\n");
 
+    struct pollfd pfds[2];
+    pfds[0].fd = STDIN_FILENO;
+    pfds[0].events = POLLIN;
+    pfds[1].fd = client->sock_fd;
+    pfds[1].events = POLLIN;
+
+    printf("securecomm> ");
+    fflush(stdout);
+
     char line[1024];
+    uint8_t rx_buf[RX_BUF_SIZE];
+
     while (client->connected) {
-        printf("securecomm> ");
-        fflush(stdout);
-
-        if (!fgets(line, sizeof(line), stdin)) break;
-
-        size_t slen = strlen(line);
-        if (slen > 0 && line[slen - 1] == '\n') {
-            line[slen - 1] = '\0';
-            slen--;
-        }
-        if (slen == 0) continue;
-
-        if (strcmp(line, "/quit") == 0 || strcmp(line, "/exit") == 0) {
+        int prc = poll(pfds, 2, 50);
+        if (prc < 0) {
+            if (errno == EINTR) continue;
             break;
-        } else if (strcmp(line, "/status") == 0 || strcmp(line, "/metrics") == 0) {
-            securecomm_metrics_print(&client->metrics, stdout);
-            continue;
-        } else if (strcmp(line, "/ping") == 0) {
-            wire_hdr_t ping_hdr;
-            ping_hdr.seq = client->tx_seq++;
-            ping_hdr.type = PKT_PING;
-            ping_hdr.len = 0;
-            ping_hdr.session_id = client->session_id;
-            sendto(client->sock_fd, &ping_hdr, sizeof(wire_hdr_t), 0,
-                   (struct sockaddr *)&client->server_addr, sizeof(client->server_addr));
-            printf("[Sent PING to server]\n");
-            continue;
         }
 
-        int rc = securecomm_client_send(client, (const uint8_t *)line, strlen(line));
-        if (rc == SECURECOMM_SUCCESS) {
-            printf("[Sent %zu bytes encrypted]\n", strlen(line));
-        } else {
-            printf("[Error sending message: %s]\n", securecomm_strerror(rc));
+        /* 1. Inbound messages from server */
+        if (pfds[1].revents & POLLIN) {
+            size_t rx_len = 0;
+            int r_rc = securecomm_client_recv(client, rx_buf, sizeof(rx_buf) - 1, &rx_len, 5);
+            if (r_rc == SECURECOMM_SUCCESS && rx_len > 0) {
+                rx_buf[rx_len] = '\0';
+                printf("\r\033[K[SERVER → YOU] %s\nsecurecomm> ", (char *)rx_buf);
+                fflush(stdout);
+            }
+        }
+
+        /* 2. Outgoing user input from terminal */
+        if (pfds[0].revents & POLLIN) {
+            if (!fgets(line, sizeof(line), stdin)) break;
+
+            size_t slen = strlen(line);
+            if (slen > 0 && line[slen - 1] == '\n') {
+                line[slen - 1] = '\0';
+                slen--;
+            }
+            if (slen == 0) {
+                printf("securecomm> ");
+                fflush(stdout);
+                continue;
+            }
+
+            if (strcmp(line, "/quit") == 0 || strcmp(line, "/exit") == 0) {
+                break;
+            } else if (strcmp(line, "/status") == 0 || strcmp(line, "/metrics") == 0) {
+                securecomm_metrics_print(&client->metrics, stdout);
+                printf("securecomm> ");
+                fflush(stdout);
+                continue;
+            } else if (strcmp(line, "/ping") == 0) {
+                wire_hdr_t ping_hdr;
+                ping_hdr.seq = client->tx_seq++;
+                ping_hdr.type = PKT_PING;
+                ping_hdr.len = 0;
+                ping_hdr.session_id = client->session_id;
+                sendto(client->sock_fd, &ping_hdr, sizeof(wire_hdr_t), 0,
+                       (struct sockaddr *)&client->server_addr, sizeof(client->server_addr));
+                printf("[Sent PING to server]\nsecurecomm> ");
+                fflush(stdout);
+                continue;
+            }
+
+            int rc = securecomm_client_send(client, (const uint8_t *)line, strlen(line));
+            if (rc == SECURECOMM_SUCCESS) {
+                printf("[YOU → SERVER] %s  (Encrypted: %zu bytes)\n", line, strlen(line) + 28);
+            } else {
+                printf("[Error sending message: %s]\n", securecomm_strerror(rc));
+            }
+            printf("securecomm> ");
+            fflush(stdout);
         }
     }
 

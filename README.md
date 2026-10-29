@@ -39,27 +39,42 @@ Each package installs:
 
 #### Quickstart: Server & Client Setup (Default: `100.113.83.56:9877`)
 
+> **IMPORTANT REQUIREMENT**: After installing the `.deb` package or building from source, **run `nexqor setup` once** on each machine. The setup wizard benchmarks your CPU, generates your unique cryptographic keypair with `0600` permissions in `~/.config/securecomm/`, and registers trusted endpoints.
+
 **1. On Server Machine (`100.113.83.56`):**
 ```bash
-# Install x86 package:
+# Install package:
 sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
 
-# Start the server (binds 0.0.0.0:9877, auto-provisions keys):
+# Run initial setup (select Role 1: Server, default port 9877):
+nexqor setup
+
+# Start the server backend:
 nexqor server start
+
+# Or launch with the GTK4 Pure C NOC Dashboard:
+./run_ui.sh
 ```
 
-**2. On Client Machine (Second PC, Laptop, or Raspberry Pi):**
+**2. On Client Machine (Second PC, Kali Linux, or Raspberry Pi):**
 ```bash
 # Install package for your architecture:
-sudo dpkg -i nexqor-x86.deb     # for Intel/AMD laptops
+sudo dpkg -i nexqor-x86.deb     # for Intel/AMD laptops & Kali VM
 sudo dpkg -i nexqor-arm64.deb   # for Raspberry Pi 4/5
 
-# Connect immediately (automatically connects to 100.113.83.56:9877):
+# Run initial setup (select Role 2: Client, target server 100.113.83.56:9877):
+nexqor setup
+
+# Connect immediately in real-time interactive chat:
 nexqor client connect
 
 # Or send a single message from terminal:
 nexqor client connect --msg "Hello Quantum Server!"
 ```
+
+**Real-Time Two-Way Chat & Dashboard Synchronization:**
+- **Client Terminal**: Incoming server commands display immediately (`[SERVER → YOU] <msg>`), while user input is logged with encryption details (`[YOU → SERVER] <msg> (Encrypted: X bytes)`).
+- **GTK4 Dashboard**: Displays `CONNECTED CLIENTS (ACTIVE)` with IP, port, session ID, and handshake latency in real time. When a client disconnects, it gracefully moves to `DISCONNECTED SESSIONS (RECENT)` at the bottom of the list.
 
 *Note on Key Permissions*: Cryptographic identity keys are automatically stored in `~/.config/securecomm/` with strict `0600` permissions for unprivileged users, completely preventing any "permission denied" errors.
 

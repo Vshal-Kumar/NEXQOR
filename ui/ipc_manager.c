@@ -196,57 +196,62 @@ static void *rx_worker_thread(void *arg) {
         }
 
         struct pollfd pfd = { .fd = mgr->rx_fd, .events = POLLIN };
-        int prc = poll(&pfd, 1, 300);
+        int prc = poll(&pfd, 1, 20);
         if (prc <= 0) continue;
 
-        ipc_hdr_t hdr;
-        ssize_t n = ipc_recv_frame(mgr->rx_fd, &hdr, buf, sizeof(buf) - 1);
-        if (n < 0) {
-            close(mgr->rx_fd);
-            mgr->rx_fd = -1;
-            trigger_status_update(mgr);
-            continue;
-        }
-
-        if (hdr.type == IPC_METRICS_RX && n >= (ssize_t)sizeof(ipc_metrics_rx_t)) {
-            ipc_metrics_rx_t *mr = (ipc_metrics_rx_t *)buf;
-            if (mr->client_id < MAX_UI_CLIENTS) {
-                last_m[mr->client_id] = *mr;
-            }
-        } else if (hdr.type == IPC_MSG_RX && n >= (ssize_t)sizeof(ipc_rx_payload_t)) {
-            ipc_rx_payload_t *info = (ipc_rx_payload_t *)buf;
-            const char *text = (const char *)(buf + sizeof(ipc_rx_payload_t));
-            uint32_t text_len = info->msg_len;
-            if (text_len > (uint32_t)(n - sizeof(ipc_rx_payload_t))) {
-                text_len = (uint32_t)(n - sizeof(ipc_rx_payload_t));
+        while (1) {
+            ipc_hdr_t hdr;
+            ssize_t n = ipc_recv_frame(mgr->rx_fd, &hdr, buf, sizeof(buf) - 1);
+            if (n < 0) {
+                close(mgr->rx_fd);
+                mgr->rx_fd = -1;
+                trigger_status_update(mgr);
+                break;
             }
 
-            rx_msg_event_t *ev = g_new0(rx_msg_event_t, 1);
-            ev->mgr = mgr;
-            get_now_hms(ev->timestamp, sizeof(ev->timestamp));
-            ev->client_id = info->client_id;
-            snprintf(ev->ip_str, sizeof(ev->ip_str), "%.15s", info->ip_str);
-            ev->port = info->port;
-            ev->session_id = info->session_id;
-            ev->msg_len = text_len;
-            ev->msg_text = malloc(text_len + 1);
-            if (ev->msg_text) {
-                memcpy(ev->msg_text, text, text_len);
-                ev->msg_text[text_len] = '\0';
+            if (hdr.type == IPC_METRICS_RX && n >= (ssize_t)sizeof(ipc_metrics_rx_t)) {
+                ipc_metrics_rx_t *mr = (ipc_metrics_rx_t *)buf;
+                if (mr->client_id < MAX_UI_CLIENTS) {
+                    last_m[mr->client_id] = *mr;
+                }
+            } else if (hdr.type == IPC_MSG_RX && n >= (ssize_t)sizeof(ipc_rx_payload_t)) {
+                ipc_rx_payload_t *info = (ipc_rx_payload_t *)buf;
+                const char *text = (const char *)(buf + sizeof(ipc_rx_payload_t));
+                uint32_t text_len = info->msg_len;
+                if (text_len > (uint32_t)(n - sizeof(ipc_rx_payload_t))) {
+                    text_len = (uint32_t)(n - sizeof(ipc_rx_payload_t));
+                }
+
+                rx_msg_event_t *ev = g_new0(rx_msg_event_t, 1);
+                ev->mgr = mgr;
+                get_now_hms(ev->timestamp, sizeof(ev->timestamp));
+                ev->client_id = info->client_id;
+                snprintf(ev->ip_str, sizeof(ev->ip_str), "%.15s", info->ip_str);
+                ev->port = info->port;
+                ev->session_id = info->session_id;
+                ev->msg_len = text_len;
+                ev->msg_text = malloc(text_len + 1);
+                if (ev->msg_text) {
+                    memcpy(ev->msg_text, text, text_len);
+                    ev->msg_text[text_len] = '\0';
+                }
+
+                static uint32_t fallback_rx_seq[MAX_UI_CLIENTS];
+                if (info->client_id < MAX_UI_CLIENTS && last_m[info->client_id].pkt_seq > 0) {
+                    ev->decrypt_us = last_m[info->client_id].decrypt_us;
+                    ev->pkt_seq = last_m[info->client_id].pkt_seq;
+                    fallback_rx_seq[info->client_id] = last_m[info->client_id].pkt_seq;
+                } else {
+                    ev->decrypt_us = (info->client_id < MAX_UI_CLIENTS) ? last_m[info->client_id].decrypt_us : 0.0f;
+                    uint16_t cid = (info->client_id < MAX_UI_CLIENTS) ? info->client_id : 0;
+                    ev->pkt_seq = ++fallback_rx_seq[cid];
+                }
+
+                g_idle_add(dispatch_rx_msg, ev);
             }
 
-            static uint32_t fallback_rx_seq[MAX_UI_CLIENTS];
-            if (info->client_id < MAX_UI_CLIENTS && last_m[info->client_id].pkt_seq > 0) {
-                ev->decrypt_us = last_m[info->client_id].decrypt_us;
-                ev->pkt_seq = last_m[info->client_id].pkt_seq;
-                fallback_rx_seq[info->client_id] = last_m[info->client_id].pkt_seq;
-            } else {
-                ev->decrypt_us = (info->client_id < MAX_UI_CLIENTS) ? last_m[info->client_id].decrypt_us : 0.0f;
-                uint16_t cid = (info->client_id < MAX_UI_CLIENTS) ? info->client_id : 0;
-                ev->pkt_seq = ++fallback_rx_seq[cid];
-            }
-
-            g_idle_add(dispatch_rx_msg, ev);
+            struct pollfd chk = { .fd = mgr->rx_fd, .events = POLLIN };
+            if (poll(&chk, 1, 0) <= 0) break;
         }
     }
     return NULL;
@@ -264,56 +269,61 @@ static void *tx_worker_thread(void *arg) {
             if (mgr->tx_fd >= 0) {
                 trigger_status_update(mgr);
             } else {
-                g_usleep(500000);
+                g_usleep(200000);
                 continue;
             }
         }
 
         struct pollfd pfd = { .fd = mgr->tx_fd, .events = POLLIN };
-        int prc = poll(&pfd, 1, 300);
+        int prc = poll(&pfd, 1, 20);
         if (prc <= 0) continue;
 
-        ipc_hdr_t hdr;
-        ssize_t n = ipc_recv_frame(mgr->tx_fd, &hdr, buf, sizeof(buf));
-        if (n < 0) {
-            pthread_mutex_lock(&mgr->tx_mu);
-            close(mgr->tx_fd);
-            mgr->tx_fd = -1;
-            pthread_mutex_unlock(&mgr->tx_mu);
-            trigger_status_update(mgr);
-            continue;
-        }
-
-        if (hdr.type == IPC_CLIENT_LIST && n >= (ssize_t)sizeof(uint16_t)) {
-            uint16_t count;
-            memcpy(&count, buf, sizeof(count));
-            if (count > MAX_UI_CLIENTS) count = MAX_UI_CLIENTS;
-
-            size_t expected = sizeof(uint16_t) + (size_t)count * sizeof(ipc_client_entry_t);
-            if ((size_t)n >= expected) {
-                client_list_event_t *ev = g_new0(client_list_event_t, 1);
-                ev->mgr = mgr;
-                ev->count = (int)count;
-                if (count > 0) {
-                    ev->clients = malloc((size_t)count * sizeof(ipc_client_entry_t));
-                    if (ev->clients) {
-                        memcpy(ev->clients, buf + sizeof(uint16_t),
-                               (size_t)count * sizeof(ipc_client_entry_t));
-                    }
-                }
-                g_idle_add(dispatch_client_list, ev);
+        while (1) {
+            ipc_hdr_t hdr;
+            ssize_t n = ipc_recv_frame(mgr->tx_fd, &hdr, buf, sizeof(buf));
+            if (n < 0) {
+                pthread_mutex_lock(&mgr->tx_mu);
+                close(mgr->tx_fd);
+                mgr->tx_fd = -1;
+                pthread_mutex_unlock(&mgr->tx_mu);
+                trigger_status_update(mgr);
+                break;
             }
-        } else if (hdr.type == IPC_METRICS_TX && n >= (ssize_t)sizeof(ipc_metrics_tx_t)) {
-            ipc_metrics_tx_t *mt = (ipc_metrics_tx_t *)buf;
-            tx_metrics_event_t *ev = g_new0(tx_metrics_event_t, 1);
-            ev->mgr = mgr;
-            ev->client_id = mt->client_id;
-            ev->encrypt_us = mt->encrypt_us;
-            ev->avg_encrypt_us = mt->avg_encrypt_us;
-            ev->bytes_sent = mt->bytes_sent;
-            ev->msg_count = mt->msg_count;
-            ev->retransmissions = mt->retransmissions;
-            g_idle_add(dispatch_tx_metrics, ev);
+
+            if (hdr.type == IPC_CLIENT_LIST && n >= (ssize_t)sizeof(uint16_t)) {
+                uint16_t count;
+                memcpy(&count, buf, sizeof(count));
+                if (count > MAX_UI_CLIENTS) count = MAX_UI_CLIENTS;
+
+                size_t expected = sizeof(uint16_t) + (size_t)count * sizeof(ipc_client_entry_t);
+                if ((size_t)n >= expected) {
+                    client_list_event_t *ev = g_new0(client_list_event_t, 1);
+                    ev->mgr = mgr;
+                    ev->count = (int)count;
+                    if (count > 0) {
+                        ev->clients = malloc((size_t)count * sizeof(ipc_client_entry_t));
+                        if (ev->clients) {
+                            memcpy(ev->clients, buf + sizeof(uint16_t),
+                                   (size_t)count * sizeof(ipc_client_entry_t));
+                        }
+                    }
+                    g_idle_add(dispatch_client_list, ev);
+                }
+            } else if (hdr.type == IPC_METRICS_TX && n >= (ssize_t)sizeof(ipc_metrics_tx_t)) {
+                ipc_metrics_tx_t *mt = (ipc_metrics_tx_t *)buf;
+                tx_metrics_event_t *ev = g_new0(tx_metrics_event_t, 1);
+                ev->mgr = mgr;
+                ev->client_id = mt->client_id;
+                ev->encrypt_us = mt->encrypt_us;
+                ev->avg_encrypt_us = mt->avg_encrypt_us;
+                ev->bytes_sent = mt->bytes_sent;
+                ev->msg_count = mt->msg_count;
+                ev->retransmissions = mt->retransmissions;
+                g_idle_add(dispatch_tx_metrics, ev);
+            }
+
+            struct pollfd chk = { .fd = mgr->tx_fd, .events = POLLIN };
+            if (poll(&chk, 1, 0) <= 0) break;
         }
     }
     return NULL;

@@ -163,7 +163,7 @@ EOF_LAUNCHER
     ln -sf securecomm "${STAGE_DIR}/usr/bin/nexqor"
     ln -sf securecomm "${STAGE_DIR}/usr/bin/${INTERNAL_PKG}"
 
-    install -m 0644 "${PKG_ROOT}/config/securecomm.example.json" "${STAGE_DIR}/etc/securecomm/securecomm.json"
+    install -m 0644 "${PKG_ROOT}/config/securecomm.example.json" "${STAGE_DIR}/etc/securecomm/securecomm.example.json"
     install -m 0644 "${PKG_ROOT}/packaging/systemd/securecomm.service" "${STAGE_DIR}/usr/lib/systemd/system/securecomm.service"
     ln -sf securecomm.service "${STAGE_DIR}/usr/lib/systemd/system/nexqor.service"
     install -m 0644 "${PKG_ROOT}/README.md" "${STAGE_DIR}/usr/share/doc/${INTERNAL_PKG}/README.md"
@@ -183,10 +183,6 @@ Description: QRYPTONEX NEXQOR Multi-Suite Secure Communication Framework (${INTE
  NEXQOR is a production C-based framework supporting Classical (X25519,
  Ed25519, AES-CCM), Pure Post-Quantum (ML-KEM-768, ML-DSA-65), Hybrid, and
  deterministic Adaptive profile selection on Linux (${CPU_DESC}).
-EOF
-
-    cat <<EOF > "${STAGE_DIR}/DEBIAN/conffiles"
-/etc/securecomm/securecomm.json
 EOF
 
     cat <<'EOF' > "${STAGE_DIR}/DEBIAN/postinst"

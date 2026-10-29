@@ -9,18 +9,38 @@ SecureComm is a production-grade, standard C11 secure communication framework de
 
 Default Network Setup: **Server listens on `0.0.0.0:9877` | Target Server Address: `100.113.83.56:9877` (UDP)**
 
-### 🖥️ Server Machine (Laptop / PC at `100.113.83.56`)
+> **CRITICAL REQUIREMENT**: After installing the package or building from source, **you MUST run `nexqor setup` once** on each node before starting or connecting. The setup wizard benchmarks your CPU, selects optimal post-quantum cryptographic profiles, generates your unique cryptographic keypair with `0600` permissions in `~/.config/securecomm/`, and registers trusted endpoints.
+
+---
+
+### 🖥️ Server Machine (Host Laptop / Cloud Server at `100.113.83.56`)
 
 #### Step 1: Install the Debian Package
 ```bash
 sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
 ```
 
-#### Step 2: Start the Server
+#### Step 2: Run the Setup Wizard (Mandatory)
+```bash
+nexqor setup
+```
+- **Select Role**: Choose `1) Server`
+- **Crypto Mode**: Press `[Enter]` for default `4) Adaptive` (auto-detects hardware AVX2/AES-NI)
+- **Bind Address**: Press `[Enter]` for default `0.0.0.0`
+- **UDP Port**: Press `[Enter]` for default `9877`
+- **Device ID**: Auto-detected hostname (e.g., `vishal-kumar-Inspiron-15-3525`)
+- Keys will be saved cleanly to `~/.config/securecomm/` with `0600` permissions (or `/etc/securecomm/` if run as root).
+
+#### Step 3: Launch the Server Backend
 ```bash
 nexqor server start
 ```
 *(Alternative alias: `securecomm server start`)*
+
+Or to launch with the **Pure C GTK4 NOC Telemetry Dashboard**:
+```bash
+./run_ui.sh
+```
 
 **What you will see in the terminal:**
 ```text
@@ -32,78 +52,119 @@ nexqor server start
   Port          : 9877
   Target Host   : 100.113.83.56:9877
   Crypto Mode   : adaptive
-  Device ID     : node-default
-  Fingerprint   : dfee8814c1deafaa...
-  Key File      : /home/vishal-kumar/.config/securecomm/node-default.key
+  Device ID     : vishal-kumar-Inspiron-15-3525
+  Fingerprint   : 2b338d18b79f459b...
+  Key File      : /home/vishal-kumar/.config/securecomm/vishal-kumar-Inspiron-15-3525.key
 
 [Ready] Waiting for incoming client connections... (Press Ctrl+C to stop)
+[IPC] Dashboard integration active on /tmp/pqc_rx.sock and /tmp/pqc_tx.sock
 ```
-- **Automatic Key Storage**: Keys are safely written with `0600` permissions into `~/.config/securecomm/` (or `/etc/securecomm/` when run as root). **No permission errors!**
-- **Trust On First Use (TOFU)**: Incoming clients are automatically verified, authenticated, and pinned on their first connection.
 
 ---
 
-### 💻 Client Machine (Second Laptop / PC / Raspberry Pi)
+### 💻 Client Machine (Second Laptop / Kali Linux / Raspberry Pi / VM)
 
 #### Step 1: Install the Debian Package
 ```bash
-# On an x86-64 Laptop or Desktop:
+# On an x86-64 Laptop, Desktop, or Kali VM:
 sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
 
-# On a Raspberry Pi 4 / 5 (ARM64):
+# On a Raspberry Pi 4 / 5 (ARM64 / AArch64):
 sudo dpkg -i nexqor-arm64.deb || sudo apt-get install -f -y
 
-# On a Raspberry Pi 2 / 3 (ARM32):
+# On a Raspberry Pi 2 / 3 (ARM32 / armhf):
 sudo dpkg -i nexqor-arm32.deb || sudo apt-get install -f -y
 ```
 
-#### Step 2: Connect to the Server
-Simply run:
+#### Step 2: Run the Setup Wizard (Mandatory)
+```bash
+nexqor setup
+```
+- **Select Role**: Choose `2) Client`
+- **Crypto Mode**: Press `[Enter]` for `4) Adaptive`
+- **Target Server IP**: Enter `100.113.83.56` (or host IP on your LAN / Tailscale)
+- **Target UDP Port**: Press `[Enter]` for `9877`
+- The wizard validates hardware, generates your cryptographic keypair in `~/.config/securecomm/`, and saves `~/.config/securecomm/securecomm.json`.
+
+#### Step 3: Connect to the Server
 ```bash
 nexqor client connect
 ```
-*(No IP or port arguments needed! It automatically targets `100.113.83.56:9877`)*
+*(No manual IP or port arguments needed! It automatically connects to the server configured in setup)*
 
-**What you will see in the terminal:**
+**Real-Time Two-Way Interactive Terminal Session:**
 ```text
 ╔══════════════════════════════════════════════════════════════════════════════════╗
 ║                 NEXQOR Secure Client (Post-Quantum & Classical)                  ║
 ╚══════════════════════════════════════════════════════════════════════════════════╝
   Target Server : 100.113.83.56:9877 (UDP)
   Crypto Mode   : adaptive
-  Device ID     : node-default
-  Fingerprint   : 8d07a85cb4e7e4ce...
-  Key File      : /home/vishal-kumar/.config/securecomm/node-default.key
+  Device ID     : kali-client-01
+  Fingerprint   : 0b33ec027f31aa92...
+  Key File      : /home/janani/.config/securecomm/kali-client-01.key
 
 [*] Connecting to 100.113.83.56:9877 over UDP...
-[✓] Cryptographic handshake complete in 3.16 ms!
+[✓] Post-Quantum Handshake Established! Mutual Authentication Verified.
+[✓] Encrypted Session Active. Session ID: 0x98124bcf8311aa01 (Latency: 1.84 ms)
 
 ╔═══════════════════════════════════════════════════════════════╗
-║             SECURECOMM INTERACTIVE SECURE CHAT                ║
+║             NEXQOR INTERACTIVE SECURE CHAT                    ║
 ║ Type messages to send encrypted over UDP. Type /quit to exit.  ║
+║ Real-Time 2-Way: Inbound server commands display instantly.   ║
 ║ Commands: /status, /metrics, /ping, /quit                     ║
 ╚═══════════════════════════════════════════════════════════════╝
 
-securecomm> Hello Quantum Server!
-[Sent 21 bytes encrypted]
+securecomm> Hello from Kali Client!
+[YOU → SERVER] Hello from Kali Client!  (Encrypted: 47 bytes)
+
+[SERVER → YOU] Welcome to QRYPTONEX Server. Command acknowledged.
 securecomm> /ping
 [Sent PING to server]
 securecomm> /metrics
+=========================================================
+               SECURECOMM METRICS & HEALTH               
+=========================================================
+ Packets Transmitted (TX)   : 4 packets (4480 bytes)
+ Packets Received (RX)      : 3 packets (2240 bytes)
+ Handshake Latency          : 1.84 ms
+=========================================================
 securecomm> /quit
 [INFO] Disconnected from server
 ```
 
-#### Send a Single Encrypted Message Directly from Terminal:
+#### Fast Non-Interactive Single Message Transmission:
 ```bash
-nexqor client connect --msg "Hello Quantum Server! Test message from terminal."
+nexqor client connect --msg "Hello Quantum Server! Immediate automated transmission."
 ```
 
-#### Custom Address / Port Override (Optional):
+#### CLI Target Overrides (Optional):
 ```bash
+# Connect to custom IP and Port directly:
 nexqor client connect 100.113.83.56 9877
-# Or using flags:
-nexqor client connect --server 100.113.83.56 --port 9877
+nexqor client connect --server 10.58.4.191 --port 9877
 ```
+
+---
+
+### 🌐 VirtualBox & Virtual Machine Networking Guide
+
+If running the client inside a **VirtualBox Kali Linux VM**:
+1. **Option A (Recommended — Tailscale / VPN)**: Install Tailscale inside both host and VM. Connect directly using the Tailscale IP `100.113.83.56`.
+2. **Option B (Bridged Adapter)**: In VirtualBox VM Settings → **Network** → Set Adapter 1 to **Bridged Adapter** (select your Wi-Fi or Ethernet card). The VM gets an IP on the same physical subnet (e.g., `10.58.x.x`). You can then connect directly to the host's Wi-Fi IP `10.58.4.191`.
+3. **Option C (NAT with Gateway)**: If using default NAT in VirtualBox, target the default gateway `10.0.2.2`:
+   ```bash
+   nexqor client connect 10.0.2.2 9877
+   ```
+
+---
+
+### 📊 Pure C GTK4 NOC Dashboard Features
+
+When the server is managed via the **GTK4 Dashboard (`./run_ui.sh`)**:
+- **CONNECTED CLIENTS (ACTIVE)**: Live list displaying Client ID, IPv4, UDP Port, Session ID, Handshake Setup Latency (typically 1.6–2.0 ms), and packet counters.
+- **DISCONNECTED SESSIONS (RECENT)**: When a client disconnects or times out, it moves to the bottom section marked with `○ Disconnected / Closed`, preserving historical audit metrics.
+- **Zero-Latency Inbound Display**: Incoming client messages appear instantaneously in the live chat log using low-overhead UNIX socket IPC (`/tmp/pqc_rx.sock`).
+- **Direct & Broadcast Messaging**: Server operators can select "Broadcast to All Clients" or target a specific client from the recipient dropdown and send encrypted commands in real time.
 
 ---
 

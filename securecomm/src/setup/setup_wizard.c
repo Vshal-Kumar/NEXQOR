@@ -65,7 +65,7 @@ int securecomm_setup_wizard_run(const char *config_path, bool non_interactive) {
     char resolved_config_path[SECURECOMM_MAX_PATH_LEN];
     snprintf(resolved_config_path, sizeof(resolved_config_path), "%s", config_path ? config_path : "/etc/securecomm/securecomm.json");
 
-    if (access("/etc/securecomm", W_OK) != 0 && getuid() != 0) {
+    if (getuid() != 0) {
         const char *home = getenv("HOME");
         if (home && strlen(home) > 0) {
             snprintf(resolved_config_path, sizeof(resolved_config_path), "%s/.config/securecomm/securecomm.json", home);
@@ -151,7 +151,7 @@ int securecomm_setup_wizard_run(const char *config_path, bool non_interactive) {
     read_input("Device Identifier", def_dev_id, cfg.device_id, sizeof(cfg.device_id), non_interactive);
 
     char base_dir[SECURECOMM_MAX_PATH_LEN] = "/etc/securecomm";
-    if (access("/etc/securecomm", W_OK) != 0 && getuid() != 0) {
+    if (getuid() != 0) {
         const char *home = getenv("HOME");
         if (home && strlen(home) > 0) {
             snprintf(base_dir, sizeof(base_dir), "%s/.config/securecomm", home);

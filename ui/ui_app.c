@@ -75,6 +75,8 @@ struct ui_app_s {
     /* Cached Client State */
     ipc_client_entry_t clients[MAX_UI_CLIENTS];
     int client_count;
+    ipc_client_entry_t disconnected_clients[MAX_UI_CLIENTS];
+    int disconnected_client_count;
     int selected_client_id;
     uint64_t tx_seq_counter;
 };
@@ -592,6 +594,42 @@ static void on_client_row_selected(GtkListBox *box, GtkListBoxRow *row, gpointer
 static void on_ipc_client_list(int count, const ipc_client_entry_t *clients, void *user_data) {
     ui_app_t *ui = (ui_app_t *)user_data;
 
+    /* Detect clients that disconnected */
+    for (int i = 0; i < ui->client_count; i++) {
+        bool still_present = false;
+        for (int j = 0; j < count; j++) {
+            if (ui->clients[i].client_id == clients[j].client_id) {
+                still_present = true;
+                break;
+            }
+        }
+        if (!still_present) {
+            bool already_in_disc = false;
+            for (int d = 0; d < ui->disconnected_client_count; d++) {
+                if (ui->disconnected_clients[d].client_id == ui->clients[i].client_id) {
+                    already_in_disc = true;
+                    break;
+                }
+            }
+            if (!already_in_disc && ui->disconnected_client_count < MAX_UI_CLIENTS) {
+                ui->disconnected_clients[ui->disconnected_client_count++] = ui->clients[i];
+            }
+        }
+    }
+
+    /* Remove reconnected clients from disconnected list */
+    for (int j = 0; j < count; j++) {
+        for (int d = 0; d < ui->disconnected_client_count; d++) {
+            if (ui->disconnected_clients[d].client_id == clients[j].client_id) {
+                for (int k = d; k < ui->disconnected_client_count - 1; k++) {
+                    ui->disconnected_clients[k] = ui->disconnected_clients[k + 1];
+                }
+                ui->disconnected_client_count--;
+                break;
+            }
+        }
+    }
+
     ui->client_count = (count > MAX_UI_CLIENTS) ? MAX_UI_CLIENTS : count;
     if (ui->client_count > 0 && clients) {
         memcpy(ui->clients, clients, (size_t)ui->client_count * sizeof(ipc_client_entry_t));
@@ -610,47 +648,97 @@ static void on_ipc_client_list(int count, const ipc_client_entry_t *clients, voi
         child = next;
     }
 
-    if (ui->client_count == 0) {
-        GtkWidget *empty_label = gtk_label_new("No clients connected yet.\nRun ./client <server_ip> on client nodes.");
+    if (ui->client_count == 0 && ui->disconnected_client_count == 0) {
+        GtkWidget *empty_label = gtk_label_new("No clients connected yet.\nRun nexqor client connect <server_ip> on client nodes.");
         gtk_widget_add_css_class(empty_label, "card-title");
         gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), empty_label);
         update_inspector_for_client(ui, NULL);
     } else {
         bool found_selected = false;
-        for (int i = 0; i < ui->client_count; i++) {
-            const ipc_client_entry_t *c = &ui->clients[i];
 
-            GtkWidget *row_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
-            gtk_widget_add_css_class(row_box, "client-row");
+        /* 1. Active Connected Clients */
+        if (ui->client_count > 0) {
+            GtkWidget *act_hdr = gtk_label_new("CONNECTED CLIENTS (ACTIVE)");
+            gtk_widget_add_css_class(act_hdr, "card-title");
+            gtk_label_set_xalign(GTK_LABEL(act_hdr), 0.0);
+            gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), act_hdr);
 
-            char title[128];
-            snprintf(title, sizeof(title), "CLIENT-%02d  ● Active Secure Session", c->client_id);
-            GtkWidget *title_lbl = gtk_label_new(title);
-            gtk_label_set_xalign(GTK_LABEL(title_lbl), 0.0);
-            gtk_widget_add_css_class(title_lbl, "client-name");
-            gtk_box_append(GTK_BOX(row_box), title_lbl);
+            for (int i = 0; i < ui->client_count; i++) {
+                const ipc_client_entry_t *c = &ui->clients[i];
 
-            char ep[128];
-            snprintf(ep, sizeof(ep), "Client Address: %s:%u  │  Session ID: 0x%016llx",
-                     c->ip_str, c->port, (unsigned long long)c->session_id);
-            GtkWidget *ep_lbl = gtk_label_new(ep);
-            gtk_label_set_xalign(GTK_LABEL(ep_lbl), 0.0);
-            gtk_widget_add_css_class(ep_lbl, "client-ip");
-            gtk_box_append(GTK_BOX(row_box), ep_lbl);
+                GtkWidget *row_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
+                gtk_widget_add_css_class(row_box, "client-row");
 
-            char meta[128];
-            snprintf(meta, sizeof(meta), "Handshake Setup: %.2f ms  │  Total Messages: %u  │  Sent: %u KB  │  Received: %u KB",
-                     c->hs_total_ms, c->msg_count, c->bytes_sent_kb, c->bytes_recv_kb);
-            GtkWidget *meta_lbl = gtk_label_new(meta);
-            gtk_label_set_xalign(GTK_LABEL(meta_lbl), 0.0);
-            gtk_widget_add_css_class(meta_lbl, "client-meta");
-            gtk_box_append(GTK_BOX(row_box), meta_lbl);
+                char title[128];
+                snprintf(title, sizeof(title), "CLIENT-%02d  ● Active Secure Session", c->client_id);
+                GtkWidget *title_lbl = gtk_label_new(title);
+                gtk_label_set_xalign(GTK_LABEL(title_lbl), 0.0);
+                gtk_widget_add_css_class(title_lbl, "client-name");
+                gtk_box_append(GTK_BOX(row_box), title_lbl);
 
-            gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), row_box);
+                char ep[128];
+                snprintf(ep, sizeof(ep), "Client Address: %s:%u  │  Session ID: 0x%016llx",
+                         c->ip_str, c->port, (unsigned long long)c->session_id);
+                GtkWidget *ep_lbl = gtk_label_new(ep);
+                gtk_label_set_xalign(GTK_LABEL(ep_lbl), 0.0);
+                gtk_widget_add_css_class(ep_lbl, "client-ip");
+                gtk_box_append(GTK_BOX(row_box), ep_lbl);
 
-            if (c->client_id == ui->selected_client_id) {
-                found_selected = true;
-                update_inspector_for_client(ui, c);
+                char meta[128];
+                snprintf(meta, sizeof(meta), "Handshake Setup: %.2f ms  │  Total Messages: %u  │  Sent: %u KB  │  Received: %u KB",
+                         c->hs_total_ms, c->msg_count, c->bytes_sent_kb, c->bytes_recv_kb);
+                GtkWidget *meta_lbl = gtk_label_new(meta);
+                gtk_label_set_xalign(GTK_LABEL(meta_lbl), 0.0);
+                gtk_widget_add_css_class(meta_lbl, "client-meta");
+                gtk_box_append(GTK_BOX(row_box), meta_lbl);
+
+                gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), row_box);
+
+                if (c->client_id == ui->selected_client_id) {
+                    found_selected = true;
+                    update_inspector_for_client(ui, c);
+                }
+            }
+        }
+
+        /* 2. Disconnected Clients Section */
+        if (ui->disconnected_client_count > 0) {
+            GtkWidget *disc_hdr = gtk_label_new("DISCONNECTED SESSIONS (RECENT)");
+            gtk_widget_add_css_class(disc_hdr, "card-title");
+            gtk_label_set_xalign(GTK_LABEL(disc_hdr), 0.0);
+            gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), disc_hdr);
+
+            for (int i = 0; i < ui->disconnected_client_count; i++) {
+                const ipc_client_entry_t *c = &ui->disconnected_clients[i];
+
+                GtkWidget *row_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
+                gtk_widget_add_css_class(row_box, "client-row");
+                gtk_widget_set_opacity(row_box, 0.65);
+
+                char title[128];
+                snprintf(title, sizeof(title), "CLIENT-%02d  ○ Disconnected / Closed", c->client_id);
+                GtkWidget *title_lbl = gtk_label_new(title);
+                gtk_label_set_xalign(GTK_LABEL(title_lbl), 0.0);
+                gtk_widget_add_css_class(title_lbl, "client-name");
+                gtk_box_append(GTK_BOX(row_box), title_lbl);
+
+                char ep[128];
+                snprintf(ep, sizeof(ep), "Last Address: %s:%u  │  Last Session: 0x%016llx",
+                         c->ip_str, c->port, (unsigned long long)c->session_id);
+                GtkWidget *ep_lbl = gtk_label_new(ep);
+                gtk_label_set_xalign(GTK_LABEL(ep_lbl), 0.0);
+                gtk_widget_add_css_class(ep_lbl, "client-ip");
+                gtk_box_append(GTK_BOX(row_box), ep_lbl);
+
+                char meta[128];
+                snprintf(meta, sizeof(meta), "Previous Handshake: %.2f ms  │  Total Messages: %u",
+                         c->hs_total_ms, c->msg_count);
+                GtkWidget *meta_lbl = gtk_label_new(meta);
+                gtk_label_set_xalign(GTK_LABEL(meta_lbl), 0.0);
+                gtk_widget_add_css_class(meta_lbl, "client-meta");
+                gtk_box_append(GTK_BOX(row_box), meta_lbl);
+
+                gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), row_box);
             }
         }
 

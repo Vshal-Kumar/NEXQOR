@@ -37,8 +37,8 @@
 
 static const char *get_default_config_path(void) {
     const char *home = getenv("HOME");
+    static char user_cfg[SECURECOMM_MAX_PATH_LEN];
     if (home && strlen(home) > 0) {
-        static char user_cfg[SECURECOMM_MAX_PATH_LEN];
         snprintf(user_cfg, sizeof(user_cfg), "%s/.config/securecomm/securecomm.json", home);
         if (access(user_cfg, R_OK) == 0) return user_cfg;
     }
@@ -47,6 +47,9 @@ static const char *get_default_config_path(void) {
     }
     if (access(FALLBACK_CONFIG_PATH, R_OK) == 0) {
         return FALLBACK_CONFIG_PATH;
+    }
+    if (getuid() != 0 && home && strlen(home) > 0) {
+        return user_cfg;
     }
     return DEFAULT_CONFIG_PATH;
 }
@@ -221,10 +224,10 @@ static int cmd_server_start(const char *cfg_path, const char *override_port, con
         cfg.mode = securecomm_mode_from_string(override_mode);
     }
 
-    /* Load or generate identity */
+    /* Load identity */
     securecomm_identity_t ident;
     char base_dir[SECURECOMM_MAX_PATH_LEN] = "/etc/securecomm";
-    if (access(base_dir, W_OK) != 0 && getuid() != 0) {
+    if (getuid() != 0) {
         const char *home = getenv("HOME");
         if (home && strlen(home) > 0) {
             snprintf(base_dir, sizeof(base_dir), "%s/.config/securecomm", home);
@@ -234,13 +237,29 @@ static int cmd_server_start(const char *cfg_path, const char *override_port, con
     }
 
     securecomm_identity_init(&ident, cfg.device_id, cfg.mode, base_dir);
+    if (strlen(cfg.private_key_path) > 0) {
+        snprintf(ident.private_key_path, sizeof(ident.private_key_path), "%s", cfg.private_key_path);
+    }
+    if (strlen(cfg.public_key_path) > 0) {
+        snprintf(ident.public_key_path, sizeof(ident.public_key_path), "%s", cfg.public_key_path);
+    }
+    if (strlen(cfg.trust_store_path) > 0) {
+        snprintf(ident.trust_store_path, sizeof(ident.trust_store_path), "%s", cfg.trust_store_path);
+    }
 
     if (!securecomm_identity_exists(&ident)) {
-        int g_rc = securecomm_identity_generate(&ident);
-        if (g_rc != SECURECOMM_SUCCESS) {
-            fprintf(stderr, "Failed to generate server identity: %s\n", securecomm_strerror(g_rc));
-            return 1;
-        }
+        fprintf(stderr, "\n");
+        fprintf(stderr, "╔══════════════════════════════════════════════════════════════════════════╗\n");
+        fprintf(stderr, "║                      SETUP REQUIRED BEFORE STARTING                      ║\n");
+        fprintf(stderr, "╚══════════════════════════════════════════════════════════════════════════╝\n");
+        fprintf(stderr, " [!] Error: NEXQOR server identity not found on this system.\n");
+        fprintf(stderr, "     Missing keyfile: %s\n\n", ident.private_key_path);
+        fprintf(stderr, " [>] Please run the onboarding setup wizard first:\n");
+        fprintf(stderr, "       nexqor setup\n");
+        fprintf(stderr, "     (or 'securecomm setup')\n\n");
+        fprintf(stderr, "     The wizard will benchmark hardware, select post-quantum profiles,\n");
+        fprintf(stderr, "     generate your cryptographic keypair, and save configuration.\n\n");
+        return 1;
     } else {
         int l_rc = securecomm_identity_load(&ident);
         if (l_rc != SECURECOMM_SUCCESS) {
@@ -313,7 +332,7 @@ static int cmd_client_connect(const char *cfg_path, const char *server_host, con
     /* Initialize identity with user-path fallback */
     securecomm_identity_t ident;
     char base_dir[SECURECOMM_MAX_PATH_LEN] = "/etc/securecomm";
-    if (access(base_dir, W_OK) != 0 && getuid() != 0) {
+    if (getuid() != 0) {
         const char *home = getenv("HOME");
         if (home && strlen(home) > 0) {
             snprintf(base_dir, sizeof(base_dir), "%s/.config/securecomm", home);
@@ -323,13 +342,29 @@ static int cmd_client_connect(const char *cfg_path, const char *server_host, con
     }
 
     securecomm_identity_init(&ident, cfg.device_id, cfg.mode, base_dir);
+    if (strlen(cfg.private_key_path) > 0) {
+        snprintf(ident.private_key_path, sizeof(ident.private_key_path), "%s", cfg.private_key_path);
+    }
+    if (strlen(cfg.public_key_path) > 0) {
+        snprintf(ident.public_key_path, sizeof(ident.public_key_path), "%s", cfg.public_key_path);
+    }
+    if (strlen(cfg.trust_store_path) > 0) {
+        snprintf(ident.trust_store_path, sizeof(ident.trust_store_path), "%s", cfg.trust_store_path);
+    }
 
     if (!securecomm_identity_exists(&ident)) {
-        int g_rc = securecomm_identity_generate(&ident);
-        if (g_rc != SECURECOMM_SUCCESS) {
-            fprintf(stderr, "Failed to generate client identity keypair: %s\n", securecomm_strerror(g_rc));
-            return 1;
-        }
+        fprintf(stderr, "\n");
+        fprintf(stderr, "╔══════════════════════════════════════════════════════════════════════════╗\n");
+        fprintf(stderr, "║                    INITIAL SETUP REQUIRED TO CONNECT                     ║\n");
+        fprintf(stderr, "╚══════════════════════════════════════════════════════════════════════════╝\n");
+        fprintf(stderr, " [!] Error: NEXQOR client node is not configured on this device.\n");
+        fprintf(stderr, "     Missing keyfile: %s\n\n", ident.private_key_path);
+        fprintf(stderr, " [>] Please run the onboarding setup wizard first:\n");
+        fprintf(stderr, "       nexqor setup\n");
+        fprintf(stderr, "     (or 'securecomm setup')\n\n");
+        fprintf(stderr, "     The wizard will benchmark hardware, select post-quantum profiles,\n");
+        fprintf(stderr, "     generate your cryptographic keypair, and register network endpoints.\n\n");
+        return 1;
     } else {
         int l_rc = securecomm_identity_load(&ident);
         if (l_rc != SECURECOMM_SUCCESS) {
