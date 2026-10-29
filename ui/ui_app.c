@@ -8,6 +8,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <arpa/inet.h>
 
 struct ui_app_s {
     GtkApplication *app;
@@ -19,6 +22,7 @@ struct ui_app_s {
     /* Header Bar Widgets (Professional Names, No Raw Algorithms) */
     GtkWidget *server_btn;
     GtkWidget *server_status_badge;
+    GtkWidget *network_endpoints_badge;
     GtkWidget *clients_badge;
     GtkWidget *suite_dropdown;
     GtkWidget *suite_badge;
@@ -137,6 +141,46 @@ static void make_hex_preview(const char *in, size_t in_len, char *out, size_t ou
         pos += (size_t)snprintf(out + pos, out_sz - pos, "%02x ", b);
     }
     if (pos > 0 && out[pos - 1] == ' ') out[pos - 1] = '\0';
+}
+
+/* Helper to discover and summarize active IPv4 network endpoints dynamically */
+static void get_active_endpoints_summary(char *buf, size_t max_len, uint16_t port) {
+    struct ifaddrs *ifaddr, *ifa;
+    if (getifaddrs(&ifaddr) == -1) {
+        snprintf(buf, max_len, "📡 0.0.0.0:%u", port);
+        return;
+    }
+    buf[0] = '\0';
+    size_t off = 0;
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
+        struct sockaddr_in *p = (struct sockaddr_in *)ifa->ifa_addr;
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &p->sin_addr, ip, sizeof(ip));
+        if (strcmp(ip, "127.0.0.1") == 0) continue;
+
+        const char *desc = "LAN";
+        if (strstr(ifa->ifa_name, "wl") != NULL) desc = "Wi-Fi";
+        else if (strstr(ifa->ifa_name, "tailscale") != NULL || strstr(ifa->ifa_name, "tun") != NULL) desc = "VPN";
+        else if (strstr(ifa->ifa_name, "en") != NULL || strstr(ifa->ifa_name, "eth") != NULL) desc = "ETH";
+
+        char piece[96];
+        snprintf(piece, sizeof(piece), "%s%s (%s):%u", off > 0 ? " | " : "", ip, desc, port);
+        size_t plen = strlen(piece);
+        if (off + plen < max_len) {
+            strcat(buf, piece);
+            off += plen;
+        }
+    }
+    freeifaddrs(ifaddr);
+    if (buf[0] == '\0') {
+        snprintf(buf, max_len, "📡 127.0.0.1:%u", port);
+    } else {
+        char tmp[256];
+        snprintf(tmp, sizeof(tmp), "📡 %s", buf);
+        strncpy(buf, tmp, max_len - 1);
+        buf[max_len - 1] = '\0';
+    }
 }
 
 /* ── Chat Messages: Add Received Message (Left-Aligned) ───────────── */
@@ -649,8 +693,22 @@ static void on_ipc_client_list(int count, const ipc_client_entry_t *clients, voi
     }
 
     if (ui->client_count == 0 && ui->disconnected_client_count == 0) {
-        GtkWidget *empty_label = gtk_label_new("No clients connected yet.\nRun nexqor client connect <server_ip> on client nodes.");
+        char ep_summary[256];
+        get_active_endpoints_summary(ep_summary, sizeof(ep_summary), 9877);
+
+        char empty_text[512];
+        snprintf(empty_text, sizeof(empty_text),
+                 "No clients connected yet.\n"
+                 "%s\n\n"
+                 "ESP32 Node (esp32_secure_node.ino):\n"
+                 "  const char* SERVER_IP = \"192.168.137.168\";\n\n"
+                 "Linux / Debian Client:\n"
+                 "  nexqor client connect 192.168.137.168 9877",
+                 ep_summary);
+
+        GtkWidget *empty_label = gtk_label_new(empty_text);
         gtk_widget_add_css_class(empty_label, "card-title");
+        gtk_label_set_xalign(GTK_LABEL(empty_label), 0.0);
         gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), empty_label);
         update_inspector_for_client(ui, NULL);
     } else {
@@ -916,6 +974,13 @@ static gboolean on_second_timer(gpointer user_data) {
         snprintf(buf, sizeof(buf), "Uptime: %02d:%02d:%02d", h, m, s);
         gtk_label_set_text(GTK_LABEL(ui->uptime_label), buf);
     }
+
+    if (ui->network_endpoints_badge) {
+        char ep_buf[256];
+        get_active_endpoints_summary(ep_buf, sizeof(ep_buf), 9877);
+        gtk_label_set_text(GTK_LABEL(ui->network_endpoints_badge), ep_buf);
+    }
+
     return G_SOURCE_CONTINUE;
 }
 
@@ -1000,6 +1065,13 @@ void ui_app_activate(GtkApplication *gtk_app, gpointer user_data) {
     ui->server_status_badge = gtk_label_new("○ OFFLINE");
     gtk_widget_add_css_class(ui->server_status_badge, "badge-offline");
     gtk_box_append(GTK_BOX(top_bar), ui->server_status_badge);
+
+    /* Dynamic Network Endpoints Badge */
+    char init_ep[256];
+    get_active_endpoints_summary(init_ep, sizeof(init_ep), 9877);
+    ui->network_endpoints_badge = gtk_label_new(init_ep);
+    gtk_widget_add_css_class(ui->network_endpoints_badge, "badge-pill");
+    gtk_box_append(GTK_BOX(top_bar), ui->network_endpoints_badge);
 
     /* Connected Clients Badge */
     ui->clients_badge = gtk_label_new("0 Clients Active");

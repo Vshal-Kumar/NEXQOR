@@ -31,6 +31,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 
 #define DEFAULT_CONFIG_PATH "/etc/securecomm/securecomm.json"
 #define FALLBACK_CONFIG_PATH "./config/securecomm.json"
@@ -206,6 +208,29 @@ static int cmd_config(int argc, char **argv, const char *cfg_path) {
     return 1;
 }
 
+static void print_active_network_endpoints(uint16_t port) {
+    struct ifaddrs *ifaddr, *ifa;
+    if (getifaddrs(&ifaddr) == -1) {
+        printf("  Endpoints     : 0.0.0.0:%u\n", port);
+        return;
+    }
+    printf("  Active Endpoints (Clients & ESP32 can connect to any of these):\n");
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
+        struct sockaddr_in *p = (struct sockaddr_in *)ifa->ifa_addr;
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &p->sin_addr, ip, sizeof(ip));
+
+        const char *desc = "LAN/Ethernet";
+        if (strcmp(ip, "127.0.0.1") == 0) desc = "Local Loopback";
+        else if (strstr(ifa->ifa_name, "wl") != NULL) desc = "Wi-Fi / Hotspot";
+        else if (strstr(ifa->ifa_name, "tailscale") != NULL || strstr(ifa->ifa_name, "tun") != NULL) desc = "Mesh VPN";
+
+        printf("    • %-16s : %s:%u (%s)\n", desc, ip, port, ifa->ifa_name);
+    }
+    freeifaddrs(ifaddr);
+}
+
 /* ─── Subcommand: server start ───────────────────────────────────── */
 static int cmd_server_start(const char *cfg_path, const char *override_port, const char *override_mode) {
     securecomm_config_t cfg;
@@ -277,13 +302,15 @@ static int cmd_server_start(const char *cfg_path, const char *override_port, con
     signal(SIGINT, server_sigint_handler);
     signal(SIGTERM, server_sigint_handler);
 
+
+
     printf("\n╔══════════════════════════════════════════════════════════════════════════════════╗\n");
     printf("║                 NEXQOR Secure Server (Post-Quantum & Classical)                  ║\n");
     printf("╚══════════════════════════════════════════════════════════════════════════════════╝\n");
     printf("  Status        : LISTENING\n");
-    printf("  Bind Address  : %s (UDP)\n", cfg.bind_address);
+    printf("  Bind Address  : %s (UDP — Listening on ALL interfaces)\n", cfg.bind_address);
     printf("  Port          : %u\n", cfg.port);
-    printf("  Target Host   : 100.113.83.56:%u\n", cfg.port);
+    print_active_network_endpoints(cfg.port);
     printf("  Crypto Mode   : %s\n", securecomm_mode_to_string(cfg.mode));
     printf("  Device ID     : %s\n", cfg.device_id);
     printf("  Fingerprint   : %.16s...\n", ident.fingerprint);
