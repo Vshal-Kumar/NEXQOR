@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "role": "server",
+  "mode": "adaptive",
+  "network": {
+    "bind_address": "0.0.0.0",
+    "server_host": "127.0.0.1",
+    "port": 9885,
+    "connection_timeout_ms": 5000
+  },
+  "identity": {
+    "device_id": "securecomm-node-1",
+    "private_key_path": "/etc/securecomm/securecomm-node-1.key",
+    "public_key_path": "/etc/securecomm/securecomm-node-1.pub",
+    "trust_store_path": "/etc/securecomm/trust_store.txt",
+    "expected_server_id": ""
+  },
+  "policy": {
+    "require_quantum_resistance": false,
+    "allow_classical_fallback": true,
+    "preference": "low_latency",
+    "allow_tofu": true
+  },
+  "resources": {
+    "max_sessions": 256,
+    "max_buffer_kb": 64
+  },
+  "logging": {
+    "level": "INFO",
+    "structured": true
+  }
+}

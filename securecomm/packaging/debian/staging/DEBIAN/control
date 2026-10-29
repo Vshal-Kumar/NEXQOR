@@ -1,0 +1,11 @@
+Package: securecomm
+Version: 1.0.0
+Section: net
+Priority: optional
+Architecture: amd64
+Depends: libc6 (>= 2.31), libssl3 (>= 3.0.0)
+Maintainer: SecureComm Engineering Team <support@securecomm.local>
+Description: Lightweight, Adaptive, Cross-Platform Secure Communication Framework
+ SecureComm is a production C-based framework supporting Classical (X25519,
+ Ed25519, AES-CCM), Pure Post-Quantum (ML-KEM-768, ML-DSA-65), Hybrid, and
+ deterministic Adaptive profile selection.

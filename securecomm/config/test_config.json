@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "role": "server",
+  "mode": "adaptive",
+  "profile_id": "profile-pqc-1",
+  "network": {
+    "bind_address": "0.0.0.0",
+    "server_address": "127.0.0.1",
+    "port": 9885,
+    "connect_timeout_ms": 5000,
+    "reconnect_attempts": 5
+  },
+  "identity": {
+    "device_id": "vishal-kumar-Inspiron-15-3525",
+    "private_key_path": "./config/vishal-kumar-Inspiron-15-3525.key",
+    "public_key_path": "./config/vishal-kumar-Inspiron-15-3525.pub",
+    "trust_store_path": "./config/trust_store.txt",
+    "require_client_auth": true
+  },
+  "policy": {
+    "require_quantum_resistance": true,
+    "require_quantum_auth": false,
+    "require_dual_combiner": false,
+    "allow_classical_fallback": false,
+    "require_fips_algorithms": true,
+    "max_acceptable_latency_ms": 500,
+    "max_memory_budget_mb": 256,
+    "preference": "balanced"
+  },
+  "resources": {
+    "max_concurrent_sessions": 64,
+    "rx_buffer_kb": 256,
+    "worker_threads": 4
+  },
+  "logging": {
+    "level": "info",
+    "file": ""
+  },
+  "auto_start_service": false
+}

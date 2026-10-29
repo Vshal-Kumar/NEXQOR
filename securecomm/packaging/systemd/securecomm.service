@@ -1,0 +1,28 @@
+[Unit]
+Description=SecureComm Lightweight Adaptive Secure Communication Service
+Documentation=https://github.com/securecomm/securecomm
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/securecomm server start --config /etc/securecomm/securecomm.json
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+# Security and Isolation Sandboxing
+DynamicUser=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+MemoryDenyWriteExecute=yes
+ReadWritePaths=/etc/securecomm /var/lib/securecomm /var/log/securecomm
+
+[Install]
+WantedBy=multi-user.target

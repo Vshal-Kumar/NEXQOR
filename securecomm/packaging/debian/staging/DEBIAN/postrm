@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+if [ "$1" = "purge" ]; then
+    rm -rf /var/log/securecomm
+    echo "Notice: Persistent cryptographic identity keys in /etc/securecomm were preserved."
+fi
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi
+exit 0

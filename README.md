@@ -17,6 +17,20 @@ Each implementation is decoupled with its own build systems, cryptographic state
 
 ---
 
+## 🚀 SecureComm Standalone Releases & Direct Downloads
+
+For turnkey production deployment, the framework provides **SecureComm**, a unified C application providing Classical, Pure PQC, Hybrid, and Adaptive profiles with zero Python runtime dependencies. Pre-built Debian packages (`.deb`) are available for direct installation across all major device architectures:
+
+| Target Architecture | Debian Architecture | Target Devices | Direct Download Link | One-Line Install Command |
+| :--- | :---: | :--- | :---: | :--- |
+| **x86-64 / AMD64 (`x86amd`)** | `amd64` | Intel/AMD PCs, Laptops, Cloud Servers | [📥 Download `.deb`](https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT) | `curl -L -o securecomm_1.0.0_x86amd.deb "https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT" && sudo dpkg -i securecomm_1.0.0_x86amd.deb` |
+| **ARM64 / AArch64 (`arm64`)** | `arm64` | Raspberry Pi 4/5, Jetson, 64-bit ARM Linux | [📥 Download `.deb`](https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ) | `curl -L -o securecomm_1.0.0_arm64.deb "https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ" && sudo dpkg -i securecomm_1.0.0_arm64.deb` |
+| **ARM32 / ARMv7 (`arm32`)** | `armhf` | Raspberry Pi 2/3, 32-bit Raspbian/Debian | [📥 Download `.deb`](https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb) | `curl -L -o securecomm_1.0.0_arm32.deb "https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb" && sudo dpkg -i securecomm_1.0.0_arm32.deb` |
+
+> Detailed architectural and operational documentation is available in [securecomm/README.md](file:///home/vishal-kumar/Desktop/Events/QHack/securecomm/README.md).
+
+---
+
 ## Table of Contents
 
 - [Project Architecture & Organization](#project-architecture--organization)

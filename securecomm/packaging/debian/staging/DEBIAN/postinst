@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+chmod 0700 /etc/securecomm
+chmod 0700 /var/lib/securecomm
+chmod 0750 /var/log/securecomm
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi
+exit 0
