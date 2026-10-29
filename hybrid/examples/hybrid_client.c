@@ -174,6 +174,6 @@ int main(int argc, char **argv) {
 
     hybrid_session_close(&session);
     close(sock);
-    printf("\n[client] Session cleanly closed. Exiting.\n");
+    printf("\n[client] Session cleanly closed.\n");
     return 0;
 }

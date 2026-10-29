@@ -105,6 +105,18 @@ bench_nclient_arm: bench_nclient.c $(SHARED_OBJS)
 	@ln -sf bench_nclient_arm bench_nclient
 	@echo "Built: bench_nclient_arm [aarch64 + NEON] (symlink: bench_nclient)"
 
+client: client_arm
+	ln -sf client_arm client
+
+client_broadcast: client_broadcast_arm
+	ln -sf client_broadcast_arm client_broadcast
+
+bench_pqc: bench_pqc_arm
+	ln -sf bench_pqc_arm bench_pqc
+
+bench_nclient: bench_nclient_arm
+	ln -sf bench_nclient_arm bench_nclient
+
 clean:
 	rm -f bench_pqc_arm bench_nclient_arm client_arm client_broadcast_arm \
 	      bench_pqc bench_nclient client client_broadcast $(SHARED_OBJS)

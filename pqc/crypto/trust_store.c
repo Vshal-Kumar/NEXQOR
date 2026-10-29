@@ -25,12 +25,14 @@ int trust_store_load_or_create_server_keys(uint8_t pk[DSA_PK_BYTES],
         size_t r2 = fread(sk, 1, DSA_SK_BYTES, f_sec);
         fclose(f_pub);
         fclose(f_sec);
+        f_pub = NULL;
+        f_sec = NULL;
         if (r1 == DSA_PK_BYTES && r2 == DSA_SK_BYTES) {
             return 0; /* Successfully loaded existing identity */
         }
     }
-    if (f_pub) fclose(f_pub);
-    if (f_sec) fclose(f_sec);
+    if (f_pub) { fclose(f_pub); f_pub = NULL; }
+    if (f_sec) { fclose(f_sec); f_sec = NULL; }
 
     /* Generate fresh keypair */
     if (dsa_keypair(pk, sk) != 0) {

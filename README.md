@@ -44,12 +44,35 @@ The repository strictly enforces modular separation. Shared external dependencie
 
 ```
 QRYPTONEX/
-├── Makefile                     # Global dispatcher (build, test, clean across all suites)
+├── Makefile                     # Global dispatcher (build, test, clean, UI targets)
 ├── README.md                    # Global architectural & operational documentation
+├── app.sh                       # Unified single-command launcher for both GTK 4 UIs
+├── run_ui.sh                    # Launcher for Server NOC & Telemetry Console
+├── run_attack_ui.sh             # Launcher for Security & Attack Lab UI
 ├── .gitignore                   # Universal exclusion rule-set (binaries, objects, keys, logs)
 ├── LICENSE                      # MIT Open Source License
 ├── liboqs/                      # Shared Open Quantum Safe library (git submodule)
 ├── liburing_local/              # Shared Linux io_uring kernel headers
+│
+├── ui/                          # GTK 4 Cryptographic Server NOC & Session Inspector
+│   ├── ui_app.c / ui_app.h      # Graphical server dashboard and client session registry
+│   ├── ipc_manager.c / .h       # UNIX domain socket IPC listener and client telemetry
+│   ├── style.css                # Cyber-Dark theme for Server NOC Console
+│   └── Makefile                 # Native GTK 4 build system
+│
+├── security_lab/                # Pure-C Real-Network Security Evaluation & Threat Lab
+│   ├── security_lab             # Main CLI security evaluation engine binary
+│   ├── Makefile                 # Modular build system (engine, tests, ui)
+│   ├── ui/                      # GTK 4 Security & Attack Lab Interface (attack_ui)
+│   │   ├── attack_ui.c / .h     # Graphical threat vector & evaluation controller
+│   │   ├── style.css            # Dark cyber theme with status badges
+│   │   └── Makefile             # Pure-C GTK 4 attack UI build system
+│   ├── attacks/                 # 15 attack & impairment implementations (loss, replay, fuzzing, etc.)
+│   ├── src/                     # Test orchestration, safety guard allowlists, suite adapters
+│   ├── monitoring/              # Packet observer, health probes, resource and recovery monitors
+│   ├── reporting/               # Comparison reports (report.md, metrics.csv, JSON audits)
+│   ├── tests/                   # Automated safety, bounds parsing, and metric unit tests
+│   └── results/                 # Timestamped run directories and latest symlink
 │
 ├── classical/                   # 100% Independent Classical IoT Suite
 │   ├── crypto/                  # AES-128-CCM AEAD, sliding replay window, trust store
@@ -88,7 +111,7 @@ QRYPTONEX/
     ├── tests/                   # 8 automated security and KAT test suites
     ├── verification/            # ProVerif 2.05 formal model for pure PQC
     ├── perf_monitor.h           # Thermal, memory, CPU, and statistical metrics engine
-    ├── server.c                 # High-throughput Linux io_uring UDP server (port 9876)
+    ├── server.c                 # High-throughput Linux io_uring UDP server (port 9877)
     ├── client.c                 # PQC interactive mutual-auth terminal client
     ├── client_broadcast.c       # Autonomous PQC telemetry broadcaster
     ├── bench_pqc.c              # Pure PQC microbenchmark suite (N runs)
@@ -488,7 +511,84 @@ Tests simultaneous handshake concurrency against an active server:
 
 ---
 
+## Dual-Console GTK 4 Graphical Interface & app.sh
+
+QRYPTONEX features two native, pure-C **GTK 4 graphical consoles** (not web applications) styled in a sleek **Cyber-Dark Theme**:
+
+| Console Interface | Binary Path | Purpose & Visual Architecture |
+| :--- | :--- | :--- |
+| **Console 1: Server NOC Dashboard** | `ui/qhack_ui` | Server state toggle (start/stop), active client session registry, bidirectional IPC chat, and deep cryptographic parameter inspector (live KEM/DSA key fingerprints, shared secrets, wire handshake latency). |
+| **Console 2: Security & Attack Lab** | `security_lab/ui/attack_ui` | Real-time threat injector with target IP/port inputs, crypto suite selector (Classical, Hybrid, PQC, or All), 15 threat scenarios, dry-run safety toggle, emergency stop cancellation, live streaming terminal, and dynamic resilience matrix. |
+
+### Running Both UIs Simultaneously (`app.sh`)
+
+To launch both interfaces side-by-side with automatic dependency verification, compilation, and synchronized cleanup:
+
+```bash
+# Unified dual launcher:
+./app.sh
+
+# Or via make target:
+make app
+```
+
+*Pressing `Ctrl+C` in the terminal cleanly closes both GTK 4 applications simultaneously.*
+
+### Running Interfaces Individually
+
+```bash
+# Launch only Server NOC Console:
+./run_ui.sh          # or: make run-ui
+
+# Launch only Security & Attack Lab:
+./run_attack_ui.sh   # or: make run-attack-ui
+```
+
+---
+
+## Real-Network Security Evaluation & Threat Injection Lab (`security_lab`)
+
+The `security_lab/` framework is a pure-C security testing and resilience evaluation engine that subjects running client and server implementations to real network impairments and active cryptographic threat vectors:
+
+### 15 Implemented Threat & Impairment Vectors:
+1. **Legitimate Baseline:** Throughput, latency, and ACK recovery under normal operation.
+2. **Packet Loss Resilience:** 15% deterministic in-transit UDP drop profile.
+3. **Delay & Variable Jitter:** 30ms ± 15ms packet transit delays.
+4. **Packet Reordering:** 25% out-of-order sequence window delivery.
+5. **Packet Duplication:** 25% duplicate frame injection testing sliding replay window.
+6. **Temporary Disconnection:** 2-second link blackhole measuring automated session recovery.
+7. **Path MTU Boundaries:** Testing oversized UDP datagrams across 512B to 4096B fragmentation limits.
+8. **Replay Protection Attack:** Injection of duplicate seq, stale seq, seq 0, and cross-session frames.
+9. **AEAD Ciphertext Tampering:** Single-bit flips and MAC tag corruption testing cryptographic integrity.
+10. **Authentication & Signature Forgery:** Bogus credentials and invalid DSA signatures testing identity rejection.
+11. **Handshake State Machine Order:** Out-of-order protocol messages and half-open handshake garbage collection.
+12. **Malformed Input & Fuzzing Flood:** Truncated wire frames, invalid packet types, and randomized datagram fuzzing.
+13. **Resource Stress:** 16 concurrent client handshakes stressing server worker queues.
+14. **Session Isolation & Blast Radius:** Cross-session packet injection testing peer isolation.
+15. **Full Suite Evaluation:** Runs all 14 scenarios sequentially across all 3 cryptographic implementations.
+
+### Running Security Tests via CLI:
+```bash
+# Run baseline against running PQC server:
+./security_lab/security_lab --suite pqc --scenario baseline --target 127.0.0.1
+
+# Run replay protection test against hybrid implementation:
+./security_lab/security_lab --suite hybrid --scenario replay --target 127.0.0.1
+
+# Run complete comparative security matrix across all 3 suites:
+./security_lab/security_lab --suite all --scenario all --target 127.0.0.1
+```
+
+All test runs generate structured audit artifacts in `security_lab/results/latest/`:
+- `report.md`: Markdown comparison matrix and threat vector analysis.
+- `metrics.csv`: Tabular scenario latencies, delivery rates, and memory overheads.
+- `scenario_results.json`: Machine-readable results schema.
+- `audit.log`: POSIX-timestamped audit trace log.
+
+---
+
 ## Formal Security Verification
+
 
 Both the **Classical** and **Post-Quantum** protocols have been formally modeled and verified in **ProVerif 2.05**:
 - Classical Model: `classical/verification/protocol.pv`

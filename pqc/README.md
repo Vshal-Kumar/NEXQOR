@@ -20,10 +20,12 @@ Modern public-key cryptography (RSA, ECDH, ECDSA) relies on mathematical problem
 QRYPTONEX addresses this paradigm shift by establishing a secure communication channel between high-throughput **x86_64 servers** (accelerated via **AVX2 / BMI2**) and resource-constrained **ARM edge devices** (Raspberry Pi 4/5 via **ARM64 NEON** and Raspberry Pi 2/3 via **ARM32 NEON / VFPv4**). The framework combines NIST-standardized lattice cryptography (**ML-KEM-768**, **ML-DSA-65**), authenticated symmetric encryption (**ChaCha20-Poly1305**), and directional session key derivation (**SHAKE256**) over an asynchronous Linux **`io_uring`** engine with application-level reliability and dynamic zero-configuration network discovery.
 
 > [!NOTE]
-> **Heterogeneous Cryptographic Implementations Available in this Repository**:
-> - **Post-Quantum Cryptography (PQC)** (Root): ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305 on UDP Port `9877`.
+> **Heterogeneous Cryptographic Implementations & Tooling Available in this Repository**:
+> - **Post-Quantum Cryptography (PQC)** (`pqc/`): ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305 on UDP Port `9877`.
 > - **Classical Cryptography** (`classical/`): X25519 + Ed25519 + AES-128-CCM on UDP Port `9877`/`9878`. See [classical/README.md](classical/README.md).
 > - **Hybrid Cryptography** (`hybrid/`): X25519 + ML-KEM-768 + Ed25519 + ML-DSA-65 + ChaCha20-Poly1305 on UDP Port `9879`. See [hybrid/README.md](hybrid/README.md).
+> - **Unified Dual GTK 4 Graphical Interface (`./app.sh`)**: Runs both the Server NOC Telemetry Console and the Real-Network Attack Testing Lab simultaneously.
+> - **Security Evaluation Lab (`security_lab/`)**: Real-network testing framework evaluating PQC, Hybrid, and Classical suites against active threat vectors (replay, packet tampering, authentication forgery, fuzzing, MTU fragmentation, and network impairments). See [security_lab/README.md](../security_lab/README.md).
 
 ---
 

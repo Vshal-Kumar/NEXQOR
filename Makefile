@@ -68,6 +68,7 @@ endif
         hybrid-arm64 hybrid-arm32 hybrid-x86_64 \
         pqc-arm64 pqc-arm32 pqc-x86_64 \
         bench bench_pqc benchpqc \
+        ui run-ui \
         detect info help banner
 
 all: banner classical hybrid pqc bench_pqc
@@ -195,7 +196,28 @@ clean-all:
 	$(MAKE) -C hybrid clean-all
 	$(MAKE) -C pqc clean-all
 	rm -f bench_pqc benchpqc /tmp/pqc_bench_*.json
+	$(MAKE) -C ui clean 2>/dev/null || true
 	@echo "All build artifacts, objects, libraries, and binaries removed."
+
+# ── GTK 4 Graphical Dashboard ────────────────────────────────────────
+ui:
+	@echo "==> Building GTK 4 C Dashboard..."
+	$(MAKE) -C ui all
+
+run-ui:
+	./run_ui.sh
+
+# ── GTK 4 Security & Attack Lab UI ──────────────────────────────────
+attack-ui:
+	@echo "==> Building GTK 4 Security & Attack Lab UI..."
+	$(MAKE) -C security_lab/ui all
+
+run-attack-ui: attack-ui
+	./security_lab/ui/attack_ui
+
+# ── Unified Dual-Console UI Launcher ─────────────────────────────────
+app:
+	./app.sh
 
 # ── Information & Help ───────────────────────────────────────────────
 detect info: banner
@@ -245,6 +267,12 @@ help:
 	@echo "Benchmarking Targets:"
 	@echo "  make bench          - Run unified comparative benchmark runner (bench_pqc)"
 	@echo "  make bench_pqc      - Build master benchmark runner (bench_pqc & benchpqc)"
+	@echo ""
+	@echo "GTK 4 Pure C Dashboard & Security Testing Targets:"
+	@echo "  make ui             - Build pure C GTK 4 server & telemetry dashboard (ui/qhack_ui)"
+	@echo "  make run-ui         - Run pure C GTK 4 dashboard (or ./run_ui.sh)"
+	@echo "  make attack-ui      - Build pure C GTK 4 security & attack evaluation UI (security_lab/ui/attack_ui)"
+	@echo "  make run-attack-ui  - Run pure C GTK 4 security & attack evaluation UI"
 	@echo ""
 	@echo "Clean Targets (Device-Aware & Multi-Arch):"
 	@echo "  make clean          - Clean build artifacts for detected device architecture"

@@ -57,6 +57,28 @@ server_endpoint.info
 core
 core.*
 
+# GTK 4 Dashboards & Security Testing Engine
+ui/qhack_ui
+security_lab/ui/attack_ui
+security_lab/security_lab
+security_lab/tests/test_safety
+security_lab/tests/test_packet_parser
+security_lab/tests/test_metrics
+
+# Security Lab Run Results and Evidence Artifacts
+security_lab/results/run_*
+security_lab/results/latest
+security_lab/results/*.log
+security_lab/results/*.csv
+security_lab/results/*.json
+security_lab/results/*.md
+!security_lab/results/.gitkeep
+
+# UNIX Domain IPC Sockets
+*.sock
+/tmp/*_rx.sock
+/tmp/*_tx.sock
+
 # Editor and IDE artifacts
 .vscode/
 .idea/
@@ -64,3 +86,4 @@ core.*
 *.swo
 *~
 .DS_Store
+

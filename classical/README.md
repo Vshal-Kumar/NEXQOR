@@ -25,9 +25,11 @@ This implementation reproduces the complete functionality, architecture, asynchr
 
 > [!NOTE]
 > The repository provides three independent, self-contained implementations:
-> 1. **Post-Quantum Cryptography** (root directory): ML-KEM-768 + ML-DSA-65 on UDP port `9877`.
+> 1. **Post-Quantum Cryptography** (`pqc/` directory): ML-KEM-768 + ML-DSA-65 on UDP port `9877`.
 > 2. **Classical Cryptography** (`classical/` directory): X25519 + Ed25519 + AES-128-CCM on UDP port `9877`/`9878`.
 > 3. **Hybrid Cryptography** (`hybrid/` directory): X25519 + ML-KEM-768 + Ed25519 + ML-DSA-65 on UDP port `9879`.
+> - **Unified Dual GTK 4 Graphical Interface (`./app.sh`)**: Runs both the Server NOC Telemetry Console and the Real-Network Attack Testing Lab simultaneously.
+> - **Security Evaluation Lab (`security_lab/`)**: Real-network testing framework evaluating PQC, Hybrid, and Classical suites against active threat vectors (replay, packet tampering, authentication forgery, fuzzing, MTU fragmentation, and network impairments). See [security_lab/README.md](../security_lab/README.md).
 
 ---
 

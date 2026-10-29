@@ -96,7 +96,7 @@ static void *rx_thread(void *arg)
             metrics_print(a->metrics);
             close(a->conn->sock);
             conn_destroy(a->conn);
-            printf("[client] Exit.\n");
+            printf("\n[client] Session cleanly closed.\n");
             exit(0);
         }
         if (hdr.type != PKT_DATA) continue;
@@ -347,9 +347,9 @@ int main(int argc, char *argv[])
     }
     g_keys.dsa_keygen_ms = now_ms() - t0;
 
-    printf("[client] Keygen completed: X25519=%.3fms  Ed25519=%.3fms\n",
+    printf("  \033[1;32m[Key Generation]\033[0m   Classical Keys Generated (Key Exchange: %.3f ms | Digital Signature: %.3f ms)\n",
            g_keys.kem_keygen_ms, g_keys.dsa_keygen_ms);
-    printf("[client] Initiating 4-way mutual authentication handshake...\n");
+    printf("  \033[1;32m[Handshake Init]\033[0m   Starting 4-Way Mutual Authentication Handshake...\n");
 
     metrics_t metrics = {0};
     metrics.session_start_ns = now_ns();
@@ -365,9 +365,20 @@ int main(int argc, char *argv[])
     explicit_bzero(g_keys.kem_sk, sizeof(g_keys.kem_sk));
     explicit_bzero(g_keys.dsa_sk, sizeof(g_keys.dsa_sk));
 
-    printf("\033[1;32m✓ Session established in %.3f ms (SID=%016llx)\033[0m\n\n",
-           metrics.hs_total_ms, (unsigned long long)c.session_id);
-    printf("Type messages and press Enter. Ctrl+C to exit.\n\n");
+    char ts[16];
+    now_hms(ts, sizeof(ts));
+    printf("  \033[1;32m[Connection Status]\033[0m Secure Handshake completed in %.3f ms (Key Exchange: %.3f ms, Digital Signature: %.3f ms)\n",
+           metrics.hs_total_ms, metrics.hs_encap_ms, metrics.hs_sign_ms);
+    printf("  \033[1;32m[Session Keys]\033[0m      Client Session Key : %02x%02x%02x%02x%02x%02x%02x%02x... (Used by client to encrypt messages to server)\n",
+           c.tx_key[0], c.tx_key[1], c.tx_key[2], c.tx_key[3],
+           c.tx_key[4], c.tx_key[5], c.tx_key[6], c.tx_key[7]);
+    printf("                      Server Session Key : %02x%02x%02x%02x%02x%02x%02x%02x... (Used by server to encrypt messages to client)\n",
+           c.rx_key[0], c.rx_key[1], c.rx_key[2], c.rx_key[3],
+           c.rx_key[4], c.rx_key[5], c.rx_key[6], c.rx_key[7]);
+    printf("  \033[1;32m[Security Features]\033[0m Tamper-Proof Header Binding (AES-128-CCM) + Replay Attack Protection Active\n");
+    printf("\n\033[1;32m[%s] Connected securely to %s:%d (Session ID: 0x%016llx)\033[0m\n",
+           ts, server_ip, SERVER_PORT, (unsigned long long)c.session_id);
+    printf("[%s] Ready to chat. Type a message and press Enter (Ctrl-C or 'exit' to quit).\n\n", ts);
 
     /* Spawn background RX thread */
     rx_args_t rx_args = { .conn = &c, .metrics = &metrics, .stop = 0 };
@@ -423,6 +434,6 @@ int main(int argc, char *argv[])
     conn_destroy(&c);
     close(sock);
 
-    printf("\n[client] Goodbye.\n");
+    printf("\n[client] Session cleanly closed.\n");
     return 0;
 }

@@ -1,3 +1,4 @@
+
 # Makefile.arm32 — PQC Client Benchmarks Cross-Compilation [ARM32 / ARMv7-A]
 #
 # Target architecture: ARM32 / ARMv7-A (armhf) with NEON / VFPv4
@@ -72,6 +73,18 @@ bench_nclient_arm32: bench_nclient.c $(SHARED_OBJS)
 	$(CC) $(OPT) $(LTO) $(WARN) $(DEFS) $(INC) -o $@ $^ $(LIBS) $(LDFLAGS) -lm
 	@ln -sf bench_nclient_arm32 bench_nclient
 	@echo "Built: bench_nclient_arm32  [armv7-a + NEON] (symlink: bench_nclient)"
+
+client: client_arm32
+	ln -sf client_arm32 client
+
+client_broadcast: client_broadcast_arm32
+	ln -sf client_broadcast_arm32 client_broadcast
+
+bench_pqc: bench_pqc_arm32
+	ln -sf bench_pqc_arm32 bench_pqc
+
+bench_nclient: bench_nclient_arm32
+	ln -sf bench_nclient_arm32 bench_nclient
 
 clean:
 	rm -f bench_pqc_arm32 bench_nclient_arm32 client_arm32 client_broadcast_arm32 \

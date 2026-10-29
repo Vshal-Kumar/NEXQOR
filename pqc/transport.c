@@ -46,10 +46,10 @@ uint64_t now_ns(void) {
 void now_hms(char *buf, int sz) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
-  struct tm *t = localtime(&ts.tv_sec);
-  if (t)
-    snprintf(buf, (size_t)sz, "%02d:%02d:%02d.%03ld", t->tm_hour, t->tm_min,
-             t->tm_sec, ts.tv_nsec / 1000000L);
+  struct tm tm;
+  if (localtime_r(&ts.tv_sec, &tm))
+    snprintf(buf, (size_t)sz, "%02d:%02d:%02d.%03ld", tm.tm_hour, tm.tm_min,
+             tm.tm_sec, ts.tv_nsec / 1000000L);
   else
     snprintf(buf, (size_t)sz, "??:??:??.???");
 }
@@ -552,71 +552,68 @@ void metrics_update_rtt(metrics_t *m, uint64_t recv_ns) {
 
 /* ── metrics_print ───────────────────────────────────────────────── */
 void metrics_print(const metrics_t *m) {
-  char ts[16];
+  if (!m) return;
+  char ts[20];
   now_hms(ts, sizeof(ts));
 
   double elapsed_s = 0.0;
   if (m->session_start_ns > 0)
     elapsed_s = (double)(now_ns() - m->session_start_ns) / 1e9;
 
-  printf("\n╔══════════════════════════════════════════════╗\n");
-  printf("║     SESSION METRICS  [%s]          ║\n", ts);
-  printf("╠══════════════════════════════════════════════╣\n");
+  printf("\n╔════════════════════════════════════════════════════════════════════════════╗\n");
+  printf("║                     SESSION METRICS SUMMARY  [%s]                  ║\n", ts);
+  printf("╠════════════════════════════════════════════════════════════════════════════╣\n");
 
-  printf("║  PQC HANDSHAKE BREAKDOWN                     ║\n");
-  printf("║  ─────────────────────────────────────────── ║\n");
-  printf("║  KEM keygen        : %8.2f µs             ║\n",
-         m->hs_kem_keygen_ms * 1000.0);
-  printf("║  DSA keygen        : %8.2f µs             ║\n",
-         m->hs_dsa_keygen_ms * 1000.0);
-  printf("║  KEM Encap/Decap   : %8.2f µs             ║\n", m->hs_encap_ms * 1000.0);
-  printf("║  DSA Sign          : %8.2f µs             ║\n", m->hs_sign_ms * 1000.0);
-  printf("║  DSA Verify        : %8.2f µs             ║\n", m->hs_verify_ms * 1000.0);
-  printf("║  Handshake Total   : %8.2f ms             ║\n", m->hs_total_ms);
-  printf("║                                              ║\n");
+  printf("║  CONNECTION SETUP (POST-QUANTUM HANDSHAKE TIMINGS)                         ║\n");
+  printf("║  ───────────────────────────────────────────────────────────────────────── ║\n");
+  printf("║  Key Exchange Setup (KeyGen)          : %8.2f µs (%.3f ms)               ║\n",
+         m->hs_kem_keygen_ms * 1000.0, m->hs_kem_keygen_ms);
+  printf("║  Digital Signature Setup (KeyGen)     : %8.2f µs (%.3f ms)               ║\n",
+         m->hs_dsa_keygen_ms * 1000.0, m->hs_dsa_keygen_ms);
+  printf("║  Shared Secret Calculation            : %8.2f µs (%.3f ms)               ║\n",
+         m->hs_encap_ms * 1000.0, m->hs_encap_ms);
+  printf("║  Identity Signature Creation          : %8.2f µs (%.3f ms)               ║\n",
+         m->hs_sign_ms * 1000.0, m->hs_sign_ms);
+  printf("║  Identity Signature Verification      : %8.2f µs (%.3f ms)               ║\n",
+         m->hs_verify_ms * 1000.0, m->hs_verify_ms);
+  printf("║  Total Connection Handshake Time      : %8.2f ms                         ║\n",
+         m->hs_total_ms);
+  printf("║                                                                            ║\n");
 
-  printf("║  AEAD (ChaCha20-Poly1305 + AAD)              ║\n");
-  printf("║  ─────────────────────────────────────────── ║\n");
-  if (m->encrypt_count > 0)
-    printf("║  Avg encrypt       : %8.2f µs             ║\n",
-           m->total_encrypt_us / (double)m->encrypt_count);
-  if (m->decrypt_count > 0)
-    printf("║  Avg decrypt       : %8.2f µs             ║\n",
-           m->total_decrypt_us / (double)m->decrypt_count);
-  printf("║                                              ║\n");
+  printf("║  MESSAGE ENCRYPTION & DECRYPTION SPEED                                     ║\n");
+  printf("║  ───────────────────────────────────────────────────────────────────────── ║\n");
+  double avg_enc = (m->encrypt_count > 0) ? (m->total_encrypt_us / (double)m->encrypt_count) : 0.0;
+  double avg_dec = (m->decrypt_count > 0) ? (m->total_decrypt_us / (double)m->decrypt_count) : 0.0;
+  printf("║  Avg Time to Encrypt Outbound Message : %8.2f µs (%.3f ms)               ║\n",
+         avg_enc, avg_enc / 1000.0);
+  printf("║  Avg Time to Decrypt Inbound Message  : %8.2f µs (%.3f ms)               ║\n",
+         avg_dec, avg_dec / 1000.0);
+  printf("║                                                                            ║\n");
 
-  printf("║  NETWORK                                     ║\n");
-  printf("║  ─────────────────────────────────────────── ║\n");
-  printf("║  Messages sent     : %8llu                ║\n",
+  printf("║  DATA TRANSFER & NETWORK PERFORMANCE                                       ║\n");
+  printf("║  ───────────────────────────────────────────────────────────────────────── ║\n");
+  printf("║  Total Messages Sent                  : %8llu                             ║\n",
          (unsigned long long)m->msg_count);
-  printf("║  Bytes sent        : %8llu B              ║\n",
+  printf("║  Total Data Sent (Outbound Bytes)     : %8llu Bytes                      ║\n",
          (unsigned long long)m->bytes_sent);
-  printf("║  Bytes received    : %8llu B              ║\n",
+  printf("║  Total Data Received (Inbound Bytes)  : %8llu Bytes                      ║\n",
          (unsigned long long)m->bytes_recv);
 
-  if (elapsed_s > 0.01) {
-    double tx_kbps = (double)m->bytes_sent * 8.0 / elapsed_s / 1000.0;
-    double rx_kbps = (double)m->bytes_recv * 8.0 / elapsed_s / 1000.0;
-    printf("║  TX bandwidth      : %8.2f kbps           ║\n", tx_kbps);
-    printf("║  RX bandwidth      : %8.2f kbps           ║\n", rx_kbps);
-    printf("║  Session duration  : %8.3f s              ║\n", elapsed_s);
-  }
+  double tx_kbps = (elapsed_s > 0.0001) ? ((double)m->bytes_sent * 8.0 / elapsed_s / 1000.0) : 0.0;
+  double rx_kbps = (elapsed_s > 0.0001) ? ((double)m->bytes_recv * 8.0 / elapsed_s / 1000.0) : 0.0;
+  printf("║  Outbound Transfer Speed              : %8.2f kbps                        ║\n", tx_kbps);
+  printf("║  Inbound Transfer Speed               : %8.2f kbps                        ║\n", rx_kbps);
+  printf("║  Session Active Duration              : %9.3f seconds                     ║\n", elapsed_s);
 
-  printf("║  Retransmissions   : %8llu                ║\n",
+  printf("║  Dropped / Retransmitted Packets      : %8llu                             ║\n",
          (unsigned long long)m->retransmissions);
 
-  if (m->decrypt_count > 1) {
-    double ia_min = (m->msg_min_rtt_ms >= 1e14) ? 0.0 : m->msg_min_rtt_ms;
-    printf("║  Inter-arrival avg : %7.3f ms              ║\n",
-           m->msg_avg_rtt_ms);
-    printf("║  Inter-arrival min : %7.3f ms              ║\n", ia_min);
-    printf("║  Inter-arrival max : %7.3f ms              ║\n",
-           m->msg_max_rtt_ms);
-    printf("║  Jitter (RFC3550)  : %7.3f ms              ║\n", m->jitter_ms);
-  } else {
-    printf("║  Jitter            :   N/A (need 2+ msgs)  ║\n");
-  }
-  printf("╚══════════════════════════════════════════════╝\n\n");
+  double ia_min = (m->msg_min_rtt_ms >= 1e14) ? 0.0 : m->msg_min_rtt_ms;
+  printf("║  Avg Gap Between Messages             : %9.3f ms                         ║\n", m->msg_avg_rtt_ms);
+  printf("║  Min Gap Between Messages             : %9.3f ms                         ║\n", ia_min);
+  printf("║  Max Gap Between Messages             : %9.3f ms                         ║\n", m->msg_max_rtt_ms);
+  printf("║  Network Delay Jitter (Timing Var)    : %9.3f ms                         ║\n", m->jitter_ms);
+  printf("╚════════════════════════════════════════════════════════════════════════════╝\n");
 }
 
 /* ── Dynamic Server Resolution & Auto-Discovery ──────────────────── */
@@ -832,6 +829,19 @@ int resolve_server_address(const char *input_target, struct sockaddr_in *out_pee
     snprintf(candidate, sizeof(candidate), "%s", DEFAULT_SERVER_ADDR);
   }
 
+  /* Check for optional port override in candidate string or environment */
+  uint16_t override_port = 0;
+  char *colon = strchr(candidate, ':');
+  if (colon) {
+    *colon = '\0';
+    override_port = (uint16_t)atoi(colon + 1);
+  }
+  const char *env_port = getenv("SERVER_PORT");
+  if (override_port == 0 && env_port && env_port[0] != '\0') {
+    override_port = (uint16_t)atoi(env_port);
+  }
+  uint16_t final_port = (override_port > 0) ? override_port : SERVER_PORT;
+
   /* Resolve candidate string via getaddrinfo (handles IPv4 numeric, hostname, and Tailscale DNS) */
   struct addrinfo hints, *res = NULL;
   memset(&hints, 0, sizeof(hints));
@@ -848,7 +858,7 @@ int resolve_server_address(const char *input_target, struct sockaddr_in *out_pee
     if (out_peer) {
       memset(out_peer, 0, sizeof(*out_peer));
       out_peer->sin_family = AF_INET;
-      out_peer->sin_port = htons(SERVER_PORT);
+      out_peer->sin_port = htons(final_port);
       out_peer->sin_addr = direct_addr;
     }
     if (resolved_ip_str && str_len > 0) {
@@ -861,7 +871,7 @@ int resolve_server_address(const char *input_target, struct sockaddr_in *out_pee
   if (out_peer) {
     memset(out_peer, 0, sizeof(*out_peer));
     out_peer->sin_family = AF_INET;
-    out_peer->sin_port = htons(SERVER_PORT);
+    out_peer->sin_port = htons(final_port);
     out_peer->sin_addr = sin_res->sin_addr;
   }
   if (resolved_ip_str && str_len > 0) {

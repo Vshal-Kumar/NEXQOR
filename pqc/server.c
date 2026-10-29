@@ -943,7 +943,7 @@ static void *ipc_rx_accept_thread(void *arg) {
       usleep(100000);
       continue;
     }
-    printf("[server] server_rx connected\n");
+    printf("[server] Dashboard Incoming Stream (Server Receive Channel) connected\n");
     pthread_mutex_lock(&g_ipc_rx_mu);
     if (g_ipc_rx_fd >= 0)
       close(g_ipc_rx_fd);
@@ -1013,7 +1013,7 @@ static void *ipc_tx_rx_loop(void *arg) {
     g_ipc_tx_fd = -1;
   pthread_mutex_unlock(&g_ipc_tx_mu);
   close(fd);
-  printf("[server] server_tx disconnected\n");
+  printf("[server] Dashboard Outgoing Stream (Server Transmit Channel) disconnected\n");
   return NULL;
 }
 
@@ -1028,12 +1028,13 @@ static void *ipc_tx_accept_thread(void *arg) {
       usleep(100000);
       continue;
     }
-    printf("[server] server_tx connected\n");
+    printf("[server] Dashboard Outgoing Stream (Server Transmit Channel) connected\n");
     pthread_mutex_lock(&g_ipc_tx_mu);
     if (g_ipc_tx_fd >= 0)
       close(g_ipc_tx_fd);
     g_ipc_tx_fd = fd;
     pthread_mutex_unlock(&g_ipc_tx_mu);
+    ipc_push_client_list();
 
     pthread_t tid;
     pthread_create(&tid, NULL, ipc_tx_rx_loop, (void *)(intptr_t)fd);
@@ -1196,7 +1197,7 @@ static void sweep_timeouts(void) {
 
     uint64_t elapsed_ns = now - s->last_seen_ns;
     if (s->state == SESSION_ESTABLISHED) {
-      if (elapsed_ns > 60000000000ULL) { /* 60 seconds timeout */
+      if (elapsed_ns > 600000000000ULL) { /* 600 seconds (10 mins) timeout */
         char ip_str[16];
         inet_ntop(AF_INET, &s->ip, ip_str, sizeof(ip_str));
         char ts[16];
@@ -1697,19 +1698,12 @@ int main(void) {
                   continue; /* Prevent stack buffer overflow */
                 }
 
-                /* Construct canonical wire header as AAD */
-                pkt_hdr_t wire_hdr;
-                wire_hdr.seq = htonl(hdr.seq);
-                wire_hdr.type = hdr.type;
-                wire_hdr.len = htons(payload_len);
-                wire_hdr.session_id = htobe64(hdr.session_id);
-
                 /* Pre-auth replay window check */
                 int rcheck = replay_window_check(&s->replay_win, hdr.seq);
                 if (rcheck != 0) {
                   /* Duplicate packet. Re-send ACK if authentic, but do not process again */
                   uint8_t dummy_pt[DATA_CHUNK_MAX];
-                  int auth_rc = aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                  int auth_rc = aead_decrypt(ct, ct_len, (const uint8_t *)pkt, PKT_HDR_BYTES,
                                              s->client_write_key, nonce, tag, dummy_pt);
                   if (auth_rc >= 0) {
                     server_send_ack(g_listen_sock, peer, hdr.seq, s->session_id_val);
@@ -1719,7 +1713,7 @@ int main(void) {
 
                 uint8_t plaintext[DATA_CHUNK_MAX];
                 double dec_t0 = now_ms();
-                int pt_len = aead_decrypt(ct, ct_len, (const uint8_t *)&wire_hdr, PKT_HDR_BYTES,
+                int pt_len = aead_decrypt(ct, ct_len, (const uint8_t *)pkt, PKT_HDR_BYTES,
                                           s->client_write_key, nonce, tag, plaintext);
                 double dec_us = (now_ms() - dec_t0) * 1000.0;
 
@@ -1747,8 +1741,6 @@ int main(void) {
                   char ip_str[16];
                   inet_ntop(AF_INET, &peer->sin_addr, ip_str, sizeof(ip_str));
                   uint16_t rport = ntohs(peer->sin_port);
-                  ipc_push_rx_msg(s->client_registry_id, ip_str, rport,
-                                  s->session_id_val, plaintext, pt_len);
 
                   float avg_dec =
                       (s->metrics.decrypt_count > 0)
@@ -1758,6 +1750,11 @@ int main(void) {
                   ipc_push_rx_metrics(s->client_registry_id, (float)dec_us,
                                       0.0f, 0.0f, avg_dec,
                                       s->metrics.bytes_recv, hdr.seq);
+
+                  ipc_push_rx_msg(s->client_registry_id, ip_str, rport,
+                                  s->session_id_val, plaintext, pt_len);
+                  printf("[server] PKT_DATA received from Client-%02d: %.*s (decrypted in %.2f us)\n",
+                         s->client_registry_id, pt_len, plaintext, dec_us);
 
                   /* Echo back to client using server_write_key */
                   uint8_t echo_pkt[12 + 16 + DATA_CHUNK_MAX];

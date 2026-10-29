@@ -751,7 +751,7 @@ static void *ipc_rx_accept_thread(void *arg) {
       usleep(100000);
       continue;
     }
-    printf("[server] server_rx terminal connected\n");
+    printf("[server] Dashboard Incoming Stream (Server Receive Channel) connected\n");
     pthread_mutex_lock(&g_ipc_rx_mu);
     if (g_ipc_rx_fd >= 0) close(g_ipc_rx_fd);
     g_ipc_rx_fd = fd;
@@ -771,7 +771,7 @@ static void *ipc_tx_worker_thread(void *arg) {
       usleep(100000);
       continue;
     }
-    printf("[server] server_tx terminal connected\n");
+    printf("[server] Dashboard Outgoing Stream (Server Transmit Channel) connected\n");
     pthread_mutex_lock(&g_ipc_tx_mu);
     if (g_ipc_tx_fd >= 0) close(g_ipc_tx_fd);
     g_ipc_tx_fd = fd;

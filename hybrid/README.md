@@ -24,7 +24,9 @@ The QRYPTONEX Hybrid Suite solves both challenges through a **dual-security hybr
 3. **Strict Fail-Closed Architecture**: No single-primitive fallback is ever permitted. Both the classical and post-quantum handshakes and signatures must verify cleanly; any tampered or missing component results in immediate connection abortion.
 
 > [!NOTE]
-> The original post-quantum implementation (located in the project root on port `9877`) and the classical IoT implementation (`classical/` on port `9877`/`9878`) remain completely untouched, self-contained, and independently buildable. This hybrid implementation resides entirely in `hybrid/` on UDP port `9879`.
+> The original post-quantum implementation (`pqc/` on port `9877`) and the classical IoT implementation (`classical/` on port `9877`/`9878`) remain completely untouched, self-contained, and independently buildable. This hybrid implementation resides entirely in `hybrid/` on UDP port `9879`.
+> - **Unified Dual GTK 4 Graphical Interface (`./app.sh`)**: Runs both the Server NOC Telemetry Console and the Real-Network Attack Testing Lab simultaneously.
+> - **Security Evaluation Lab (`security_lab/`)**: Real-network testing framework evaluating PQC, Hybrid, and Classical suites against active threat vectors (replay, packet tampering, authentication forgery, fuzzing, MTU fragmentation, and network impairments). See [security_lab/README.md](../security_lab/README.md).
 
 ---
 

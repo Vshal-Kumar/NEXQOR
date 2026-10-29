@@ -1,0 +1,402 @@
+/*
+ * ui/style.css — Cyberpunk / Dark NOC Theme for QRYPTONEX Dashboard
+ */
+
+window {
+    background-color: #080c16;
+    color: #e2e8f0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+headerbar {
+    background-color: #0b0f1d;
+    border-bottom: 1px solid #1e293b;
+    padding: 6px 12px;
+}
+
+.top-bar {
+    background: linear-gradient(180deg, #10172a 0%, #080c16 100%);
+    border-bottom: 1px solid #1e293b;
+    padding: 10px 18px;
+}
+
+.brand-title {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: #38bdf8;
+    text-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+}
+
+.brand-subtitle {
+    font-size: 11px;
+    font-weight: 500;
+    color: #94a3b8;
+    letter-spacing: 0.5px;
+}
+
+/* Status Badges */
+.badge-online {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid #10b981;
+    color: #34d399;
+    border-radius: 9999px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+.badge-offline {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid #ef4444;
+    color: #f87171;
+    border-radius: 9999px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+.badge-pill {
+    background: #111827;
+    border: 1px solid #283548;
+    color: #cbd5e1;
+    border-radius: 9999px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge-accent {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid #a855f7;
+    color: #c084fc;
+    border-radius: 9999px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.badge-mode {
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid #0284c7;
+    color: #38bdf8;
+    border-radius: 9999px;
+    padding: 4px 14px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* Paned Separator */
+paned > separator {
+    background-color: #1e293b;
+    min-width: 4px;
+    min-height: 4px;
+}
+
+paned > separator:hover {
+    background-color: #38bdf8;
+}
+
+/* Card Containers */
+.dashboard-card {
+    background-color: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 14px;
+    margin: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.card-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+/* Client Item in List */
+.client-row {
+    background-color: #162032;
+    border: 1px solid #24344d;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    transition: all 150ms ease;
+}
+
+.client-row:hover {
+    background-color: #1c2b42;
+    border-color: #38bdf8;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+}
+
+.client-row:selected {
+    background-color: #1a3353;
+    border: 1px solid #38bdf8;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.3);
+}
+
+.client-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.client-ip {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 12px;
+    color: #38bdf8;
+}
+
+.client-meta {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+/* Monospace Crypto Inspector */
+.crypto-inspector {
+    background-color: #080c16;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'DejaVu Sans Mono', monospace;
+    font-size: 12px;
+    color: #cbd5e1;
+}
+
+.crypto-key-label {
+    color: #718096;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.crypto-key-val {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 12px;
+    color: #38bdf8;
+    font-weight: 700;
+}
+
+.crypto-key-sec {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 12px;
+    color: #c084fc;
+    font-weight: 700;
+}
+
+.crypto-tag-ok {
+    color: #34d399;
+    font-weight: 700;
+}
+
+/* ── Chat Messages (Left / Right Layout) ──────────────────────────── */
+.chat-window {
+    background-color: #070a13;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.message-row-left {
+    margin: 8px 0;
+}
+
+.message-row-right {
+    margin: 8px 0;
+}
+
+/* Received Message (Inbound from Client) — Left Side */
+.message-bubble-rx {
+    background: linear-gradient(135deg, #131d33 0%, #0c1424 100%);
+    border: 1px solid #1e3a5f;
+    border-left: 4px solid #38bdf8;
+    border-radius: 10px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Sent Message (Outbound from Server/Operator) — Right Side */
+.message-bubble-tx {
+    background: linear-gradient(135deg, #1f1b3b 0%, #120f26 100%);
+    border: 1px solid #3c2d66;
+    border-right: 4px solid #c084fc;
+    border-radius: 10px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.msg-header-rx {
+    font-size: 12px;
+    font-weight: 700;
+    color: #38bdf8;
+}
+
+.msg-header-tx {
+    font-size: 12px;
+    font-weight: 700;
+    color: #c084fc;
+}
+
+.msg-time {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    color: #64748b;
+    margin-left: 8px;
+}
+
+.msg-text {
+    font-size: 14px;
+    color: #f8fafc;
+    margin: 6px 0;
+    line-height: 1.4;
+}
+
+.msg-meta-rx {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 4px;
+    padding: 4px 8px;
+    margin-top: 4px;
+}
+
+.msg-meta-tx {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+.msg-expand-btn {
+    background: transparent;
+    border: none;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-top: 4px;
+    border-radius: 4px;
+}
+
+.msg-expand-btn:hover {
+    background-color: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+}
+
+.msg-details-box {
+    background-color: #050811;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 6px;
+}
+
+.crypto-detail-label {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.crypto-detail-val {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    color: #38bdf8;
+    font-weight: 700;
+}
+
+.crypto-detail-val-tx {
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    color: #c084fc;
+    font-weight: 700;
+}
+
+/* Message Entry Box */
+entry {
+    background-color: #0b0f19;
+    border: 1px solid #283548;
+    border-radius: 8px;
+    color: #f8fafc;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+entry:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3);
+}
+
+/* Buttons */
+button {
+    background-color: #162032;
+    border: 1px solid #283548;
+    border-radius: 8px;
+    color: #f8fafc;
+    font-weight: 600;
+    padding: 8px 16px;
+    transition: all 150ms ease;
+}
+
+button:hover {
+    background-color: #24344d;
+    border-color: #64748b;
+}
+
+button.btn-primary {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    border: 1px solid #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+button.btn-primary:hover {
+    background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.55);
+}
+
+button.btn-success {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    border: 1px solid #10b981;
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+}
+
+button.btn-success:hover {
+    background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.55);
+}
+
+button.btn-danger {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    border: 1px solid #ef4444;
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+}
+
+button.btn-danger:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+}
+
+/* Metrics Table Card */
+.metrics-box {
+    background-color: #060911;
+    border: 1px solid #1a2638;
+    border-radius: 8px;
+    padding: 10px;
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    color: #38bdf8;
+}

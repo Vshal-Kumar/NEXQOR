@@ -342,10 +342,16 @@ int main(int argc, char *argv[]) {
 
     char ts[16];
     now_hms(ts, sizeof(ts));
-    printf("  \033[1;32m[Handshake]\033[0m Completed in %.3f ms (Mutual Auth + Dual Signatures)\n",
-           metrics.hs_total_ms);
-    printf("  \033[1;32m[Wire Security]\033[0m ChaCha20-Poly1305 15B AAD Header Binding + RFC 6479 Replay Window\n");
-    printf("\n\033[1;32m[%s] Connected to %s:%d (Session ID: %016llx)\033[0m\n",
+    printf("  \033[1;32m[Connection Status]\033[0m Secure Hybrid Handshake completed in %.3f ms (Key Exchange: %.3f ms, Digital Signature: %.3f ms)\n",
+           metrics.hs_total_ms, metrics.hs_encap_ms, metrics.hs_sign_ms);
+    printf("  \033[1;32m[Session Keys]\033[0m      Client Session Key : %02x%02x%02x%02x%02x%02x%02x%02x... (Used by client to encrypt messages to server)\n",
+           c.tx_key[0], c.tx_key[1], c.tx_key[2], c.tx_key[3],
+           c.tx_key[4], c.tx_key[5], c.tx_key[6], c.tx_key[7]);
+    printf("                      Server Session Key : %02x%02x%02x%02x%02x%02x%02x%02x... (Used by server to encrypt messages to client)\n",
+           c.rx_key[0], c.rx_key[1], c.rx_key[2], c.rx_key[3],
+           c.rx_key[4], c.rx_key[5], c.rx_key[6], c.rx_key[7]);
+    printf("  \033[1;32m[Security Features]\033[0m Dual Classical + Post-Quantum Protection + ChaCha20-Poly1305 Header Binding Active\n");
+    printf("\n\033[1;32m[%s] Connected securely to %s:%d (Session ID: 0x%016llx)\033[0m\n",
            ts, server_ip, SERVER_PORT, (unsigned long long)c.session_id);
     printf("[%s] Streaming encrypted IoT telemetry from device '%s'...\n\n", ts, device_id);
 
@@ -399,5 +405,6 @@ int main(int argc, char *argv[]) {
     conn_destroy(&c);
     close(sock);
     printf("\n[broadcast] Broadcaster cleanly shut down.\n");
+    printf("[client] Session cleanly closed.\n");
     return 0;
 }

@@ -92,7 +92,7 @@ static void *rx_thread(void *arg)
             metrics_print(a->metrics);
             close(a->conn->sock);
             conn_destroy(a->conn);
-            printf("[client] Exit.\n");
+            printf("\n[client] Session cleanly closed.\n");
             exit(0);
         }
         if (hdr.type != PKT_DATA) continue;
@@ -303,11 +303,20 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    printf("\n\033[1;32m✓ SECURE HYBRID LINK ESTABLISHED\033[0m (Total Handshake: %.2f ms)\n", m.hs_total_ms);
-    printf("  • Classical  : X25519 (ECDH) + Ed25519 (Signature)\n");
-    printf("  • Post-Quantum: ML-KEM-768 (KEM) + ML-DSA-65 (Signature)\n");
-    printf("  • Cipher     : ChaCha20-Poly1305 + Header AAD binding\n\n");
-    printf("Type messages and press Enter. Type 'exit' or Ctrl+C to quit.\n\n");
+    char ts[16];
+    now_hms(ts, sizeof(ts));
+    printf("  \033[1;32m[Connection Status]\033[0m Secure Hybrid Handshake completed in %.3f ms (Key Exchange: %.3f ms, Digital Signature: %.3f ms)\n",
+           m.hs_total_ms, m.hs_encap_ms, m.hs_sign_ms);
+    printf("  \033[1;32m[Session Keys]\033[0m      Client Session Key : %02x%02x%02x%02x%02x%02x%02x%02x... (Used by client to encrypt messages to server)\n",
+           c.tx_key[0], c.tx_key[1], c.tx_key[2], c.tx_key[3],
+           c.tx_key[4], c.tx_key[5], c.tx_key[6], c.tx_key[7]);
+    printf("                      Server Session Key : %02x%02x%02x%02x%02x%02x%02x%02x... (Used by server to encrypt messages to client)\n",
+           c.rx_key[0], c.rx_key[1], c.rx_key[2], c.rx_key[3],
+           c.rx_key[4], c.rx_key[5], c.rx_key[6], c.rx_key[7]);
+    printf("  \033[1;32m[Security Features]\033[0m Dual Classical + Post-Quantum Protection + ChaCha20-Poly1305 Header Binding Active\n");
+    printf("\n\033[1;32m[%s] Connected securely to %s:%d (Session ID: 0x%016llx)\033[0m\n",
+           ts, server_ip, SERVER_PORT, (unsigned long long)c.session_id);
+    printf("[%s] Ready to chat. Type a message and press Enter (Ctrl-C or 'exit' to quit).\n\n", ts);
 
     /* 5. Spawn RX Thread */
     rx_args_t rxa;

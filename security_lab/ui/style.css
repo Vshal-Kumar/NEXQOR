@@ -1,0 +1,245 @@
+/*
+ * security_lab/ui/style.css — Sleek Cyber Dark Theme for GTK 4 Security Lab
+ */
+
+* {
+    font-family: 'Outfit', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: #e2e8f0;
+}
+
+window {
+    background-color: #0b0f19;
+}
+
+/* ── Top Header Toolbar ─────────────────────────────────────────────── */
+.top-bar {
+    background: linear-gradient(180deg, #161f30 0%, #0f1624 100%);
+    border-bottom: 1px solid #23324d;
+    padding: 12px 20px;
+}
+
+.lab-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f8fafc;
+    letter-spacing: 0.8px;
+}
+
+.lab-subtitle {
+    font-size: 11px;
+    font-weight: 500;
+    color: #38bdf8;
+    letter-spacing: 0.5px;
+}
+
+/* ── Status Badges ──────────────────────────────────────────────────── */
+.status-badge {
+    padding: 5px 12px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    border: 1px solid transparent;
+}
+
+.status-idle {
+    background-color: rgba(71, 85, 105, 0.25);
+    border-color: #475569;
+    color: #94a3b8;
+}
+
+.status-running {
+    background-color: rgba(245, 158, 11, 0.2);
+    border-color: #f59e0b;
+    color: #fbbf24;
+}
+
+.status-passed {
+    background-color: rgba(16, 185, 129, 0.2);
+    border-color: #10b981;
+    color: #34d399;
+}
+
+.status-failed {
+    background-color: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #f87171;
+}
+
+/* ── Action Buttons ─────────────────────────────────────────────────── */
+button.btn-primary {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid #38bdf8;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+    transition: all 0.2s ease;
+}
+
+button.btn-primary:hover {
+    background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+    box-shadow: 0 6px 16px rgba(56, 189, 248, 0.5);
+}
+
+button.btn-emergency {
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid #f87171;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+button.btn-emergency:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+}
+
+button.btn-outline {
+    background-color: #1e293b;
+    color: #cbd5e1;
+    border: 1px solid #334155;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+
+button.btn-outline:hover {
+    background-color: #334155;
+    color: #f8fafc;
+}
+
+/* ── Panels & Cards ─────────────────────────────────────────────────── */
+.left-panel {
+    background-color: #0f172a;
+    border-right: 1px solid #1e293b;
+    padding: 16px;
+}
+
+.right-panel {
+    background-color: #0b0f19;
+    padding: 16px;
+}
+
+.panel-section-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: #64748b;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.param-card {
+    background-color: #131d31;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.param-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+/* ── Form Inputs ────────────────────────────────────────────────────── */
+entry {
+    background-color: #0b1120;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: #f1f5f9;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+entry:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+dropdown button {
+    background-color: #0b1120;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: #f1f5f9;
+}
+
+/* ── Scenario Selection Cards ───────────────────────────────────────── */
+.scenario-row {
+    background-color: #131d31;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    transition: all 0.15s ease-in-out;
+}
+
+.scenario-row:hover {
+    background-color: #1a2742;
+    border-color: #38bdf8;
+}
+
+.scenario-row:selected {
+    background-color: #1e3a5f;
+    border-color: #0ea5e9;
+}
+
+.scenario-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.scenario-desc {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+/* ── Terminal Console ───────────────────────────────────────────────── */
+.console-container {
+    background-color: #070a12;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+textview.console-text {
+    background-color: transparent;
+    color: #38bdf8;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+/* ── Results Summary Cards ──────────────────────────────────────────── */
+.results-card {
+    background-color: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.verdict-pass {
+    color: #10b981;
+    font-weight: 800;
+}
+
+.verdict-fail {
+    color: #ef4444;
+    font-weight: 800;
+}
+
+.metric-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #38bdf8;
+}

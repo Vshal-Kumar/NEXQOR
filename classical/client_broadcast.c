@@ -427,15 +427,15 @@ int main(int argc, char *argv[]) {
 
   char ts[16];
   now_hms(ts, sizeof(ts));
-  printf("  \033[1;32m[Handshake]\033[0m Completed in %.3f ms (ECDH Derive: %.3f ms, Ed25519 Sign: %.3f ms)\n",
+  printf("  \033[1;32m[Connection Status]\033[0m Secure Handshake completed in %.3f ms (Key Exchange: %.3f ms, Digital Signature: %.3f ms)\n",
          metrics.hs_total_ms, metrics.hs_encap_ms, metrics.hs_sign_ms);
-  printf("  \033[1;32m[Session Keys]\033[0m  Client TX Key : %02x%02x%02x%02x%02x%02x%02x%02x... (AES-128)\n",
+  printf("  \033[1;32m[Session Keys]\033[0m      Client Session Key : %02x%02x%02x%02x%02x%02x%02x%02x... (Used by client to encrypt messages to server)\n",
          c.tx_key[0], c.tx_key[1], c.tx_key[2], c.tx_key[3],
          c.tx_key[4], c.tx_key[5], c.tx_key[6], c.tx_key[7]);
-  printf("                  Server RX Key : %02x%02x%02x%02x%02x%02x%02x%02x... (AES-128)\n",
+  printf("                      Server Session Key : %02x%02x%02x%02x%02x%02x%02x%02x... (Used by server to encrypt messages to client)\n",
          c.rx_key[0], c.rx_key[1], c.rx_key[2], c.rx_key[3],
          c.rx_key[4], c.rx_key[5], c.rx_key[6], c.rx_key[7]);
-  printf("  \033[1;32m[Wire Security]\033[0m AES-128-CCM 15B AAD Header Binding + RFC 6479 Replay Window\n");
+  printf("  \033[1;32m[Security Features]\033[0m Tamper-Proof Header Binding (AES-128-CCM) + Replay Attack Protection Active\n");
   printf("\n\033[1;32m[%s] Connected to %s:%d (Session ID: %016llx)\033[0m\n",
          ts, server_ip, SERVER_PORT, (unsigned long long)c.session_id);
   printf("[%s] Streaming encrypted IoT telemetry from device '%s' (interval: %dms)...\n",
@@ -496,5 +496,6 @@ int main(int argc, char *argv[]) {
   now_hms(ts, sizeof(ts));
   printf("\n[%s] Disconnected. Streamed %llu telemetry packets.\n",
          ts, (unsigned long long)broadcast_count);
+  printf("[client] Session cleanly closed.\n");
   return 0;
 }
