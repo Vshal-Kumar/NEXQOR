@@ -18,27 +18,27 @@
 
 typedef struct {
     const char *id;
-    const char *icon;
+    const char *tag;
     const char *name;
     const char *description;
 } attack_scenario_def_t;
 
 static const attack_scenario_def_t G_SCENARIOS[] = {
-    { "all",          "🛡️", "All Scenarios (Full Suite)",           "Execute full security evaluation matrix" },
-    { "baseline",     "⚡", "Baseline Benchmark",                   "Legitimate session throughput, latency & ACK rate" },
-    { "loss",         "📉", "Packet Loss Resilience (15%)",        "In-transit packet drop profile & ACK recovery" },
-    { "delay_jitter", "⏱️", "Delay & Variable Jitter (30ms±15ms)",  "Tolerance to out-of-band network transit delays" },
-    { "reorder",      "🔀", "Packet Reordering (25%)",             "Out-of-order sequence window sliding checks" },
-    { "duplication",  "♊", "Packet Duplication (25%)",            "Replay rejection of duplicate datagram copies" },
-    { "disconnect",   "🔌", "Temporary Disconnection (2s)",        "Link blackhole & state machine reconnection" },
-    { "mtu",          "📏", "Path MTU Boundaries (512B-4096B)",    "Oversized datagram fragmentation & buffer limits" },
-    { "replay",       "🔄", "Replay Protection Attack",            "Duplicate seq, stale seq, seq 0, & cross-session" },
-    { "tampering",    "🔐", "AEAD Ciphertext & Tag Tampering",     "Bit-flipping, tag corruption, & AAD header mods" },
-    { "auth",         "🔏", "Authentication & Signature Forgery",   "Forged credentials, invalid DSA signatures" },
-    { "handshake",    "🤝", "Handshake State Machine Order",       "Out-of-order frames & incomplete handshake drops" },
-    { "malformed",    "💥", "Malformed Input & Fuzzing Flood",     "0-byte packets, truncated headers, random fuzz" },
-    { "stress",       "🏋️", "Concurrent Client Resource Stress",   "16 concurrent client handshake worker queues" },
-    { "isolation",    "🧱", "Session Isolation & Blast Radius",    "Cross-session injection & peer interference" }
+    { "all",          "[ALL]",  "All Security Scenarios (Full Suite)",        "Runs every network test and attack simulation automatically in sequence" },
+    { "baseline",     "[BASE]", "Normal Network Traffic Benchmark",          "Measures standard throughput, latency, and ACK response under clean conditions" },
+    { "loss",         "[LOSS]", "Packet Loss Resilience Test (15%)",          "Randomly drops 15% of packets to verify automatic retransmission and recovery" },
+    { "delay_jitter", "[JITR]", "Network Lag & Variable Jitter (30ms)",       "Adds unpredictable delay to verify packets do not time out or get stuck" },
+    { "reorder",      "[RORD]", "Scrambled Packet Order (25%)",               "Mixes up arrival sequence to verify anti-replay sliding window reorders properly" },
+    { "duplication",  "[DUPL]", "Duplicate Packet Flood (25%)",               "Sends duplicate copies to make sure identical packets are ignored and rejected" },
+    { "disconnect",   "[DISC]", "Temporary Link Outage (2s Outage)",          "Cuts network for 2 seconds to confirm the connection reconnects smoothly" },
+    { "mtu",          "[PMTU]", "Oversized Packet Test (512B - 4KB)",         "Sends large packets to verify buffers handle oversized data without crashing" },
+    { "replay",       "[RPLY]", "Replay Attack Simulation",                   "Resends previously captured packets to check they are blocked and ignored" },
+    { "tampering",    "[TAMP]", "Data Tampering & Bit-Flipping",              "Flips bits in encrypted packets to verify corrupted data is instantly rejected" },
+    { "auth",         "[AUTH]", "Forged Signature & Fake Identity",           "Sends forged cryptographic signatures to ensure unauthorized users cannot connect" },
+    { "handshake",    "[HSHK]", "Broken Handshake Order Attack",              "Sends handshake steps in wrong order to ensure server rejects bad flows" },
+    { "malformed",    "[FUZZ]", "Malformed Input & Fuzzing Flood",            "Sends random garbage bytes and broken headers to verify the server never crashes" },
+    { "stress",       "[STRS]", "High-Traffic Overload Stress Test",          "Simulates 16 simultaneous client connections to test memory limits and queue speed" },
+    { "isolation",    "[ISOL]", "Cross-Client Session Snooping",              "Attempts to inject messages into other clients' sessions to test strict separation" }
 };
 
 #define SCENARIO_COUNT (sizeof(G_SCENARIOS) / sizeof(G_SCENARIOS[0]))
@@ -130,8 +130,8 @@ static void post_console_line(attack_ui_app_t *ui, const char *line) {
 /* ── Results Visualizer & Table Population ─────────────────────────── */
 static void populate_results_card(attack_ui_app_t *ui, const char *scenario_name,
                                   const char *verdict, const char *evidence, const char *suite) {
-    GtkWidget *card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
-    gtk_widget_add_css_class(card, "param-card");
+    GtkWidget *card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_add_css_class(card, "results-card");
 
     GtkWidget *top_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget *title_lbl = gtk_label_new(scenario_name);
@@ -140,12 +140,22 @@ static void populate_results_card(attack_ui_app_t *ui, const char *scenario_name
     gtk_widget_set_hexpand(title_lbl, TRUE);
 
     GtkWidget *suite_badge = gtk_label_new(suite);
-    gtk_widget_add_css_class(suite_badge, "status-badge");
-    gtk_widget_add_css_class(suite_badge, "status-idle");
+    gtk_widget_add_css_class(suite_badge, "suite-badge");
 
-    GtkWidget *verdict_lbl = gtk_label_new(verdict);
+    /* Ensure verdict has zero emojis */
+    const char *clean_verdict = "PASS";
+    bool is_pass = true;
+    if (strstr(verdict, "FAIL") || strstr(verdict, "VULN")) {
+        clean_verdict = "FAIL";
+        is_pass = false;
+    } else if (strstr(verdict, "INCON") || strstr(verdict, "WARN")) {
+        clean_verdict = "INCONCLUSIVE";
+        is_pass = false;
+    }
+
+    GtkWidget *verdict_lbl = gtk_label_new(clean_verdict);
     gtk_widget_add_css_class(verdict_lbl, "status-badge");
-    if (strstr(verdict, "PASS")) {
+    if (is_pass) {
         gtk_widget_add_css_class(verdict_lbl, "status-passed");
     } else {
         gtk_widget_add_css_class(verdict_lbl, "status-failed");
@@ -156,7 +166,7 @@ static void populate_results_card(attack_ui_app_t *ui, const char *scenario_name
     gtk_box_append(GTK_BOX(top_row), verdict_lbl);
 
     GtkWidget *ev_lbl = gtk_label_new(evidence);
-    gtk_widget_add_css_class(ev_lbl, "scenario-desc");
+    gtk_widget_add_css_class(ev_lbl, "results-evidence");
     gtk_label_set_xalign(GTK_LABEL(ev_lbl), 0.0);
     gtk_label_set_wrap(GTK_LABEL(ev_lbl), TRUE);
 
@@ -181,6 +191,13 @@ static gboolean cb_on_attack_finished(gpointer user_data) {
     gtk_label_set_text(GTK_LABEL(ui->status_badge), "EVALUATION FINISHED");
     gtk_widget_remove_css_class(ui->status_badge, "status-running");
     gtk_widget_add_css_class(ui->status_badge, "status-passed");
+
+    /* Pre-compile formatted PDF report in background */
+    char gen_cmd[2560];
+    snprintf(gen_cmd, sizeof(gen_cmd), "python3 %.900s/security_lab/reporting/generate_pdf.py '%.900s' >/dev/null 2>&1 &",
+             ui->workspace_root, ui->workspace_root);
+    int r_gen = system(gen_cmd);
+    (void)r_gen;
 
     /* Clear old result cards */
     GtkWidget *child = gtk_widget_get_first_child(ui->results_list_box);
@@ -400,8 +417,8 @@ static void on_stop_clicked(GtkWidget *widget, gpointer user_data) {
     (void)widget;
     attack_ui_app_t *ui = (attack_ui_app_t *)user_data;
     if (ui->is_running && ui->worker_pid > 0) {
-        post_console_line(ui, "\n[EMERGENCY STOP] Operator triggered test cancellation (SIGINT/SIGTERM)");
-        gtk_label_set_text(GTK_LABEL(ui->status_badge), "ABORTING TEST...");
+        post_console_line(ui, "\n[ABORT] Attack execution aborted by operator (SIGINT/SIGTERM sent to worker process)");
+        gtk_label_set_text(GTK_LABEL(ui->status_badge), "ATTACK ABORTED");
         gtk_widget_remove_css_class(ui->status_badge, "status-running");
         gtk_widget_add_css_class(ui->status_badge, "status-failed");
 
@@ -420,12 +437,27 @@ static void on_stop_clicked(GtkWidget *widget, gpointer user_data) {
 static void on_open_report_clicked(GtkWidget *widget, gpointer user_data) {
     (void)widget;
     attack_ui_app_t *ui = (attack_ui_app_t *)user_data;
-    char report_path[1024];
-    snprintf(report_path, sizeof(report_path), "%.900s/security_lab/results/latest/report.md", ui->workspace_root);
-    char cmd[2200];
-    snprintf(cmd, sizeof(cmd), "xdg-open '%.1000s' 2>/dev/null || cat '%.1000s'", report_path, report_path);
-    int res = system(cmd);
+
+    /* Ensure formatted PDF report is compiled */
+    char gen_cmd[2560];
+    snprintf(gen_cmd, sizeof(gen_cmd), "python3 %.900s/security_lab/reporting/generate_pdf.py '%.900s' >/dev/null 2>&1",
+             ui->workspace_root, ui->workspace_root);
+    int res_gen = system(gen_cmd);
+    (void)res_gen;
+
+    char pdf_path[1024];
+    snprintf(pdf_path, sizeof(pdf_path), "%.900s/security_lab/results/latest/report.pdf", ui->workspace_root);
+
+    /* Open PDF via desktop default viewer, falling back to evince or browser */
+    char open_cmd[4096];
+    snprintf(open_cmd, sizeof(open_cmd), "xdg-open '%.1000s' 2>/dev/null || evince '%.1000s' 2>/dev/null || google-chrome '%.1000s' >/dev/null 2>&1 &",
+             pdf_path, pdf_path, pdf_path);
+    int res = system(open_cmd);
     (void)res;
+
+    char log_msg[1200];
+    snprintf(log_msg, sizeof(log_msg), "[REPORT] Displaying formatted PDF evaluation report: %s", pdf_path);
+    post_console_line(ui, log_msg);
 }
 
 static void on_target_preset_clicked(GtkWidget *widget, gpointer user_data) {
@@ -529,24 +561,24 @@ void attack_ui_activate(GtkApplication *app, gpointer user_data) {
     gtk_widget_add_css_class(ui->status_badge, "status-idle");
     gtk_box_append(GTK_BOX(top_bar), ui->status_badge);
 
-    ui->btn_run = gtk_button_new_with_label("🚀 Launch Attack");
+    ui->btn_run = gtk_button_new_with_label("Launch Attack");
     gtk_widget_add_css_class(ui->btn_run, "btn-primary");
     g_signal_connect(ui->btn_run, "clicked", G_CALLBACK(on_run_clicked), ui);
     gtk_box_append(GTK_BOX(top_bar), ui->btn_run);
 
-    ui->btn_run_all = gtk_button_new_with_label("⚡ Full Evaluation");
+    ui->btn_run_all = gtk_button_new_with_label("Full Evaluation");
     gtk_widget_add_css_class(ui->btn_run_all, "btn-outline");
     g_signal_connect(ui->btn_run_all, "clicked", G_CALLBACK(on_run_all_clicked), ui);
     gtk_box_append(GTK_BOX(top_bar), ui->btn_run_all);
 
-    ui->btn_stop = gtk_button_new_with_label("🛑 Emergency Stop");
+    ui->btn_stop = gtk_button_new_with_label("Abort Attack");
     gtk_widget_add_css_class(ui->btn_stop, "btn-emergency");
     gtk_widget_set_sensitive(ui->btn_stop, FALSE);
     g_signal_connect(ui->btn_stop, "clicked", G_CALLBACK(on_stop_clicked), ui);
     gtk_box_append(GTK_BOX(top_bar), ui->btn_stop);
 
-    ui->btn_open_report = gtk_button_new_with_label("📄 View Report");
-    gtk_widget_add_css_class(ui->btn_open_report, "btn-outline");
+    ui->btn_open_report = gtk_button_new_with_label("View PDF Report");
+    gtk_widget_add_css_class(ui->btn_open_report, "btn-report");
     g_signal_connect(ui->btn_open_report, "clicked", G_CALLBACK(on_open_report_clicked), ui);
     gtk_box_append(GTK_BOX(top_bar), ui->btn_open_report);
 
@@ -554,7 +586,7 @@ void attack_ui_activate(GtkApplication *app, gpointer user_data) {
 
     /* ── Main Split View ────────────────────────────────────────────── */
     GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
-    gtk_paned_set_position(GTK_PANED(paned), 460);
+    gtk_paned_set_position(GTK_PANED(paned), 470);
     gtk_widget_set_vexpand(paned, TRUE);
     gtk_box_append(GTK_BOX(root_vbox), paned);
 
@@ -674,11 +706,14 @@ void attack_ui_activate(GtkApplication *app, gpointer user_data) {
     g_signal_connect(ui->scenario_list_box, "row-selected", G_CALLBACK(on_scenario_selected), ui);
 
     for (size_t i = 0; i < SCENARIO_COUNT; i++) {
-        GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+        GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
         gtk_widget_add_css_class(row, "scenario-row");
 
-        GtkWidget *icon_lbl = gtk_label_new(G_SCENARIOS[i].icon);
-        gtk_box_append(GTK_BOX(row), icon_lbl);
+        /* Clean text badge tag without emojis */
+        GtkWidget *tag_lbl = gtk_label_new(G_SCENARIOS[i].tag);
+        gtk_widget_add_css_class(tag_lbl, "scenario-tag");
+        gtk_label_set_xalign(GTK_LABEL(tag_lbl), 0.5);
+        gtk_box_append(GTK_BOX(row), tag_lbl);
 
         GtkWidget *text_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
         GtkWidget *name_lbl = gtk_label_new(G_SCENARIOS[i].name);
@@ -711,6 +746,7 @@ void attack_ui_activate(GtkApplication *app, gpointer user_data) {
 
     ui->console_scrolled = gtk_scrolled_window_new();
     gtk_widget_add_css_class(ui->console_scrolled, "console-container");
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(ui->console_scrolled), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_widget_set_vexpand(ui->console_scrolled, TRUE);
 
     ui->console_view = gtk_text_view_new();
@@ -725,10 +761,10 @@ void attack_ui_activate(GtkApplication *app, gpointer user_data) {
 
     /* Welcome message in console */
     gtk_text_buffer_set_text(ui->console_buf,
-        "╔══════════════════════════════════════════════════════════════════════════╗\n"
-        "║             QRYPTONEX Real-Network Security Evaluation & Resilience Lab  ║\n"
-        "║             Ready to evaluate Classical, Hybrid, and Pure PQC stacks     ║\n"
-        "╚══════════════════════════════════════════════════════════════════════════╝\n"
+        "========================================================================\n"
+        "  QRYPTONEX Real-Network Security Evaluation & Resilience Lab\n"
+        "  Evaluation engine ready. Monitoring Classical, Hybrid, and Pure PQC.\n"
+        "========================================================================\n"
         "Select target IP and attack scenario, then click 'Launch Attack'.\n", -1);
 
     /* Bottom Half: Results & Resilience Matrix */
@@ -751,8 +787,9 @@ void attack_ui_activate(GtkApplication *app, gpointer user_data) {
     gtk_box_append(GTK_BOX(right_panel), res_head_box);
 
     GtkWidget *res_scroll = gtk_scrolled_window_new();
-    gtk_widget_set_size_request(res_scroll, -1, 260);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(res_scroll), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(res_scroll, -1, 280);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(res_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_vexpand(res_scroll, TRUE);
 
     ui->results_list_box = gtk_list_box_new();
     gtk_list_box_set_selection_mode(GTK_LIST_BOX(ui->results_list_box), GTK_SELECTION_NONE);

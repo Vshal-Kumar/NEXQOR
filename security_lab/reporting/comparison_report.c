@@ -37,9 +37,9 @@ int report_write_comparison_md(const run_metadata_t *meta,
     fprintf(f, "## 1. Executive Summary & Evaluated Cryptographic Suites\n\n");
     fprintf(f, "| Security Suite | Key Exchange (KEM) | Digital Signature (DSA) | Symmetric AEAD | Post-Quantum Resistance |\n");
     fprintf(f, "| :--- | :--- | :--- | :--- | :--- |\n");
-    fprintf(f, "| **1. Classical IoT** | X25519 ECDH (32B) | Ed25519 (64B Sig) | AES-128-CCM | ❌ Vulnerable to Shor's Algorithm |\n");
-    fprintf(f, "| **2. Hybrid Suite** | X25519 + ML-KEM-768 | Ed25519 + ML-DSA-65 | ChaCha20-Poly1305 | ✅ Dual-Protection (Quantum-Safe + FIPS compliant) |\n");
-    fprintf(f, "| **3. Pure Post-Quantum** | ML-KEM-768 (Kyber768) | ML-DSA-65 (Dilithium3) | ChaCha20-Poly1305 | ✅ Full NIST FIPS 203 & 204 PQC |\n\n");
+    fprintf(f, "| **1. Classical IoT** | X25519 ECDH (32B) | Ed25519 (64B Sig) | AES-128-CCM | Vulnerable (Classical only, Shor algorithm vulnerable) |\n");
+    fprintf(f, "| **2. Hybrid Suite** | X25519 + ML-KEM-768 | Ed25519 + ML-DSA-65 | ChaCha20-Poly1305 | Protected (Dual Classical + Post-Quantum) |\n");
+    fprintf(f, "| **3. Pure Post-Quantum** | ML-KEM-768 (Kyber768) | ML-DSA-65 (Dilithium3) | ChaCha20-Poly1305 | Protected (NIST FIPS 203 & 204 PQC) |\n\n");
 
     fprintf(f, "## 2. Experimental Scenarios & Validation Matrix\n\n");
     fprintf(f, "| Scenario ID | Evaluated Property | Suite | Verdict | Evidence / Observed Behavior |\n");
@@ -47,8 +47,8 @@ int report_write_comparison_md(const run_metadata_t *meta,
 
     for (size_t i = 0; i < count; i++) {
         const scenario_result_t *r = &results[i];
-        const char *badge = (r->status == RESULT_PASS) ? "✅ PASS" :
-                            (r->status == RESULT_FAIL) ? "❌ FAIL" : "⚠️ INCONCLUSIVE";
+        const char *badge = (r->status == RESULT_PASS) ? "PASS" :
+                            (r->status == RESULT_FAIL) ? "FAIL" : "INCONCLUSIVE";
         fprintf(f, "| `%s` | %s | **%s** | %s | %s |\n",
                 r->scenario_id, r->scenario_name, r->suite_name, badge, r->evidence_summary);
     }
@@ -86,5 +86,12 @@ int report_write_comparison_md(const run_metadata_t *meta,
     fprintf(f, "3. **Strict Target Safety Allowlist:** The testing framework strictly refuses execution against any IP address not explicitly allowlisted in `safety_guard.c`.\n");
 
     fclose(f);
+
+    /* Automatically generate formatted PDF report */
+    char pdf_cmd[1024];
+    snprintf(pdf_cmd, sizeof(pdf_cmd), "python3 security_lab/reporting/generate_pdf.py . >/dev/null 2>&1 &");
+    int sys_ret = system(pdf_cmd);
+    (void)sys_ret;
+
     return 0;
 }

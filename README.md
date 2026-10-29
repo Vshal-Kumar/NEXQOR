@@ -19,7 +19,29 @@ Each implementation is decoupled with its own build systems, cryptographic state
 
 ## 🚀 SecureComm Standalone Releases & Direct Downloads
 
-For turnkey production deployment, the framework provides **SecureComm**, a unified C application providing Classical, Pure PQC, Hybrid, and Adaptive profiles with zero Python runtime dependencies. Pre-built Debian packages (`.deb`) are available for direct installation across all major device architectures:
+### 🌐 Official APT Repository Installation (Recommended)
+
+You can install `securecomm` directly using standard `apt` on any Ubuntu or Debian machine (x86-64 PCs, Raspberry Pi 4/5, or Raspberry Pi 2/3):
+
+```bash
+# 1. Register the SecureComm APT repository:
+curl -1sLf 'https://dl.cloudsmith.io/public/securecomm/securecomm/setup.deb.sh' | sudo -E distro=debian codename=wheezy bash
+
+# 2. Update and install:
+sudo apt-get update && sudo apt-get install -y securecomm
+```
+
+Once installed, verify immediately:
+```bash
+which securecomm
+securecomm --help
+```
+
+---
+
+### 📦 Direct Pre-Built Debian Package Downloads (`.deb`)
+
+For air-gapped or offline installations, standalone `.deb` packages can be downloaded directly:
 
 | Target Architecture | Debian Architecture | Target Devices | Direct Download Link | One-Line Install Command |
 | :--- | :---: | :--- | :---: | :--- |

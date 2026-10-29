@@ -163,7 +163,29 @@ make clean
 
 ## 4. Multi-Architecture Debian Packaging & Direct Downloads
 
-SecureComm generates three distinct, architecture-specific `.deb` packages designed for unambiguous hardware targeting:
+### 🌐 Official APT Repository Installation (Recommended)
+
+To install SecureComm across any Debian or Ubuntu system (Intel/AMD x86_64 PCs, Raspberry Pi 4/5, or Raspberry Pi 2/3):
+
+```bash
+# 1. Register the SecureComm Cloudsmith repository:
+curl -1sLf 'https://dl.cloudsmith.io/public/securecomm/securecomm/setup.deb.sh' | sudo -E distro=debian codename=wheezy bash
+
+# 2. Update and install SecureComm:
+sudo apt-get update && sudo apt-get install -y securecomm
+```
+
+Verify installation:
+```bash
+which securecomm
+securecomm --help
+```
+
+---
+
+### 📦 Standalone Debian Packages (`.deb`)
+
+SecureComm also generates three distinct, architecture-specific `.deb` packages designed for direct download and offline/air-gapped environments:
 
 | Architecture | Target CPU Family | Debian Arch (`dpkg`) | Target Hardware | Direct Download Link |
 | :--- | :--- | :---: | :--- | :---: |

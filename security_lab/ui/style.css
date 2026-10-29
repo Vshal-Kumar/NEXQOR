@@ -1,35 +1,35 @@
 /*
- * security_lab/ui/style.css — Sleek Cyber Dark Theme for GTK 4 Security Lab
+ * security_lab/ui/style.css — Cyber Terminal Green & Black Theme for GTK 4 Security Lab
  */
 
 * {
-    font-family: 'Outfit', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-family: 'JetBrains Mono', 'Ubuntu Mono', 'Fira Code', 'Segoe UI', system-ui, sans-serif;
     color: #e2e8f0;
 }
 
 window {
-    background-color: #0b0f19;
+    background-color: #000000;
 }
 
 /* ── Top Header Toolbar ─────────────────────────────────────────────── */
 .top-bar {
-    background: linear-gradient(180deg, #161f30 0%, #0f1624 100%);
-    border-bottom: 1px solid #23324d;
+    background: linear-gradient(180deg, #090e0b 0%, #030504 100%);
+    border-bottom: 1px solid #14331c;
     padding: 12px 20px;
 }
 
 .lab-title {
     font-size: 16px;
     font-weight: 800;
-    color: #f8fafc;
-    letter-spacing: 0.8px;
+    color: #00ff66;
+    letter-spacing: 1px;
 }
 
 .lab-subtitle {
     font-size: 11px;
-    font-weight: 500;
-    color: #38bdf8;
-    letter-spacing: 0.5px;
+    font-weight: 600;
+    color: #00e5ff;
+    letter-spacing: 0.6px;
 }
 
 /* ── Status Badges ──────────────────────────────────────────────────── */
@@ -38,71 +38,99 @@ window {
     border-radius: 9999px;
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.5px;
     border: 1px solid transparent;
 }
 
 .status-idle {
-    background-color: rgba(71, 85, 105, 0.25);
-    border-color: #475569;
-    color: #94a3b8;
+    background-color: #09130d;
+    border-color: #173822;
+    color: #809988;
 }
 
 .status-running {
-    background-color: rgba(245, 158, 11, 0.2);
-    border-color: #f59e0b;
+    background-color: #241800;
+    border-color: #d97706;
     color: #fbbf24;
 }
 
 .status-passed {
-    background-color: rgba(16, 185, 129, 0.2);
-    border-color: #10b981;
-    color: #34d399;
+    background-color: #00290e;
+    border-color: #00cc52;
+    color: #00ff66;
 }
 
 .status-failed {
-    background-color: rgba(239, 68, 68, 0.2);
+    background-color: #260707;
     border-color: #ef4444;
     color: #f87171;
 }
 
+.suite-badge {
+    background-color: #001f2e;
+    border: 1px solid #0099cc;
+    color: #38bdf8;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
 /* ── Action Buttons ─────────────────────────────────────────────────── */
 button.btn-primary {
-    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
     color: #ffffff;
-    font-weight: 700;
+    font-weight: 800;
     font-size: 13px;
     padding: 8px 18px;
     border-radius: 8px;
-    border: 1px solid #38bdf8;
-    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+    border: 1px solid #00ff66;
+    box-shadow: 0 4px 14px rgba(0, 255, 102, 0.35);
     transition: all 0.2s ease;
 }
 
 button.btn-primary:hover {
-    background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
-    box-shadow: 0 6px 16px rgba(56, 189, 248, 0.5);
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 6px 18px rgba(0, 255, 102, 0.5);
+    color: #ffffff;
 }
 
 button.btn-emergency {
-    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
-    color: #ffffff;
+    background: linear-gradient(135deg, #2b0808 0%, #170404 100%);
+    color: #f87171;
     font-weight: 700;
     font-size: 12px;
     padding: 8px 16px;
     border-radius: 8px;
-    border: 1px solid #f87171;
-    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    border: 1px solid #ef4444;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 
 button.btn-emergency:hover {
     background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+    color: #ffffff;
+}
+
+button.btn-report {
+    background-color: #06121f;
+    color: #38bdf8;
+    border: 1px solid #0284c7;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 7px 14px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.2);
+}
+
+button.btn-report:hover {
+    background-color: #0284c7;
+    color: #ffffff;
 }
 
 button.btn-outline {
-    background-color: #1e293b;
-    color: #cbd5e1;
-    border: 1px solid #334155;
+    background-color: #07100b;
+    color: #00ff66;
+    border: 1px solid #14331c;
     font-size: 11px;
     font-weight: 600;
     padding: 6px 12px;
@@ -110,34 +138,34 @@ button.btn-outline {
 }
 
 button.btn-outline:hover {
-    background-color: #334155;
-    color: #f8fafc;
+    background-color: #14331c;
+    color: #ffffff;
 }
 
 /* ── Panels & Cards ─────────────────────────────────────────────────── */
 .left-panel {
-    background-color: #0f172a;
-    border-right: 1px solid #1e293b;
+    background-color: #030504;
+    border-right: 1px solid #14331c;
     padding: 16px;
 }
 
 .right-panel {
-    background-color: #0b0f19;
+    background-color: #000000;
     padding: 16px;
 }
 
 .panel-section-title {
     font-size: 11px;
     font-weight: 800;
-    color: #64748b;
-    letter-spacing: 1px;
+    color: #00ff66;
+    letter-spacing: 1.2px;
     margin-bottom: 8px;
     text-transform: uppercase;
 }
 
 .param-card {
-    background-color: #131d31;
-    border: 1px solid #1e293b;
+    background-color: #050a07;
+    border: 1px solid #14331c;
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 12px;
@@ -146,37 +174,40 @@ button.btn-outline:hover {
 .param-label {
     font-size: 11px;
     font-weight: 600;
-    color: #94a3b8;
+    color: #809988;
 }
 
 /* ── Form Inputs ────────────────────────────────────────────────────── */
 entry {
-    background-color: #0b1120;
-    border: 1px solid #334155;
+    background-color: #020302;
+    border: 1px solid #173b20;
     border-radius: 6px;
     padding: 6px 10px;
-    color: #f1f5f9;
+    color: #00ff66;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
 }
 
 entry:focus {
-    border-color: #38bdf8;
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    border-color: #00ff66;
+    box-shadow: 0 0 0 2px rgba(0, 255, 102, 0.25);
 }
 
 dropdown button {
-    background-color: #0b1120;
-    border: 1px solid #334155;
+    background-color: #020302;
+    border: 1px solid #173b20;
     border-radius: 6px;
     padding: 6px 10px;
-    color: #f1f5f9;
+    color: #00ff66;
+    font-size: 12px;
+    font-weight: 600;
 }
 
 /* ── Scenario Selection Cards ───────────────────────────────────────── */
 .scenario-row {
-    background-color: #131d31;
-    border: 1px solid #1e293b;
+    background-color: #050a07;
+    border: 1px solid #122818;
     border-radius: 8px;
     padding: 10px 14px;
     margin-bottom: 6px;
@@ -184,62 +215,111 @@ dropdown button {
 }
 
 .scenario-row:hover {
-    background-color: #1a2742;
-    border-color: #38bdf8;
+    background-color: #0a170e;
+    border-color: #00cc52;
 }
 
 .scenario-row:selected {
-    background-color: #1e3a5f;
-    border-color: #0ea5e9;
+    background-color: #0e2414;
+    border-color: #00ff66;
+    box-shadow: 0 0 8px rgba(0, 255, 102, 0.2);
+}
+
+.scenario-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 800;
+    color: #00ff66;
+    background-color: #00240d;
+    border: 1px solid #00aa44;
+    border-radius: 4px;
+    padding: 4px 6px;
+    min-width: 44px;
 }
 
 .scenario-name {
     font-size: 13px;
     font-weight: 700;
-    color: #f8fafc;
+    color: #f0fff4;
 }
 
 .scenario-desc {
     font-size: 11px;
-    color: #94a3b8;
+    color: #80a88c;
+    line-height: 1.35;
 }
 
 /* ── Terminal Console ───────────────────────────────────────────────── */
 .console-container {
-    background-color: #070a12;
-    border: 1px solid #1e293b;
+    background-color: #000000;
+    border: 1px solid #00aa44;
     border-radius: 8px;
     padding: 8px;
+    box-shadow: inset 0 0 16px rgba(0, 255, 102, 0.04);
 }
 
 textview.console-text {
-    background-color: transparent;
-    color: #38bdf8;
-    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-    font-size: 12px;
-    line-height: 1.45;
+    background-color: #000000;
+    color: #00ff66;
+    font-family: 'JetBrains Mono', 'Ubuntu Mono', 'Fira Code', 'DejaVu Sans Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
-/* ── Results Summary Cards ──────────────────────────────────────────── */
+textview.console-text text {
+    background-color: #000000;
+    color: #00ff66;
+}
+
+textview.console-text text:selected {
+    background-color: #003814;
+    color: #00ff66;
+}
+
+/* ── Results Summary Cards & Scroll ─────────────────────────────────── */
 .results-card {
-    background-color: #0f172a;
-    border: 1px solid #1e293b;
+    background-color: #040805;
+    border: 1px solid #14331c;
     border-radius: 8px;
-    padding: 14px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
 }
 
-.verdict-pass {
-    color: #10b981;
-    font-weight: 800;
+.results-card:hover {
+    background-color: #07100b;
+    border-color: #00cc52;
 }
 
-.verdict-fail {
-    color: #ef4444;
-    font-weight: 800;
+.results-evidence {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #a8d5b5;
+    line-height: 1.4;
 }
 
 .metric-val {
     font-family: 'JetBrains Mono', monospace;
     font-weight: 700;
-    color: #38bdf8;
+    color: #00ff66;
+}
+
+/* ── Scrollbars ─────────────────────────────────────────────────────── */
+scrollbar {
+    background-color: #000000;
+}
+
+scrollbar trough {
+    background-color: #050a06;
+    border-radius: 4px;
+}
+
+scrollbar slider {
+    background-color: #00aa44;
+    border-radius: 4px;
+    min-width: 8px;
+    min-height: 8px;
+}
+
+scrollbar slider:hover {
+    background-color: #00ff66;
 }
