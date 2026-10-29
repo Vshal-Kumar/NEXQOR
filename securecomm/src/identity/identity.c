@@ -362,3 +362,25 @@ int securecomm_identity_verify_peer(const securecomm_identity_t *ident,
     SECURECOMM_LOG_WARN("Peer '%s' not present in pinned trust store and TOFU disabled", peer_id);
     return SECURECOMM_ERR_AUTH_FAILED;
 }
+
+int securecomm_identity_adapt_for_mode(securecomm_identity_t *ident, securecomm_mode_t target_mode) {
+    if (!ident) return SECURECOMM_ERR_INVALID_ARG;
+
+    /* If the identity contains composite keys (Classical 32 + PQC 1952) */
+    if (ident->public_key_len >= (32 + 1952)) {
+        if (target_mode == SECURECOMM_MODE_CLASSICAL) {
+            ident->public_key_len = 32;
+            ident->private_key_len = 32;
+            securecomm_identity_compute_fingerprint(ident->public_key, ident->public_key_len, ident->fingerprint);
+        } else if (target_mode == SECURECOMM_MODE_PQC) {
+            memmove(ident->public_key, ident->public_key + 32, 1952);
+            ident->public_key_len = 1952;
+            if (ident->private_key_len >= (32 + 4032)) {
+                memmove(ident->private_key, ident->private_key + 32, 4032);
+                ident->private_key_len = 4032;
+            }
+            securecomm_identity_compute_fingerprint(ident->public_key, ident->public_key_len, ident->fingerprint);
+        }
+    }
+    return SECURECOMM_SUCCESS;
+}

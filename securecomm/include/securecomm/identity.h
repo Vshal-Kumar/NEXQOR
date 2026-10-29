@@ -58,6 +58,9 @@ bool securecomm_identity_exists(const securecomm_identity_t *ident);
 /* Format fingerprint from raw public key */
 int  securecomm_identity_compute_fingerprint(const uint8_t *pk, size_t pk_len, char out_hex[65]);
 
+/* Adapt multi-algorithm or composite identity keys to the active operating mode */
+int  securecomm_identity_adapt_for_mode(securecomm_identity_t *ident, securecomm_mode_t target_mode);
+
 #ifdef __cplusplus
 }
 #endif

@@ -392,6 +392,25 @@ bool ipc_manager_start_server(ipc_manager_t *mgr, const char *workspace_root) {
         return true; /* Already running */
     }
 
+    char sec_bin[2048];
+    snprintf(sec_bin, sizeof(sec_bin), "%s/securecomm/bin/securecomm", workspace_root);
+    if (access(sec_bin, X_OK) == 0) {
+        const char *mode_str = "pqc";
+        if (mgr->suite == SUITE_HYBRID) mode_str = "hybrid";
+        else if (mgr->suite == SUITE_CLASSICAL) mode_str = "classical";
+
+        pid_t pid = fork();
+        if (pid == 0) {
+            execl(sec_bin, sec_bin, "server", "start", "--mode", mode_str, NULL);
+            _exit(1);
+        } else if (pid > 0) {
+            mgr->server_pid = pid;
+            mgr->server_started_by_us = true;
+            trigger_status_update(mgr);
+            return true;
+        }
+    }
+
     const char *subdir = "pqc";
     if (mgr->suite == SUITE_HYBRID) subdir = "hybrid";
     else if (mgr->suite == SUITE_CLASSICAL) subdir = "classical";

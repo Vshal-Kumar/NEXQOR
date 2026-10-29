@@ -6,6 +6,7 @@
 **/server_tx
 **/client
 **/client_broadcast
+!**/src/**
 **/bench_pqc
 **/benchpqc
 bench_pqc
