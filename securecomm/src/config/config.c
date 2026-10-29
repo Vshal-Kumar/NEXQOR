@@ -14,6 +14,21 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+static void ensure_dir_exists(const char *dir) {
+    if (!dir || strlen(dir) == 0) return;
+    char tmp[SECURECOMM_MAX_PATH_LEN];
+    snprintf(tmp, sizeof(tmp), "%s", dir);
+    size_t len = strlen(tmp);
+    for (size_t i = 1; i < len; i++) {
+        if (tmp[i] == '/') {
+            tmp[i] = '\0';
+            mkdir(tmp, 0755);
+            tmp[i] = '/';
+        }
+    }
+    mkdir(tmp, 0755);
+}
+
 void securecomm_config_init_default(securecomm_config_t *cfg) {
     if (!cfg) return;
     memset(cfg, 0, sizeof(*cfg));
@@ -257,11 +272,34 @@ int securecomm_config_save(const securecomm_config_t *cfg, const char *path) {
     
     if (!json_text) return SECURECOMM_ERR_NOMEM;
     
+    /* Ensure parent directory of path exists */
+    char dir_buf[SECURECOMM_MAX_PATH_LEN];
+    snprintf(dir_buf, sizeof(dir_buf), "%s", path);
+    char *last_slash = strrchr(dir_buf, '/');
+    if (last_slash) {
+        *last_slash = '\0';
+        ensure_dir_exists(dir_buf);
+    }
+
+    char final_path[SECURECOMM_MAX_PATH_LEN];
+    snprintf(final_path, sizeof(final_path), "%s", path);
+
     /* Atomic write via temporary file */
     char tmp_path[SECURECOMM_MAX_PATH_LEN + 16];
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%d", path, (int)getpid());
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%d", final_path, (int)getpid());
     
     FILE *f = fopen(tmp_path, "wb");
+    if (!f) {
+        /* If write fails to /etc/securecomm, fall back to ~/.config/securecomm/securecomm.json */
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(dir_buf, sizeof(dir_buf), "%.900s/.config/securecomm", home);
+            ensure_dir_exists(dir_buf);
+            snprintf(final_path, sizeof(final_path), "%.900s/securecomm.json", dir_buf);
+            snprintf(tmp_path, sizeof(tmp_path), "%.950s.tmp.%d", final_path, (int)getpid());
+            f = fopen(tmp_path, "wb");
+        }
+    }
     if (!f) {
         free(json_text);
         return SECURECOMM_ERR_CONFIG_WRITE;
@@ -283,7 +321,7 @@ int securecomm_config_save(const securecomm_config_t *cfg, const char *path) {
     /* Set reasonable permissions */
     chmod(tmp_path, 0644);
     
-    if (rename(tmp_path, path) != 0) {
+    if (rename(tmp_path, final_path) != 0) {
         unlink(tmp_path);
         return SECURECOMM_ERR_CONFIG_WRITE;
     }

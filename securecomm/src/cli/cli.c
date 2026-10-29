@@ -36,14 +36,14 @@
 #define FALLBACK_CONFIG_PATH "./config/securecomm.json"
 
 static const char *get_default_config_path(void) {
-    if (access(DEFAULT_CONFIG_PATH, R_OK) == 0) {
-        return DEFAULT_CONFIG_PATH;
-    }
     const char *home = getenv("HOME");
     if (home && strlen(home) > 0) {
         static char user_cfg[SECURECOMM_MAX_PATH_LEN];
         snprintf(user_cfg, sizeof(user_cfg), "%s/.config/securecomm/securecomm.json", home);
         if (access(user_cfg, R_OK) == 0) return user_cfg;
+    }
+    if (access(DEFAULT_CONFIG_PATH, R_OK) == 0) {
+        return DEFAULT_CONFIG_PATH;
     }
     if (access(FALLBACK_CONFIG_PATH, R_OK) == 0) {
         return FALLBACK_CONFIG_PATH;

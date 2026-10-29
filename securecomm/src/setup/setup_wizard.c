@@ -21,6 +21,21 @@
 #include <sys/stat.h>
 #include <arpa/inet.h>
 
+static void ensure_dir_exists(const char *dir) {
+    if (!dir || strlen(dir) == 0) return;
+    char tmp[SECURECOMM_MAX_PATH_LEN];
+    snprintf(tmp, sizeof(tmp), "%s", dir);
+    size_t len = strlen(tmp);
+    for (size_t i = 1; i < len; i++) {
+        if (tmp[i] == '/') {
+            tmp[i] = '\0';
+            mkdir(tmp, 0755);
+            tmp[i] = '/';
+        }
+    }
+    mkdir(tmp, 0755);
+}
+
 static void read_input(const char *prompt, const char *def_val, char *out, size_t out_sz, bool non_interactive) {
     if (non_interactive || !isatty(STDIN_FILENO)) {
         snprintf(out, out_sz, "%s", def_val);
@@ -47,6 +62,17 @@ static void read_input(const char *prompt, const char *def_val, char *out, size_
 }
 
 int securecomm_setup_wizard_run(const char *config_path, bool non_interactive) {
+    char resolved_config_path[SECURECOMM_MAX_PATH_LEN];
+    snprintf(resolved_config_path, sizeof(resolved_config_path), "%s", config_path ? config_path : "/etc/securecomm/securecomm.json");
+
+    if (access("/etc/securecomm", W_OK) != 0 && getuid() != 0) {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(resolved_config_path, sizeof(resolved_config_path), "%s/.config/securecomm/securecomm.json", home);
+            config_path = resolved_config_path;
+        }
+    }
+
     printf("\n╔═══════════════════════════════════════════════════════════════╗\n");
     printf("║                SECURECOMM SYSTEM SETUP WIZARD                 ║\n");
     printf("║   Lightweight, Adaptive, Cross-Platform Secure Communication  ║\n");
@@ -103,14 +129,14 @@ int securecomm_setup_wizard_run(const char *config_path, bool non_interactive) {
     /* ─── Step 4: Network Configuration ──────────────────────────── */
     printf("\n[4/8] Network Configuration:\n");
     char port_str[32];
-    snprintf(port_str, sizeof(port_str), "%u", cfg.port);
+    snprintf(port_str, sizeof(port_str), "%u", cfg.port > 0 ? cfg.port : SECURECOMM_DEFAULT_PORT);
 
     if (cfg.role == SECURECOMM_ROLE_SERVER) {
         read_input("Server bind address", "0.0.0.0", cfg.bind_address, sizeof(cfg.bind_address), non_interactive);
         read_input("UDP listening port", port_str, ans, sizeof(ans), non_interactive);
         cfg.port = (uint16_t)atoi(ans);
     } else {
-        read_input("Remote server address or hostname", "127.0.0.1", cfg.server_host, sizeof(cfg.server_host), non_interactive);
+        read_input("Remote server address or hostname", SECURECOMM_DEFAULT_SERVER_HOST, cfg.server_host, sizeof(cfg.server_host), non_interactive);
         read_input("Remote server UDP port", port_str, ans, sizeof(ans), non_interactive);
         cfg.port = (uint16_t)atoi(ans);
     }
@@ -125,9 +151,15 @@ int securecomm_setup_wizard_run(const char *config_path, bool non_interactive) {
     read_input("Device Identifier", def_dev_id, cfg.device_id, sizeof(cfg.device_id), non_interactive);
 
     char base_dir[SECURECOMM_MAX_PATH_LEN] = "/etc/securecomm";
-    if (access("/etc", W_OK) != 0) {
-        snprintf(base_dir, sizeof(base_dir), "./config");
+    if (access("/etc/securecomm", W_OK) != 0 && getuid() != 0) {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(base_dir, sizeof(base_dir), "%s/.config/securecomm", home);
+        } else {
+            snprintf(base_dir, sizeof(base_dir), "./config");
+        }
     }
+    ensure_dir_exists(base_dir);
     snprintf(cfg.private_key_path, sizeof(cfg.private_key_path), "%s/%s.key", base_dir, cfg.device_id);
     snprintf(cfg.public_key_path, sizeof(cfg.public_key_path), "%s/%s.pub", base_dir, cfg.device_id);
     snprintf(cfg.trust_store_path, sizeof(cfg.trust_store_path), "%s/trust_store.txt", base_dir);
