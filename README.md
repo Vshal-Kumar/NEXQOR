@@ -37,15 +37,31 @@ Each package installs:
 - Default configuration template: `/etc/securecomm/securecomm.json`
 - Documentation & changelogs: `/usr/share/doc/nexqor-<arch>/`
 
-#### Terminal Installation Command:
+#### Quickstart: Server & Client Setup (Default: `100.113.83.56:9877`)
+
+**1. On Server Machine (`100.113.83.56`):**
 ```bash
-# Install package and resolve any missing system libraries automatically:
+# Install x86 package:
 sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
 
-# Verify installation:
-nexqor --help
-# (or: securecomm --help)
+# Start the server (binds 0.0.0.0:9877, auto-provisions keys):
+nexqor server start
 ```
+
+**2. On Client Machine (Second PC, Laptop, or Raspberry Pi):**
+```bash
+# Install package for your architecture:
+sudo dpkg -i nexqor-x86.deb     # for Intel/AMD laptops
+sudo dpkg -i nexqor-arm64.deb   # for Raspberry Pi 4/5
+
+# Connect immediately (automatically connects to 100.113.83.56:9877):
+nexqor client connect
+
+# Or send a single message from terminal:
+nexqor client connect --msg "Hello Quantum Server!"
+```
+
+*Note on Key Permissions*: Cryptographic identity keys are automatically stored in `~/.config/securecomm/` with strict `0600` permissions for unprivileged users, completely preventing any "permission denied" errors.
 
 > For deep architectural specifications, configuration schemas, and operational instructions, see [securecomm/README.md](file:///home/vishal-kumar/Desktop/Events/QHack/securecomm/README.md).
 

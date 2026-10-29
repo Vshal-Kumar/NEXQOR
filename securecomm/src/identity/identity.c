@@ -27,7 +27,8 @@ static int ensure_dir_exists(const char *path) {
     char temp[SECURECOMM_MAX_PATH_LEN];
     snprintf(temp, sizeof(temp), "%s", path);
     char *p = strrchr(temp, '/');
-    if (!p || p == temp) return 0;
+    if (!p) return 0;
+    if (p == temp) return 0; /* root '/' */
     *p = '\0';
 
     struct stat st;
@@ -42,11 +43,25 @@ static int ensure_dir_exists(const char *path) {
     for (char *s = sub + 1; *s; s++) {
         if (*s == '/') {
             *s = '\0';
-            mkdir(sub, 0700);
+            mkdir(sub, 0755);
             *s = '/';
         }
     }
-    return mkdir(sub, 0700) == 0 ? 0 : (errno == EEXIST ? 0 : -1);
+    return mkdir(sub, 0755) == 0 ? 0 : (errno == EEXIST ? 0 : -1);
+}
+
+static void fallback_to_user_paths(securecomm_identity_t *ident) {
+    const char *home = getenv("HOME");
+    char user_dir[SECURECOMM_MAX_PATH_LEN];
+    if (home && strlen(home) > 0) {
+        snprintf(user_dir, sizeof(user_dir), "%s/.config/securecomm", home);
+    } else {
+        snprintf(user_dir, sizeof(user_dir), "/tmp/securecomm-%u", (unsigned int)getuid());
+    }
+    ensure_dir_exists(user_dir);
+    snprintf(ident->private_key_path, sizeof(ident->private_key_path), "%s/%s.key", user_dir, ident->device_id);
+    snprintf(ident->public_key_path, sizeof(ident->public_key_path), "%s/%s.pub", user_dir, ident->device_id);
+    snprintf(ident->trust_store_path, sizeof(ident->trust_store_path), "%s/trust_store.txt", user_dir);
 }
 
 int securecomm_identity_compute_fingerprint(const uint8_t *pk, size_t pk_len, char out_hex[65]) {
@@ -83,12 +98,25 @@ int securecomm_identity_init(securecomm_identity_t *ident, const char *device_id
     snprintf(ident->device_id, sizeof(ident->device_id), "%s", device_id);
     ident->mode = mode;
 
+    char resolved_dir[SECURECOMM_MAX_PATH_LEN];
+    snprintf(resolved_dir, sizeof(resolved_dir), "%s", base_dir);
+
+    /* If base_dir is /etc/securecomm and not writable by current user, use user config */
+    if (strcmp(base_dir, "/etc/securecomm") == 0 && access("/etc/securecomm", W_OK) != 0 && getuid() != 0) {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(resolved_dir, sizeof(resolved_dir), "%s/.config/securecomm", home);
+        } else {
+            snprintf(resolved_dir, sizeof(resolved_dir), "/tmp/securecomm-%u", (unsigned int)getuid());
+        }
+    }
+
     snprintf(ident->private_key_path, sizeof(ident->private_key_path),
-             "%s/%s.key", base_dir, device_id);
+             "%s/%s.key", resolved_dir, device_id);
     snprintf(ident->public_key_path, sizeof(ident->public_key_path),
-             "%s/%s.pub", base_dir, device_id);
+             "%s/%s.pub", resolved_dir, device_id);
     snprintf(ident->trust_store_path, sizeof(ident->trust_store_path),
-             "%s/trust_store.txt", base_dir);
+             "%s/trust_store.txt", resolved_dir);
 
     ident->is_provisioned = securecomm_identity_exists(ident);
     return SECURECOMM_SUCCESS;
@@ -96,8 +124,20 @@ int securecomm_identity_init(securecomm_identity_t *ident, const char *device_id
 
 bool securecomm_identity_exists(const securecomm_identity_t *ident) {
     if (!ident) return false;
-    return (access(ident->private_key_path, F_OK) == 0 &&
-            access(ident->public_key_path, F_OK) == 0);
+    if (access(ident->private_key_path, F_OK) == 0 &&
+        access(ident->public_key_path, F_OK) == 0) {
+        return true;
+    }
+    const char *home = getenv("HOME");
+    if (home && strlen(home) > 0) {
+        char user_sk[SECURECOMM_MAX_PATH_LEN], user_pk[SECURECOMM_MAX_PATH_LEN];
+        snprintf(user_sk, sizeof(user_sk), "%s/.config/securecomm/%s.key", home, ident->device_id);
+        snprintf(user_pk, sizeof(user_pk), "%s/.config/securecomm/%s.pub", home, ident->device_id);
+        if (access(user_sk, F_OK) == 0 && access(user_pk, F_OK) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int securecomm_identity_generate(securecomm_identity_t *ident) {
@@ -182,9 +222,20 @@ int securecomm_identity_generate(securecomm_identity_t *ident) {
     int fd_sk = open(ident->private_key_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     umask(old_mask);
     if (fd_sk < 0) {
-        SECURECOMM_LOG_ERROR("Failed to write private key to '%s': %s",
-                             ident->private_key_path, strerror(errno));
-        return SECURECOMM_ERR_FILE_IO;
+        /* If opening private key failed (e.g. Permission Denied), fallback to user directory */
+        fallback_to_user_paths(ident);
+        ensure_dir_exists(ident->private_key_path);
+        ensure_dir_exists(ident->public_key_path);
+
+        old_mask = umask(0077);
+        fd_sk = open(ident->private_key_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        umask(old_mask);
+
+        if (fd_sk < 0) {
+            SECURECOMM_LOG_ERROR("Failed to write private key to '%s': %s",
+                                 ident->private_key_path, strerror(errno));
+            return SECURECOMM_ERR_FILE_IO;
+        }
     }
     if (write(fd_sk, ident->private_key, ident->private_key_len) != (ssize_t)ident->private_key_len) {
         close(fd_sk);
@@ -206,8 +257,8 @@ int securecomm_identity_generate(securecomm_identity_t *ident) {
     close(fd_pk);
 
     ident->is_provisioned = true;
-    SECURECOMM_LOG_INFO("Provisioned device identity '%s' [fingerprint: %.16s...]",
-                        ident->device_id, ident->fingerprint);
+    SECURECOMM_LOG_INFO("Provisioned device identity '%s' at %s [fingerprint: %.16s...]",
+                        ident->device_id, ident->private_key_path, ident->fingerprint);
     return SECURECOMM_SUCCESS;
 }
 
@@ -216,7 +267,19 @@ int securecomm_identity_load(securecomm_identity_t *ident) {
 
     struct stat st;
     if (stat(ident->private_key_path, &st) != 0) {
-        return SECURECOMM_ERR_KEY_NOT_FOUND;
+        /* Check fallback user path */
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            char user_sk[SECURECOMM_MAX_PATH_LEN];
+            snprintf(user_sk, sizeof(user_sk), "%s/.config/securecomm/%s.key", home, ident->device_id);
+            if (stat(user_sk, &st) == 0) {
+                fallback_to_user_paths(ident);
+            } else {
+                return SECURECOMM_ERR_KEY_NOT_FOUND;
+            }
+        } else {
+            return SECURECOMM_ERR_KEY_NOT_FOUND;
+        }
     }
 
     /* Verify strict 0600 permissions */

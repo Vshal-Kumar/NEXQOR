@@ -4,8 +4,8 @@
   "mode": "adaptive",
   "network": {
     "bind_address": "0.0.0.0",
-    "server_host": "127.0.0.1",
-    "port": 9885,
+    "server_host": "100.113.83.56",
+    "port": 9877,
     "connection_timeout_ms": 5000
   },
   "identity": {

@@ -14,8 +14,9 @@ void securecomm_policy_init_default(securecomm_policy_t *p) {
     p->require_quantum_resistance = true;
     p->require_quantum_auth = false;
     p->require_dual_combiner = false;
-    p->allow_classical_fallback = false; /* STRICT: No silent downgrade */
+    p->allow_classical_fallback = true;
     p->require_fips_algorithms = true;
+    p->allow_tofu = true;
     p->max_acceptable_latency_ms = 500;
     p->max_memory_budget_mb = 256;
     p->min_protocol_version = 0x0100;

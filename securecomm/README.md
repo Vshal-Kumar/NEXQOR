@@ -1,22 +1,125 @@
 # SecureComm: Production Operations & Architectural Manual
 ## Lightweight, Adaptive, Cross-Platform Secure Communication Framework
 
-SecureComm is a production-grade, standard C11 secure communication framework designed for embedded IoT systems, edge gateways, and Linux servers. It provides a unified command-line application (`securecomm`) supporting **Classical**, **Pure Post-Quantum (PQC)**, **Hybrid**, and **Adaptive** operating modes over high-throughput, low-latency UDP transport.
+SecureComm is a production-grade, standard C11 secure communication framework designed for embedded IoT systems, edge gateways, and Linux servers. It provides a unified command-line application (`securecomm` or `nexqor`) supporting **Classical**, **Pure Post-Quantum (PQC)**, **Hybrid**, and **Adaptive** operating modes over high-throughput, low-latency UDP transport.
+
+---
+
+## ⚡ Quickstart: Step-by-Step Server & Client Deployment
+
+Default Network Setup: **Server listens on `0.0.0.0:9877` | Target Server Address: `100.113.83.56:9877` (UDP)**
+
+### 🖥️ Server Machine (Laptop / PC at `100.113.83.56`)
+
+#### Step 1: Install the Debian Package
+```bash
+sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
+```
+
+#### Step 2: Start the Server
+```bash
+nexqor server start
+```
+*(Alternative alias: `securecomm server start`)*
+
+**What you will see in the terminal:**
+```text
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                 NEXQOR Secure Server (Post-Quantum & Classical)                  ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+  Status        : LISTENING
+  Bind Address  : 0.0.0.0 (UDP)
+  Port          : 9877
+  Target Host   : 100.113.83.56:9877
+  Crypto Mode   : adaptive
+  Device ID     : node-default
+  Fingerprint   : dfee8814c1deafaa...
+  Key File      : /home/vishal-kumar/.config/securecomm/node-default.key
+
+[Ready] Waiting for incoming client connections... (Press Ctrl+C to stop)
+```
+- **Automatic Key Storage**: Keys are safely written with `0600` permissions into `~/.config/securecomm/` (or `/etc/securecomm/` when run as root). **No permission errors!**
+- **Trust On First Use (TOFU)**: Incoming clients are automatically verified, authenticated, and pinned on their first connection.
+
+---
+
+### 💻 Client Machine (Second Laptop / PC / Raspberry Pi)
+
+#### Step 1: Install the Debian Package
+```bash
+# On an x86-64 Laptop or Desktop:
+sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
+
+# On a Raspberry Pi 4 / 5 (ARM64):
+sudo dpkg -i nexqor-arm64.deb || sudo apt-get install -f -y
+
+# On a Raspberry Pi 2 / 3 (ARM32):
+sudo dpkg -i nexqor-arm32.deb || sudo apt-get install -f -y
+```
+
+#### Step 2: Connect to the Server
+Simply run:
+```bash
+nexqor client connect
+```
+*(No IP or port arguments needed! It automatically targets `100.113.83.56:9877`)*
+
+**What you will see in the terminal:**
+```text
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                 NEXQOR Secure Client (Post-Quantum & Classical)                  ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+  Target Server : 100.113.83.56:9877 (UDP)
+  Crypto Mode   : adaptive
+  Device ID     : node-default
+  Fingerprint   : 8d07a85cb4e7e4ce...
+  Key File      : /home/vishal-kumar/.config/securecomm/node-default.key
+
+[*] Connecting to 100.113.83.56:9877 over UDP...
+[✓] Cryptographic handshake complete in 3.16 ms!
+
+╔═══════════════════════════════════════════════════════════════╗
+║             SECURECOMM INTERACTIVE SECURE CHAT                ║
+║ Type messages to send encrypted over UDP. Type /quit to exit.  ║
+║ Commands: /status, /metrics, /ping, /quit                     ║
+╚═══════════════════════════════════════════════════════════════╝
+
+securecomm> Hello Quantum Server!
+[Sent 21 bytes encrypted]
+securecomm> /ping
+[Sent PING to server]
+securecomm> /metrics
+securecomm> /quit
+[INFO] Disconnected from server
+```
+
+#### Send a Single Encrypted Message Directly from Terminal:
+```bash
+nexqor client connect --msg "Hello Quantum Server! Test message from terminal."
+```
+
+#### Custom Address / Port Override (Optional):
+```bash
+nexqor client connect 100.113.83.56 9877
+# Or using flags:
+nexqor client connect --server 100.113.83.56 --port 9877
+```
 
 ---
 
 ## Table of Contents
-1. [Architectural Overview & Cryptographic Primitives](#1-architectural-overview--cryptographic-primitives)
-2. [Source Tree & Modular Component Architecture](#2-source-tree--modular-component-architecture)
-3. [End-to-End Build & Compilation Plan](#3-end-to-end-build--compilation-plan)
-4. [Multi-Architecture Debian Packaging Plan](#4-multi-architecture-debian-packaging-plan)
-5. [System Installation & Service Management (systemd)](#5-system-installation--service-management-systemd)
-6. [Complete Configuration Guide (JSON Schema)](#6-complete-configuration-guide-json-schema)
-7. [Device Identity, Fingerprinting & Trust Store](#7-device-identity-fingerprinting--trust-store)
-8. [Client-Server Operational Workflows](#8-client-server-operational-workflows)
-9. [Adaptive Policy Engine & Explainability](#9-adaptive-policy-engine--explainability)
-10. [Platform Diagnostics, Health Checks & Benchmarking](#10-platform-diagnostics-health-checks--benchmarking)
-11. [Troubleshooting & Error Code Dictionary](#11-troubleshooting--error-code-dictionary)
+1. [⚡ Quickstart: Step-by-Step Server & Client Deployment](#-quickstart-step-by-step-server--client-deployment)
+2. [Architectural Overview & Cryptographic Primitives](#1-architectural-overview--cryptographic-primitives)
+3. [Source Tree & Modular Component Architecture](#2-source-tree--modular-component-architecture)
+4. [End-to-End Build & Compilation Plan](#3-end-to-end-build--compilation-plan)
+5. [Multi-Architecture Debian Packaging Plan](#4-multi-architecture-debian-packaging-plan)
+6. [System Installation & Service Management (systemd)](#5-system-installation--service-management-systemd)
+7. [Complete Configuration Guide (JSON Schema)](#6-complete-configuration-guide-json-schema)
+8. [Device Identity, Fingerprinting & Trust Store](#7-device-identity-fingerprinting--trust-store)
+9. [Client-Server Operational Workflows](#8-client-server-operational-workflows)
+10. [Adaptive Policy Engine & Explainability](#9-adaptive-policy-engine--explainability)
+11. [Platform Diagnostics, Health Checks & Benchmarking](#10-platform-diagnostics-health-checks--benchmarking)
+12. [Troubleshooting & Error Code Dictionary](#11-troubleshooting--error-code-dictionary)
 
 ---
 
@@ -271,8 +374,8 @@ The configuration file is located at `/etc/securecomm/securecomm.json` (or speci
   "mode": "adaptive",
   "network": {
     "bind_address": "0.0.0.0",
-    "server_host": "127.0.0.1",
-    "port": 9885,
+    "server_host": "100.113.83.56",
+    "port": 9877,
     "connection_timeout_ms": 5000
   },
   "identity": {
@@ -361,17 +464,24 @@ securecomm setup --non-interactive --config /etc/securecomm/securecomm.json
 
 ### Scenario 2: Starting a Secure Server
 ```bash
+nexqor server start
+# Or explicitly:
 securecomm server start --config /etc/securecomm/securecomm.json
 ```
 Output:
 ```
-[2026-10-29 15:45:00] [INFO ] [CORE] SecureComm Server listening on 0.0.0.0:9885 [mode: adaptive]
+[2026-10-29 15:45:00] [INFO ] [CORE] SecureComm Server listening on 0.0.0.0:9877 [mode: adaptive]
+[2026-10-29 15:45:00] [INFO ] [CORE] Target Host: 100.113.83.56:9877
 [2026-10-29 15:45:00] [INFO ] [CORE] Adaptive mode selected profile: NIST FIPS 203/204 Pure Post-Quantum (ML-KEM-768 + ML-DSA-65) (pqc)
 ```
 
 ### Scenario 3: Connecting a Client (Interactive Chat Shell)
 ```bash
-securecomm client connect --config /etc/securecomm/securecomm.json --server 127.0.0.1 --port 9885
+# Connect directly (targets 100.113.83.56:9877 by default):
+nexqor client connect
+
+# Or connect with custom parameters:
+nexqor client connect 100.113.83.56 9877
 ```
 Once connected, an interactive encrypted shell opens:
 ```
@@ -499,14 +609,36 @@ Output:
 
 ## 11. Troubleshooting & Error Code Dictionary
 
+### 🔑 Resolved Issue: "Failed to write private key to '/etc/securecomm/identity.key': Permission denied"
+
+#### What caused this?
+On Linux, the `/etc/` directory is owned by `root`. When a normal, non-root user ran `nexqor server start` or `nexqor client connect`, the application attempted to generate cryptographic identity keypairs inside `/etc/securecomm/identity.key`, which resulted in `Permission denied`.
+
+#### How NEXQOR fixes this automatically:
+1. **Dynamic User-Space Fallback**:
+   - When executed by an unprivileged user (or if `/etc/securecomm/` is read-only), NEXQOR automatically switches key storage to `$HOME/.config/securecomm/<device_id>.key`.
+   - The directory is created automatically with mode `0700`, and private keys are saved with strict `0600` permissions (readable only by the owner).
+2. **Debian Package Sticky-Bit Protection**:
+   - The Debian package `postinst` script configures `/etc/securecomm` with mode `1777` (the same secure sticky-bit model used by `/tmp`), enabling all users to maintain node keys securely if `/etc` is preferred.
+3. **Manual Override (Optional)**:
+   If you ever need to manually set up your local user key directory:
+   ```bash
+   mkdir -p ~/.config/securecomm
+   chmod 0700 ~/.config/securecomm
+   ```
+
+---
+
+### Common Error Codes & Quick Fixes
+
 | Error String | Code | Root Cause | Solution |
 | :--- | :---: | :--- | :--- |
-| `SECURECOMM_ERR_PERM_DENIED` | -3 | Private key file has insecure permissions (e.g. `0644`). | Run `chmod 0600 /etc/securecomm/*.key`. |
-| `SECURECOMM_ERR_AUTH_FAILED` | -6 | Peer public key doesn't match the pinned fingerprint in `trust_store.txt`. | If authorized identity rotation, update `trust_store.txt`. |
-| `SECURECOMM_ERR_NETWORK` | -5 | UDP socket failed to bind or address already in use. | Check if another process is using port with `ss -ulnp \| grep <port>`. |
-| `SECURECOMM_ERR_NO_COMPAT_PROFILE` | -11 | Adaptive engine could not find a profile satisfying policy constraints. | Run `securecomm adaptive explain` to see exact stage rejections. |
-| `SECURECOMM_ERR_TIMEOUT` | -7 | Remote server did not respond to Client Hello within timeout. | Check network connectivity and ensure server daemon is running. |
-| `SECURECOMM_ERR_BACKEND_MISSING`| -9 | Target runtime backend library (e.g. `liboqs`) is missing. | Verify `libssl3` and `liboqs` installation via `securecomm diagnostics`. |
+| `SECURECOMM_ERR_PERM_DENIED` | -3 | Key directory unwritable or private key permissions loose. | Automatically resolved by storing in `~/.config/securecomm/` with `0600` permissions. |
+| `SECURECOMM_ERR_TIMEOUT` | -7 | Target UDP port unreachable or server not started. | 1. Ensure server is running: `nexqor server start`<br>2. Verify port `9877` (UDP) is open: `sudo ufw allow 9877/udp` |
+| `SECURECOMM_ERR_AUTH_FAILED` | -6 | Peer public key doesn't match the pinned fingerprint in `trust_store.txt`. | Default `allow_tofu = true` automatically trusts and pins on first connect. For identity rotation, edit `~/.config/securecomm/trust_store.txt`. |
+| `SECURECOMM_ERR_NETWORK` | -5 | UDP socket failed to bind or address already in use. | Check if another process is using port 9877: `ss -ulnp \| grep 9877`. Terminate old instance with `killall nexqor` or `killall securecomm`. |
+| `SECURECOMM_ERR_NO_COMPAT_PROFILE` | -11 | Adaptive engine could not find a profile satisfying policy constraints. | Run `nexqor adaptive explain` to see exact stage rejections. |
+| `SECURECOMM_ERR_BACKEND_MISSING`| -9 | Target runtime backend library (e.g. `liboqs`) is missing. | Verify dependencies via `nexqor diagnostics`. |
 
 ---
 
@@ -517,3 +649,4 @@ Output:
 - **Downgrade Attack Resistance**: Enforced at Stage B of the Adaptive Engine.
 - **Replay Protection**: Packets with duplicate sequence numbers or outside the 64-datagram window are discarded prior to AEAD decryption.
 - **Resource Bounds**: Bounded session tables (256 sessions), bounded 16KB buffers, monotonic expiration timers.
+

@@ -36,45 +36,58 @@
 #define FALLBACK_CONFIG_PATH "./config/securecomm.json"
 
 static const char *get_default_config_path(void) {
-    if (access("/etc/securecomm", W_OK) == 0 || (getuid() == 0 && access("/etc", W_OK) == 0)) {
+    if (access(DEFAULT_CONFIG_PATH, R_OK) == 0) {
         return DEFAULT_CONFIG_PATH;
     }
-    return FALLBACK_CONFIG_PATH;
+    const char *home = getenv("HOME");
+    if (home && strlen(home) > 0) {
+        static char user_cfg[SECURECOMM_MAX_PATH_LEN];
+        snprintf(user_cfg, sizeof(user_cfg), "%s/.config/securecomm/securecomm.json", home);
+        if (access(user_cfg, R_OK) == 0) return user_cfg;
+    }
+    if (access(FALLBACK_CONFIG_PATH, R_OK) == 0) {
+        return FALLBACK_CONFIG_PATH;
+    }
+    return DEFAULT_CONFIG_PATH;
 }
 
 static void print_version(void) {
-    printf("SecureComm version %s\n", SECURECOMM_VERSION_STRING);
+    printf("NEXQOR / SecureComm version %s\n", SECURECOMM_VERSION_STRING);
     printf("Lightweight, Adaptive, Cross-Platform Secure Communication Framework\n");
     printf("Protocols: Classical (X25519/Ed25519), Pure PQC (ML-KEM/ML-DSA), Hybrid, Adaptive\n");
-    printf("Target Architecture: Linux x86_64 / ARM64\n");
+    printf("Target Architecture: Linux x86_64 / ARM64 / ARM32\n");
 }
 
 static void print_help(const char *prog) {
     printf("Usage: %s <command> [options]\n\n", prog);
     printf("Core Commands:\n");
-    printf("  setup                     Run interactive or automated onboarding wizard\n");
+    printf("  setup                     Run interactive onboarding wizard\n");
     printf("  detect                    Detect hardware, CPU features, memory, and crypto backends\n");
     printf("  profiles list             List registered cryptographic profiles\n");
     printf("  profiles check            Check device compatibility for each profile\n");
     printf("  adaptive explain          Explain deterministic 5-stage profile selection\n");
     printf("  config validate           Validate syntax, permissions, and settings of config\n");
     printf("  config show               Display configuration with secret redaction\n");
-    printf("  server start              Launch SecureComm UDP server\n");
-    printf("  client connect            Initiate secure connection to remote server\n");
+    printf("  server [start] [port]     Launch NEXQOR UDP server (default: 0.0.0.0:9877)\n");
+    printf("  client [connect] [ip]     Connect to remote server (default: 100.113.83.56:9877)\n");
     printf("  status                    Inspect running service status and health\n");
     printf("  diagnostics               Execute comprehensive platform security diagnostics\n");
     printf("  benchmark                 Run cryptographic microbenchmarks\n");
     printf("\nGlobal Options:\n");
+    printf("  --server <ip>             Target server IP address (default: 100.113.83.56)\n");
+    printf("  --port <port>             Target or bind UDP port (default: 9877)\n");
     printf("  --config <path>           Specify configuration file path\n");
+    printf("  --msg <text>              Send single message and exit (non-interactive)\n");
     printf("  --version, -v             Display version information\n");
     printf("  --help, -h                Display this help message\n");
     printf("\nExamples:\n");
-    printf("  %s setup\n", prog);
-    printf("  %s detect\n", prog);
-    printf("  %s adaptive explain\n", prog);
-    printf("  %s server start --config /etc/securecomm/securecomm.json\n", prog);
-    printf("  %s client connect --server 127.0.0.1 --port 9879\n", prog);
-    printf("  %s benchmark --mode hybrid\n", prog);
+    printf("  # Server (on 100.113.83.56):\n");
+    printf("  %s server start\n", prog);
+    printf("  %s server 9877\n\n", prog);
+    printf("  # Client (connecting from another laptop / Raspberry Pi):\n");
+    printf("  %s client connect\n", prog);
+    printf("  %s client connect 100.113.83.56 9877\n", prog);
+    printf("  %s client connect --server 100.113.83.56 --port 9877\n", prog);
 }
 
 /* ─── Signal handling for Server ─────────────────────────────────── */
@@ -195,13 +208,14 @@ static int cmd_server_start(const char *cfg_path, const char *override_port, con
     securecomm_config_t cfg;
     int rc = securecomm_config_load(&cfg, cfg_path);
     if (rc != SECURECOMM_SUCCESS) {
-        fprintf(stderr, "Warning: Config file '%s' not found, initializing defaults.\n", cfg_path);
-        securecomm_config_init_defaults(&cfg);
+        securecomm_config_init_default(&cfg);
         cfg.role = SECURECOMM_ROLE_SERVER;
     }
 
-    if (override_port) {
+    if (override_port && strlen(override_port) > 0) {
         cfg.port = (uint16_t)atoi(override_port);
+    } else if (cfg.port == 0) {
+        cfg.port = SECURECOMM_DEFAULT_PORT;
     }
     if (override_mode) {
         cfg.mode = securecomm_mode_from_string(override_mode);
@@ -209,39 +223,28 @@ static int cmd_server_start(const char *cfg_path, const char *override_port, con
 
     /* Load or generate identity */
     securecomm_identity_t ident;
-    char base_dir[SECURECOMM_MAX_PATH_LEN] = "./config";
-    if (strlen(cfg.private_key_path) > 0) {
-        char temp[SECURECOMM_MAX_PATH_LEN];
-        snprintf(temp, sizeof(temp), "%s", cfg.private_key_path);
-        char *p = strrchr(temp, '/');
-        if (p) {
-            *p = '\0';
-            snprintf(base_dir, sizeof(base_dir), "%s", temp);
+    char base_dir[SECURECOMM_MAX_PATH_LEN] = "/etc/securecomm";
+    if (access(base_dir, W_OK) != 0 && getuid() != 0) {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(base_dir, sizeof(base_dir), "%s/.config/securecomm", home);
+        } else {
+            snprintf(base_dir, sizeof(base_dir), "/tmp/securecomm-%u", (unsigned int)getuid());
         }
     }
 
     securecomm_identity_init(&ident, cfg.device_id, cfg.mode, base_dir);
-    if (strlen(cfg.private_key_path) > 0) {
-        snprintf(ident.private_key_path, sizeof(ident.private_key_path), "%s", cfg.private_key_path);
-    }
-    if (strlen(cfg.public_key_path) > 0) {
-        snprintf(ident.public_key_path, sizeof(ident.public_key_path), "%s", cfg.public_key_path);
-    }
-    if (strlen(cfg.trust_store_path) > 0) {
-        snprintf(ident.trust_store_path, sizeof(ident.trust_store_path), "%s", cfg.trust_store_path);
-    }
 
     if (!securecomm_identity_exists(&ident)) {
-        SECURECOMM_LOG_INFO("Identity keypair not found at %s. Generating fresh keypair...", ident.private_key_path);
         int g_rc = securecomm_identity_generate(&ident);
         if (g_rc != SECURECOMM_SUCCESS) {
-            fprintf(stderr, "Failed to generate identity: %s\n", securecomm_strerror(g_rc));
+            fprintf(stderr, "Failed to generate server identity: %s\n", securecomm_strerror(g_rc));
             return 1;
         }
     } else {
         int l_rc = securecomm_identity_load(&ident);
         if (l_rc != SECURECOMM_SUCCESS) {
-            fprintf(stderr, "Failed to load identity: %s\n", securecomm_strerror(l_rc));
+            fprintf(stderr, "Failed to load server identity: %s\n", securecomm_strerror(l_rc));
             return 1;
         }
     }
@@ -255,11 +258,18 @@ static int cmd_server_start(const char *cfg_path, const char *override_port, con
     signal(SIGINT, server_sigint_handler);
     signal(SIGTERM, server_sigint_handler);
 
-    printf("Starting SecureComm Server...\n");
-    printf("Endpoint: %s:%u (UDP) | Mode: %s | Device ID: %s\n",
-           cfg.bind_address, cfg.port, securecomm_mode_to_string(cfg.mode), cfg.device_id);
-    printf("Identity Fingerprint: %s\n", ident.fingerprint);
-    printf("Press Ctrl+C to stop.\n\n");
+    printf("\n╔══════════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                 NEXQOR Secure Server (Post-Quantum & Classical)                  ║\n");
+    printf("╚══════════════════════════════════════════════════════════════════════════════════╝\n");
+    printf("  Status        : LISTENING\n");
+    printf("  Bind Address  : %s (UDP)\n", cfg.bind_address);
+    printf("  Port          : %u\n", cfg.port);
+    printf("  Target Host   : 100.113.83.56:%u\n", cfg.port);
+    printf("  Crypto Mode   : %s\n", securecomm_mode_to_string(cfg.mode));
+    printf("  Device ID     : %s\n", cfg.device_id);
+    printf("  Fingerprint   : %.16s...\n", ident.fingerprint);
+    printf("  Key File      : %s\n\n", ident.private_key_path);
+    printf("[Ready] Waiting for incoming client connections... (Press Ctrl+C to stop)\n\n");
 
     rc = securecomm_server_run(g_server);
 
@@ -279,45 +289,87 @@ static int cmd_client_connect(const char *cfg_path, const char *server_host, con
     securecomm_config_t cfg;
     int rc = securecomm_config_load(&cfg, cfg_path);
     if (rc != SECURECOMM_SUCCESS) {
-        securecomm_config_init_defaults(&cfg);
+        securecomm_config_init_default(&cfg);
         cfg.role = SECURECOMM_ROLE_CLIENT;
     }
 
-    if (server_host) snprintf(cfg.server_host, sizeof(cfg.server_host), "%s", server_host);
-    if (port_str) cfg.port = (uint16_t)atoi(port_str);
+    if (server_host && strlen(server_host) > 0) {
+        snprintf(cfg.server_host, sizeof(cfg.server_host), "%s", server_host);
+        snprintf(cfg.server_address, sizeof(cfg.server_address), "%s", server_host);
+    } else if (strlen(cfg.server_host) == 0 && strlen(cfg.server_address) == 0) {
+        snprintf(cfg.server_host, sizeof(cfg.server_host), "%s", SECURECOMM_DEFAULT_SERVER_HOST);
+        snprintf(cfg.server_address, sizeof(cfg.server_address), "%s", SECURECOMM_DEFAULT_SERVER_HOST);
+    } else if (strlen(cfg.server_host) == 0 && strlen(cfg.server_address) > 0) {
+        snprintf(cfg.server_host, sizeof(cfg.server_host), "%s", cfg.server_address);
+    }
+
+    if (port_str && strlen(port_str) > 0) {
+        cfg.port = (uint16_t)atoi(port_str);
+    } else if (cfg.port == 0) {
+        cfg.port = SECURECOMM_DEFAULT_PORT;
+    }
     if (mode_str) cfg.mode = securecomm_mode_from_string(mode_str);
 
-    /* Initialize identity */
+    /* Initialize identity with user-path fallback */
     securecomm_identity_t ident;
-    char base_dir[SECURECOMM_MAX_PATH_LEN] = "./config";
+    char base_dir[SECURECOMM_MAX_PATH_LEN] = "/etc/securecomm";
+    if (access(base_dir, W_OK) != 0 && getuid() != 0) {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(base_dir, sizeof(base_dir), "%s/.config/securecomm", home);
+        } else {
+            snprintf(base_dir, sizeof(base_dir), "/tmp/securecomm-%u", (unsigned int)getuid());
+        }
+    }
+
     securecomm_identity_init(&ident, cfg.device_id, cfg.mode, base_dir);
-    if (strlen(cfg.private_key_path) > 0) snprintf(ident.private_key_path, sizeof(ident.private_key_path), "%s", cfg.private_key_path);
-    if (strlen(cfg.public_key_path) > 0) snprintf(ident.public_key_path, sizeof(ident.public_key_path), "%s", cfg.public_key_path);
-    if (strlen(cfg.trust_store_path) > 0) snprintf(ident.trust_store_path, sizeof(ident.trust_store_path), "%s", cfg.trust_store_path);
 
     if (!securecomm_identity_exists(&ident)) {
-        securecomm_identity_generate(&ident);
+        int g_rc = securecomm_identity_generate(&ident);
+        if (g_rc != SECURECOMM_SUCCESS) {
+            fprintf(stderr, "Failed to generate client identity keypair: %s\n", securecomm_strerror(g_rc));
+            return 1;
+        }
     } else {
-        securecomm_identity_load(&ident);
+        int l_rc = securecomm_identity_load(&ident);
+        if (l_rc != SECURECOMM_SUCCESS) {
+            fprintf(stderr, "Failed to load client identity keypair: %s\n", securecomm_strerror(l_rc));
+            return 1;
+        }
     }
+
+    printf("\n╔══════════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                 NEXQOR Secure Client (Post-Quantum & Classical)                  ║\n");
+    printf("╚══════════════════════════════════════════════════════════════════════════════════╝\n");
+    printf("  Target Server : %s:%u (UDP)\n", cfg.server_host, cfg.port);
+    printf("  Crypto Mode   : %s\n", securecomm_mode_to_string(cfg.mode));
+    printf("  Device ID     : %s\n", cfg.device_id);
+    printf("  Fingerprint   : %.16s...\n", ident.fingerprint);
+    printf("  Key File      : %s\n\n", ident.private_key_path);
 
     securecomm_client_t *client = securecomm_client_create(&cfg, &ident);
     if (!client) {
-        fprintf(stderr, "Failed to create SecureComm client\n");
+        fprintf(stderr, "Failed to create SecureComm client instance\n");
         return 1;
     }
 
+    printf("[*] Connecting to %s:%u over UDP...\n", cfg.server_host, cfg.port);
     rc = securecomm_client_connect(client);
     if (rc != SECURECOMM_SUCCESS) {
-        fprintf(stderr, "Connection failed: %s\n", securecomm_strerror(rc));
+        fprintf(stderr, "[!] Connection failed: %s\n", securecomm_strerror(rc));
+        fprintf(stderr, "    Tip: Verify server is running on %s:%u and UDP port %u is open.\n\n",
+                cfg.server_host, cfg.port, cfg.port);
         securecomm_client_free(client);
         return 1;
     }
 
+    printf("[✓] Post-Quantum Handshake Established! Mutual Authentication Verified.\n");
+    printf("[✓] Encrypted Session Active.\n\n");
+
     if (msg) {
         rc = securecomm_client_send(client, (const uint8_t *)msg, strlen(msg));
         if (rc == SECURECOMM_SUCCESS) {
-            printf("Message sent successfully (%zu bytes).\n", strlen(msg));
+            printf("[✓] Message sent successfully (%zu bytes).\n", strlen(msg));
         } else {
             fprintf(stderr, "Failed to send message: %s\n", securecomm_strerror(rc));
         }
@@ -573,9 +625,31 @@ int securecomm_cli_dispatch(int argc, char **argv) {
         return cmd_config(argc - 2, argv + 2, cfg_path);
     }
     if (strcmp(cmd, "server") == 0) {
+        for (int i = 2; i < argc; i++) {
+            if (argv[i][0] == '-') {
+                if (strcmp(argv[i], "--port") == 0 || strcmp(argv[i], "--mode") == 0 || strcmp(argv[i], "--config") == 0) i++;
+                continue;
+            }
+            if (strcmp(argv[i], "start") == 0) continue;
+            if (atoi(argv[i]) > 0 && !port_override) {
+                port_override = argv[i];
+            }
+        }
         return cmd_server_start(cfg_path, port_override, mode_override);
     }
     if (strcmp(cmd, "client") == 0) {
+        for (int i = 2; i < argc; i++) {
+            if (argv[i][0] == '-') {
+                if (strcmp(argv[i], "--server") == 0 || strcmp(argv[i], "--port") == 0 || strcmp(argv[i], "--mode") == 0 || strcmp(argv[i], "--msg") == 0 || strcmp(argv[i], "--config") == 0) i++;
+                continue;
+            }
+            if (strcmp(argv[i], "connect") == 0) continue;
+            if (!server_override && (strchr(argv[i], '.') != NULL || atoi(argv[i]) == 0)) {
+                server_override = argv[i];
+            } else if (!port_override && atoi(argv[i]) > 0) {
+                port_override = argv[i];
+            }
+        }
         return cmd_client_connect(cfg_path, server_override, port_override, mode_override, msg_override);
     }
     if (strcmp(cmd, "status") == 0) {

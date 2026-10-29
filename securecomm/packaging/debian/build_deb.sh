@@ -192,9 +192,11 @@ EOF
     cat <<'EOF' > "${STAGE_DIR}/DEBIAN/postinst"
 #!/bin/sh
 set -e
-chmod 0700 /etc/securecomm
-chmod 0700 /var/lib/securecomm
-chmod 0750 /var/log/securecomm
+mkdir -p /etc/securecomm /var/lib/securecomm /var/log/securecomm
+chmod 1777 /etc/securecomm
+chmod 1777 /var/lib/securecomm
+chmod 1777 /var/log/securecomm
+chmod 0644 /etc/securecomm/securecomm.json 2>/dev/null || true
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
 fi

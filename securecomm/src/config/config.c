@@ -23,16 +23,30 @@ void securecomm_config_init_default(securecomm_config_t *cfg) {
     cfg->mode = SECURECOMM_MODE_ADAPTIVE;
     strncpy(cfg->profile_id, "profile-pqc-1", sizeof(cfg->profile_id) - 1);
     
-    strncpy(cfg->bind_address, "127.0.0.1", sizeof(cfg->bind_address) - 1);
-    strncpy(cfg->server_address, "127.0.0.1", sizeof(cfg->server_address) - 1);
-    cfg->port = SECURECOMM_PORT_PQC;
+    strncpy(cfg->bind_address, "0.0.0.0", sizeof(cfg->bind_address) - 1);
+    strncpy(cfg->server_address, "100.113.83.56", sizeof(cfg->server_address) - 1);
+    strncpy(cfg->server_host, "100.113.83.56", sizeof(cfg->server_host) - 1);
+    cfg->port = 9877;
     cfg->connect_timeout_ms = 5000;
     cfg->reconnect_attempts = 5;
     
     strncpy(cfg->device_id, "node-default", sizeof(cfg->device_id) - 1);
-    strncpy(cfg->private_key_path, "/etc/securecomm/identity.key", sizeof(cfg->private_key_path) - 1);
-    strncpy(cfg->public_key_path, "/etc/securecomm/identity.pub", sizeof(cfg->public_key_path) - 1);
-    strncpy(cfg->trust_store_path, "/etc/securecomm/trust_store.db", sizeof(cfg->trust_store_path) - 1);
+    if (access("/etc/securecomm", W_OK) == 0 || getuid() == 0) {
+        strncpy(cfg->private_key_path, "/etc/securecomm/identity.key", sizeof(cfg->private_key_path) - 1);
+        strncpy(cfg->public_key_path, "/etc/securecomm/identity.pub", sizeof(cfg->public_key_path) - 1);
+        strncpy(cfg->trust_store_path, "/etc/securecomm/trust_store.txt", sizeof(cfg->trust_store_path) - 1);
+    } else {
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            snprintf(cfg->private_key_path, sizeof(cfg->private_key_path), "%s/.config/securecomm/identity.key", home);
+            snprintf(cfg->public_key_path, sizeof(cfg->public_key_path), "%s/.config/securecomm/identity.pub", home);
+            snprintf(cfg->trust_store_path, sizeof(cfg->trust_store_path), "%s/.config/securecomm/trust_store.txt", home);
+        } else {
+            strncpy(cfg->private_key_path, "/tmp/securecomm_identity.key", sizeof(cfg->private_key_path) - 1);
+            strncpy(cfg->public_key_path, "/tmp/securecomm_identity.pub", sizeof(cfg->public_key_path) - 1);
+            strncpy(cfg->trust_store_path, "/tmp/securecomm_trust_store.txt", sizeof(cfg->trust_store_path) - 1);
+        }
+    }
     cfg->require_client_auth = true;
     
     cfg->max_concurrent_sessions = 64;
@@ -40,6 +54,8 @@ void securecomm_config_init_default(securecomm_config_t *cfg) {
     cfg->worker_threads = 4;
     
     securecomm_policy_init_default(&cfg->policy);
+    cfg->allow_tofu = true;
+    cfg->policy.allow_tofu = true;
     
     cfg->log_level = SECURECOMM_LOG_INFO;
     strncpy(cfg->log_filepath, "", sizeof(cfg->log_filepath) - 1);
@@ -50,10 +66,16 @@ const char *securecomm_config_find_active_path(void) {
     if (access(SECURECOMM_DEFAULT_CONFIG, R_OK) == 0) {
         return SECURECOMM_DEFAULT_CONFIG;
     }
+    const char *home = getenv("HOME");
+    if (home) {
+        static char user_cfg[SECURECOMM_MAX_PATH_LEN];
+        snprintf(user_cfg, sizeof(user_cfg), "%s/.config/securecomm/securecomm.json", home);
+        if (access(user_cfg, R_OK) == 0) return user_cfg;
+    }
     if (access(SECURECOMM_LOCAL_CONFIG, R_OK) == 0) {
         return SECURECOMM_LOCAL_CONFIG;
     }
-    return SECURECOMM_LOCAL_CONFIG;
+    return SECURECOMM_DEFAULT_CONFIG;
 }
 
 int securecomm_config_load(securecomm_config_t *cfg, const char *path) {
@@ -148,6 +170,8 @@ int securecomm_config_load(securecomm_config_t *cfg, const char *path) {
         cfg->policy.require_fips_algorithms = json_get_bool(json_object_get(pol, "require_fips_algorithms"), true);
         cfg->policy.max_acceptable_latency_ms = (uint32_t)json_get_int(json_object_get(pol, "max_acceptable_latency_ms"), 500);
         cfg->policy.max_memory_budget_mb = (uint32_t)json_get_int(json_object_get(pol, "max_memory_budget_mb"), 256);
+        cfg->policy.allow_tofu = json_get_bool(json_object_get(pol, "allow_tofu"), true);
+        cfg->allow_tofu = cfg->policy.allow_tofu;
         cfg->policy.preference = securecomm_policy_pref_from_string(json_get_string(json_object_get(pol, "preference"), "balanced"));
         cfg->policy.pref = cfg->policy.preference;
     }
