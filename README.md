@@ -17,39 +17,37 @@ Each implementation is decoupled with its own build systems, cryptographic state
 
 ---
 
-## 🚀 SecureComm Standalone Releases & Direct Downloads
+## 🚀 Standalone Releases & Debian Packages
 
-### 🌐 Official APT Repository Installation (Recommended)
+NEXQOR / SecureComm is distributed as pre-compiled standalone Debian (`.deb`) packages for Intel/AMD PCs, Raspberry Pi 4/5, and embedded ARM microcomputers, as well as a pure-C source tree buildable with standard GNU tools.
 
-You can install `securecomm` directly using standard `apt` on any Ubuntu or Debian machine (x86-64 PCs, Raspberry Pi 4/5, or Raspberry Pi 2/3):
+### 📦 Pre-Built Debian Packages (`.deb`)
 
+For quick installation on any Debian or Ubuntu system without manual compilation:
+
+| Target Architecture | Debian Architecture | Target Devices | Package File | Direct Download Link | Local Install Command |
+| :--- | :---: | :--- | :---: | :---: | :--- |
+| **x86-64 / AMD64 (`x86`)** | `amd64` | Intel/AMD PCs, Laptops, Cloud Servers | `nexqor-x86.deb` | [📥 Download `nexqor-x86.deb`](https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT) | `sudo dpkg -i nexqor-x86.deb` |
+| **ARM64 / AArch64 (`arm64`)** | `arm64` | Raspberry Pi 4/5, Jetson, 64-bit ARM Linux | `nexqor-arm64.deb` | [📥 Download `nexqor-arm64.deb`](https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ) | `sudo dpkg -i nexqor-arm64.deb` |
+| **ARM32 / ARMv7 (`arm32`)** | `armhf` | Raspberry Pi 2/3, 32-bit Raspbian/Debian | `nexqor-arm32.deb` | [📥 Download `nexqor-arm32.deb`](https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb) | `sudo dpkg -i nexqor-arm32.deb` |
+
+Each package installs:
+- Executable binaries: `/usr/bin/nexqor`, `/usr/bin/securecomm`, and `/usr/bin/nexqor-<arch>`
+- Hardened systemd services: `/usr/lib/systemd/system/nexqor.service` and `securecomm.service`
+- Default configuration template: `/etc/securecomm/securecomm.json`
+- Documentation & changelogs: `/usr/share/doc/nexqor-<arch>/`
+
+#### Terminal Installation Command:
 ```bash
-# 1. Register the SecureComm APT repository:
-curl -1sLf 'https://dl.cloudsmith.io/public/securecomm/securecomm/setup.deb.sh' | sudo -E distro=debian codename=wheezy bash
+# Install package and resolve any missing system libraries automatically:
+sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
 
-# 2. Update and install:
-sudo apt-get update && sudo apt-get install -y securecomm
+# Verify installation:
+nexqor --help
+# (or: securecomm --help)
 ```
 
-Once installed, verify immediately:
-```bash
-which securecomm
-securecomm --help
-```
-
----
-
-### 📦 Direct Pre-Built Debian Package Downloads (`.deb`)
-
-For air-gapped or offline installations, standalone `.deb` packages can be downloaded directly:
-
-| Target Architecture | Debian Architecture | Target Devices | Direct Download Link | One-Line Install Command |
-| :--- | :---: | :--- | :---: | :--- |
-| **x86-64 / AMD64 (`x86amd`)** | `amd64` | Intel/AMD PCs, Laptops, Cloud Servers | [📥 Download `.deb`](https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT) | `curl -L -o securecomm_1.0.0_x86amd.deb "https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT" && sudo dpkg -i securecomm_1.0.0_x86amd.deb` |
-| **ARM64 / AArch64 (`arm64`)** | `arm64` | Raspberry Pi 4/5, Jetson, 64-bit ARM Linux | [📥 Download `.deb`](https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ) | `curl -L -o securecomm_1.0.0_arm64.deb "https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ" && sudo dpkg -i securecomm_1.0.0_arm64.deb` |
-| **ARM32 / ARMv7 (`arm32`)** | `armhf` | Raspberry Pi 2/3, 32-bit Raspbian/Debian | [📥 Download `.deb`](https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb) | `curl -L -o securecomm_1.0.0_arm32.deb "https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb" && sudo dpkg -i securecomm_1.0.0_arm32.deb` |
-
-> Detailed architectural and operational documentation is available in [securecomm/README.md](file:///home/vishal-kumar/Desktop/Events/QHack/securecomm/README.md).
+> For deep architectural specifications, configuration schemas, and operational instructions, see [securecomm/README.md](file:///home/vishal-kumar/Desktop/Events/QHack/securecomm/README.md).
 
 ---
 
@@ -549,16 +547,16 @@ Tests simultaneous handshake concurrency against an active server:
 
 ## Dual-Console GTK 4 Graphical Interface & app.sh
 
-QRYPTONEX features two native, pure-C **GTK 4 graphical consoles** (not web applications) styled in a sleek **Cyber-Dark Theme**:
+QRYPTONEX features two native, pure-C **GTK 4 graphical consoles** (zero web wrappers or electron bloat) styled in a sleek, high-contrast **Cyber-Dark Theme**:
 
 | Console Interface | Binary Path | Purpose & Visual Architecture |
 | :--- | :--- | :--- |
-| **Console 1: Server NOC Dashboard** | `ui/qhack_ui` | Server state toggle (start/stop), active client session registry, bidirectional IPC chat, and deep cryptographic parameter inspector (live KEM/DSA key fingerprints, shared secrets, wire handshake latency). |
-| **Console 2: Security & Attack Lab** | `security_lab/ui/attack_ui` | Real-time threat injector with target IP/port inputs, crypto suite selector (Classical, Hybrid, PQC, or All), 15 threat scenarios, dry-run safety toggle, emergency stop cancellation, live streaming terminal, and dynamic resilience matrix. |
+| **Console 1: Server NOC Dashboard** | `ui/qhack_ui` | Real-time cryptographic server control, client session registry, bidirectional IPC terminal, and deep cryptographic parameter inspector (live KEM/DSA key fingerprints, shared secrets, wire handshake latency). |
+| **Console 2: Security & Attack Lab** | `security_lab/ui/attack_ui` | Interactive threat injector featuring target IP/port inputs, crypto suite selector (Classical, Hybrid, PQC, or All), 15 threat scenarios with plain-English explanations, live matrix-green terminal console on pitch black (`#000000`), smooth independent scrolling, **Abort Attack** process cancellation, live PASS/FAIL resilience cards, and one-click **Executive PDF Report** viewer. |
 
 ### Running Both UIs Simultaneously (`app.sh`)
 
-To launch both interfaces side-by-side with automatic dependency verification, compilation, and synchronized cleanup:
+To launch both interfaces side-by-side with automatic dependency verification, subproject compilation, and synchronized cleanup:
 
 ```bash
 # Unified dual launcher:
@@ -568,7 +566,7 @@ To launch both interfaces side-by-side with automatic dependency verification, c
 make app
 ```
 
-*Pressing `Ctrl+C` in the terminal cleanly closes both GTK 4 applications simultaneously.*
+*Pressing `Ctrl+C` in the launcher terminal cleanly terminates both GTK 4 applications and clears runtime locks.*
 
 ### Running Interfaces Individually
 
@@ -587,21 +585,21 @@ make app
 The `security_lab/` framework is a pure-C security testing and resilience evaluation engine that subjects running client and server implementations to real network impairments and active cryptographic threat vectors:
 
 ### 15 Implemented Threat & Impairment Vectors:
-1. **Legitimate Baseline:** Throughput, latency, and ACK recovery under normal operation.
-2. **Packet Loss Resilience:** 15% deterministic in-transit UDP drop profile.
-3. **Delay & Variable Jitter:** 30ms ± 15ms packet transit delays.
-4. **Packet Reordering:** 25% out-of-order sequence window delivery.
-5. **Packet Duplication:** 25% duplicate frame injection testing sliding replay window.
-6. **Temporary Disconnection:** 2-second link blackhole measuring automated session recovery.
-7. **Path MTU Boundaries:** Testing oversized UDP datagrams across 512B to 4096B fragmentation limits.
-8. **Replay Protection Attack:** Injection of duplicate seq, stale seq, seq 0, and cross-session frames.
-9. **AEAD Ciphertext Tampering:** Single-bit flips and MAC tag corruption testing cryptographic integrity.
-10. **Authentication & Signature Forgery:** Bogus credentials and invalid DSA signatures testing identity rejection.
-11. **Handshake State Machine Order:** Out-of-order protocol messages and half-open handshake garbage collection.
-12. **Malformed Input & Fuzzing Flood:** Truncated wire frames, invalid packet types, and randomized datagram fuzzing.
-13. **Resource Stress:** 16 concurrent client handshakes stressing server worker queues.
-14. **Session Isolation & Blast Radius:** Cross-session packet injection testing peer isolation.
-15. **Full Suite Evaluation:** Runs all 14 scenarios sequentially across all 3 cryptographic implementations.
+1. **[BASE] Normal Baseline Operation:** Measures clean round-trip latency, baseline throughput, and delivery rate under optimal network conditions.
+2. **[LOSS] Packet Drop Resilience:** Simulates 15% deterministic network loss to test client retransmission and state preservation.
+3. **[JITR] Delay & Variable Jitter:** Injects 30ms ± 15ms packet transit delays to test timeout handling and timestamp validation.
+4. **[RORD] Out-of-Order Delivery:** Shuffles delivery sequence to test reordering buffers and sliding sequence windows.
+5. **[DUPL] Packet Duplication Injection:** Duplicates valid datagrams in-transit to test anti-replay window suppression.
+6. **[DISC] Temporary Link Drop:** Drops all packets for 2 seconds to verify session heartbeat recovery and re-handshake triggers.
+7. **[PMTU] Path MTU Exceeded:** Tests transmission across MTU boundary limits from 512B to 4096B to check fragmentation handling.
+8. **[RPLY] Anti-Replay Counter Attack:** Deliberately injects duplicate sequence numbers, stale counters, and cross-session replays.
+9. **[TAMP] Ciphertext Bit-Flip Attack:** Modifies encrypted payload bits and MAC tags in-transit to verify AEAD tamper detection.
+10. **[AUTH] Invalid Identity Attack:** Injects forged digital signatures and unrecognized public keys to test peer authentication rejection.
+11. **[HSHK] Out-of-Order Handshake:** Transmits handshake phases in reverse or incomplete sequence to test state-machine bounds checking.
+12. **[FUZZ] Malformed Frame Fuzzing:** Floods the socket with truncated headers, invalid wire IDs, and pseudo-random fuzz payloads.
+13. **[STRS] Resource Queue Saturation:** Launches 16 parallel handshake requests simultaneously to evaluate server worker pool queue handling.
+14. **[ISOL] Cross-Session Injection:** Replays valid session packets into a neighboring client's socket to verify session cryptographic isolation.
+15. **[ALL] Full Suite Evaluation:** Sequentially executes all 14 scenarios across all 3 cryptographic implementations (Classical, Hybrid, PQC).
 
 ### Running Security Tests via CLI:
 ```bash
@@ -615,11 +613,14 @@ The `security_lab/` framework is a pure-C security testing and resilience evalua
 ./security_lab/security_lab --suite all --scenario all --target 127.0.0.1
 ```
 
-All test runs generate structured audit artifacts in `security_lab/results/latest/`:
-- `report.md`: Markdown comparison matrix and threat vector analysis.
-- `metrics.csv`: Tabular scenario latencies, delivery rates, and memory overheads.
-- `scenario_results.json`: Machine-readable results schema.
-- `audit.log`: POSIX-timestamped audit trace log.
+### Automated Executive PDF & Audit Reports
+
+All evaluation runs generate structured audit artifacts stored in `security_lab/results/latest/`:
+- **`report.pdf`**: Formatted Executive PDF Report complete with system details, executive summary, comprehensive scenario verdicts, and formal security conclusions. Compiled automatically via `generate_pdf.py` and openable directly via the GTK 4 UI (`View PDF Report` button).
+- **`report.md`**: Clean GitHub-flavored markdown report with structured scenario comparison tables and cryptographic status.
+- **`metrics.csv`**: Granular numerical log containing per-scenario latency, packet loss, delivery percentage, and heap usage.
+- **`scenario_results.json`**: Machine-readable JSON schema for CI/CD automated ingestion.
+- **`audit.log`**: Nanosecond-timestamped protocol event log.
 
 ---
 

@@ -124,9 +124,9 @@ securecomm/
 ├── packaging/
 │   ├── debian/                       # Multi-architecture Debian package generator
 │   │   ├── build_deb.sh              # Package build script
-│   │   ├── securecomm_1.0.0_x86amd.deb
-│   │   ├── securecomm_1.0.0_arm64.deb
-│   │   └── securecomm_1.0.0_arm32.deb
+│   │   ├── nexqor-x86.deb            # x86-64 / AMD64 Debian package
+│   │   ├── nexqor-arm64.deb          # ARM64 / AArch64 Debian package
+│   │   └── nexqor-arm32.deb          # ARM32 / armhf Debian package
 │   └── systemd/securecomm.service    # Hardened systemd service definition
 └── config/
     └── securecomm.example.json       # Documented configuration template
@@ -163,59 +163,36 @@ make clean
 
 ## 4. Multi-Architecture Debian Packaging & Direct Downloads
 
-### 🌐 Official APT Repository Installation (Recommended)
-
-To install SecureComm across any Debian or Ubuntu system (Intel/AMD x86_64 PCs, Raspberry Pi 4/5, or Raspberry Pi 2/3):
-
-```bash
-# 1. Register the SecureComm Cloudsmith repository:
-curl -1sLf 'https://dl.cloudsmith.io/public/securecomm/securecomm/setup.deb.sh' | sudo -E distro=debian codename=wheezy bash
-
-# 2. Update and install SecureComm:
-sudo apt-get update && sudo apt-get install -y securecomm
-```
-
-Verify installation:
-```bash
-which securecomm
-securecomm --help
-```
-
----
-
 ### 📦 Standalone Debian Packages (`.deb`)
 
-SecureComm also generates three distinct, architecture-specific `.deb` packages designed for direct download and offline/air-gapped environments:
+SecureComm generates three distinct, architecture-specific `.deb` packages designed for direct installation and offline/air-gapped environments:
 
-| Architecture | Target CPU Family | Debian Arch (`dpkg`) | Target Hardware | Direct Download Link |
+| Package Name (`.deb`) | Internal Package Name | Debian Arch (`dpkg`) | Target CPU & Hardware | Direct Download Link |
 | :--- | :--- | :---: | :--- | :---: |
-| **`x86amd`** | **x86-64** | `amd64` | Intel/AMD PCs, laptops, and x86_64 cloud servers | [📥 Download `securecomm_1.0.0_x86amd.deb`](https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT) |
-| **`arm64`** | **ARM64 (AArch64)** | `arm64` | Raspberry Pi 4, Raspberry Pi 5, Jetson, 64-bit ARM Linux | [📥 Download `securecomm_1.0.0_arm64.deb`](https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ) |
-| **`arm32`** | **ARM32 (ARMv7)** | `armhf` | Raspberry Pi 2/3 running 32-bit Raspbian/Debian | [📥 Download `securecomm_1.0.0_arm32.deb`](https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb) |
+| **`nexqor-x86.deb`** | `nexqor-x86` | `amd64` | Intel/AMD PCs, laptops, and x86_64 cloud servers | [📥 Download `nexqor-x86.deb`](https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT) |
+| **`nexqor-arm64.deb`** | `nexqor-arm64` | `arm64` | Raspberry Pi 4, Raspberry Pi 5, Jetson, 64-bit ARM Linux | [📥 Download `nexqor-arm64.deb`](https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ) |
+| **`nexqor-arm32.deb`** | `nexqor-arm32` | `armhf` | Raspberry Pi 2/3 running 32-bit Raspbian/Debian | [📥 Download `nexqor-arm32.deb`](https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb) |
 
 ---
 
-### One-Line Terminal Download & Install Commands
+### Terminal Download & Install Commands
 
-#### 1. For x86-64 PC, Laptop & Cloud Servers (`x86amd`):
+#### 1. For x86-64 PC, Laptop & Cloud Servers (`nexqor-x86`):
 ```bash
-# Download and install x86-64 package:
-curl -L -o securecomm_1.0.0_x86amd.deb "https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT"
-sudo dpkg -i securecomm_1.0.0_x86amd.deb || sudo apt-get install -f -y
+# Direct local package installation:
+sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
 ```
 
-#### 2. For Raspberry Pi 4 / 5, Jetson, 64-bit ARM (`arm64`):
+#### 2. For Raspberry Pi 4 / 5, Jetson, 64-bit ARM (`nexqor-arm64`):
 ```bash
-# Download and install ARM64 package:
-curl -L -o securecomm_1.0.0_arm64.deb "https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ"
-sudo dpkg -i securecomm_1.0.0_arm64.deb || sudo apt-get install -f -y
+# Direct local package installation:
+sudo dpkg -i nexqor-arm64.deb || sudo apt-get install -f -y
 ```
 
-#### 3. For Raspberry Pi 2 / 3, 32-bit ARM OS (`arm32`):
+#### 3. For Raspberry Pi 2 / 3, 32-bit ARM OS (`nexqor-arm32`):
 ```bash
-# Download and install ARM32 package:
-curl -L -o securecomm_1.0.0_arm32.deb "https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb"
-sudo dpkg -i securecomm_1.0.0_arm32.deb || sudo apt-get install -f -y
+# Direct local package installation:
+sudo dpkg -i nexqor-arm32.deb || sudo apt-get install -f -y
 ```
 
 ---
@@ -228,9 +205,9 @@ make package
 # (or: make package-all)
 
 # Or build individual packages:
-make package-x86amd    # Generates packaging/debian/securecomm_1.0.0_x86amd.deb
-make package-arm64     # Generates packaging/debian/securecomm_1.0.0_arm64.deb
-make package-arm32     # Generates packaging/debian/securecomm_1.0.0_arm32.deb
+make package-x86      # Generates packaging/debian/nexqor-x86.deb
+make package-arm64    # Generates packaging/debian/nexqor-arm64.deb
+make package-arm32    # Generates packaging/debian/nexqor-arm32.deb
 ```
 
 ---
@@ -242,13 +219,13 @@ If you built the packages locally with `make package`:
 
 ```bash
 # On x86-64:
-sudo dpkg -i packaging/debian/securecomm_1.0.0_x86amd.deb
+sudo dpkg -i packaging/debian/nexqor-x86.deb
 
 # On ARM64 (AArch64):
-sudo dpkg -i packaging/debian/securecomm_1.0.0_arm64.deb
+sudo dpkg -i packaging/debian/nexqor-arm64.deb
 
 # On ARM32 (ARMv7):
-sudo dpkg -i packaging/debian/securecomm_1.0.0_arm32.deb
+sudo dpkg -i packaging/debian/nexqor-arm32.deb
 ```
 
 ### Filesystem Layout After Installation

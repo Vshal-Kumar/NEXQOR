@@ -81,39 +81,44 @@ EOF_STUBS
 build_single_package() {
     local TARGET_ID="$1"
     local DEB_ARCH=""
-    local FILE_SUFFIX=""
+    local FILE_NAME=""
+    local INTERNAL_PKG=""
     local CPU_DESC=""
 
     case "$TARGET_ID" in
-        x86amd|amd64|x86_64)
+        x86|x86amd|amd64|x86_64)
             DEB_ARCH="amd64"
-            FILE_SUFFIX="x86amd"
+            FILE_NAME="nexqor-x86.deb"
+            INTERNAL_PKG="nexqor-x86"
             CPU_DESC="x86-64 (Intel/AMD 64-bit)"
             ;;
         arm64|aarch64)
             DEB_ARCH="arm64"
-            FILE_SUFFIX="arm64"
+            FILE_NAME="nexqor-arm64.deb"
+            INTERNAL_PKG="nexqor-arm64"
             CPU_DESC="ARM64 / AArch64 (Raspberry Pi 4/5, Jetson)"
             ;;
         arm32|armhf|armv7l)
             DEB_ARCH="armhf"
-            FILE_SUFFIX="arm32"
+            FILE_NAME="nexqor-arm32.deb"
+            INTERNAL_PKG="nexqor-arm32"
             CPU_DESC="ARM32 / ARMv7 (Raspberry Pi 2/3 32-bit)"
             ;;
         *)
-            DEB_ARCH="$TARGET_ID"
-            FILE_SUFFIX="$TARGET_ID"
+            DEB_ARCH="amd64"
+            FILE_NAME="nexqor-${TARGET_ID}.deb"
+            INTERNAL_PKG="nexqor-${TARGET_ID}"
             CPU_DESC="$TARGET_ID"
             ;;
     esac
 
-    local STAGE_DIR="${PKG_ROOT}/packaging/debian/staging_${FILE_SUFFIX}"
-    local DEB_FILE="${PKG_ROOT}/packaging/debian/${PKG_NAME}_${VERSION}_${FILE_SUFFIX}.deb"
+    local STAGE_DIR="${PKG_ROOT}/packaging/debian/staging_${INTERNAL_PKG}"
+    local DEB_FILE="${PKG_ROOT}/packaging/debian/${FILE_NAME}"
 
     echo ""
     echo "=========================================================================="
-    echo "  Building Distinct Package: ${PKG_NAME}_${VERSION}_${FILE_SUFFIX}.deb"
-    echo "  Target Architecture: ${CPU_DESC} [Debian Arch: ${DEB_ARCH}]"
+    echo "  Building Package: ${FILE_NAME}"
+    echo "  Internal Package Name: ${INTERNAL_PKG} [Debian Arch: ${DEB_ARCH}]"
     echo "=========================================================================="
 
     rm -rf "${STAGE_DIR}"
@@ -123,29 +128,29 @@ build_single_package() {
     mkdir -p "${STAGE_DIR}/var/lib/securecomm"
     mkdir -p "${STAGE_DIR}/var/log/securecomm"
     mkdir -p "${STAGE_DIR}/usr/lib/systemd/system"
-    mkdir -p "${STAGE_DIR}/usr/share/doc/securecomm"
+    mkdir -p "${STAGE_DIR}/usr/share/doc/${INTERNAL_PKG}"
 
     # Select appropriate binary for this architecture
-    if [ "$FILE_SUFFIX" = "x86amd" ]; then
+    if [ "$INTERNAL_PKG" = "nexqor-x86" ]; then
         install -m 0755 "${PKG_ROOT}/bin/securecomm" "${STAGE_DIR}/usr/bin/securecomm"
-    elif [ "$FILE_SUFFIX" = "arm64" ]; then
+    elif [ "$INTERNAL_PKG" = "nexqor-arm64" ]; then
         if [ -f "${PKG_ROOT}/bin/securecomm_arm64" ]; then
             install -m 0755 "${PKG_ROOT}/bin/securecomm_arm64" "${STAGE_DIR}/usr/bin/securecomm"
         else
             install -m 0755 "${PKG_ROOT}/bin/securecomm" "${STAGE_DIR}/usr/bin/securecomm"
         fi
-    elif [ "$FILE_SUFFIX" = "arm32" ]; then
+    elif [ "$INTERNAL_PKG" = "nexqor-arm32" ]; then
         # 32-bit ARM launcher wrapper
         cat << 'EOF_LAUNCHER' > "${STAGE_DIR}/usr/bin/securecomm"
 #!/bin/bash
-# SecureComm Multi-Architecture ARM32 Launcher
+# NEXQOR Multi-Architecture ARM32 Launcher
 ARCH=$(uname -m)
 if [ -f /usr/lib/securecomm/securecomm.bin ]; then
     exec /usr/lib/securecomm/securecomm.bin "$@"
 fi
-echo "[SecureComm: ARM32 / armhf]"
+echo "[NEXQOR / SecureComm: ARM32 / armhf]"
 echo "Host Architecture: $ARCH"
-echo "Starting SecureComm on ARM32 hardware..."
+echo "Starting NEXQOR SecureComm on ARM32 hardware..."
 exec /usr/bin/securecomm.real "$@" 2>/dev/null || {
     echo "Notice: Install native dependencies via 'apt install libssl-dev' to complete ARM32 setup."
     exit 0
@@ -154,21 +159,28 @@ EOF_LAUNCHER
         chmod 0755 "${STAGE_DIR}/usr/bin/securecomm"
     fi
 
+    # Provide 'nexqor', 'securecomm', and package-name alias binaries
+    ln -sf securecomm "${STAGE_DIR}/usr/bin/nexqor"
+    ln -sf securecomm "${STAGE_DIR}/usr/bin/${INTERNAL_PKG}"
+
     install -m 0644 "${PKG_ROOT}/config/securecomm.example.json" "${STAGE_DIR}/etc/securecomm/securecomm.json"
     install -m 0644 "${PKG_ROOT}/packaging/systemd/securecomm.service" "${STAGE_DIR}/usr/lib/systemd/system/securecomm.service"
-    install -m 0644 "${PKG_ROOT}/README.md" "${STAGE_DIR}/usr/share/doc/securecomm/README.md"
-    install -m 0644 "${PKG_ROOT}/VERSION" "${STAGE_DIR}/usr/share/doc/securecomm/VERSION"
+    ln -sf securecomm.service "${STAGE_DIR}/usr/lib/systemd/system/nexqor.service"
+    install -m 0644 "${PKG_ROOT}/README.md" "${STAGE_DIR}/usr/share/doc/${INTERNAL_PKG}/README.md"
+    install -m 0644 "${PKG_ROOT}/VERSION" "${STAGE_DIR}/usr/share/doc/${INTERNAL_PKG}/VERSION"
 
     cat <<EOF > "${STAGE_DIR}/DEBIAN/control"
-Package: ${PKG_NAME}
+Package: ${INTERNAL_PKG}
 Version: ${VERSION}
 Section: net
 Priority: optional
 Architecture: ${DEB_ARCH}
 Depends: libc6 (>= 2.31), libssl3 (>= 3.0.0)
-Maintainer: SecureComm Engineering Team <support@securecomm.local>
-Description: Lightweight, Adaptive, Cross-Platform Secure Communication Framework (${FILE_SUFFIX})
- SecureComm is a production C-based framework supporting Classical (X25519,
+Provides: nexqor, securecomm
+Replaces: securecomm
+Maintainer: NEXQOR Engineering Team <support@nexqor.local>
+Description: QRYPTONEX NEXQOR Multi-Suite Secure Communication Framework (${INTERNAL_PKG})
+ NEXQOR is a production C-based framework supporting Classical (X25519,
  Ed25519, AES-CCM), Pure Post-Quantum (ML-KEM-768, ML-DSA-65), Hybrid, and
  deterministic Adaptive profile selection on Linux (${CPU_DESC}).
 EOF
@@ -194,7 +206,8 @@ EOF
 #!/bin/sh
 set -e
 if [ -d /run/systemd/system ]; then
-    systemctl stop securecomm.service || true
+    systemctl stop securecomm.service 2>/dev/null || true
+    systemctl stop nexqor.service 2>/dev/null || true
 fi
 exit 0
 EOF
@@ -226,16 +239,21 @@ fi
 
 # Execute requested builds
 if [ "$TARGET_REQUEST" = "all" ]; then
-    build_single_package "x86amd"
+    # Remove old debian packages
+    rm -f "${PKG_ROOT}/packaging/debian/securecomm"*.deb
+    rm -f "${PKG_ROOT}/packaging/debian/nexqor"*.deb
+
+    build_single_package "x86"
     build_single_package "arm64"
     build_single_package "arm32"
+
     echo ""
     echo "=========================================================================================================================="
-    printf "%-30s %-20s %-12s %-28s %-40s\n" "Package Name" "Target CPU Family" "Debian Arch" "Internal Binary" "Target Devices"
+    printf "%-25s %-22s %-14s %-25s %-40s\n" "Debian Package File" "Internal Package Name" "Debian Arch" "Executable Binary" "Target Hardware"
     echo "--------------------------------------------------------------------------------------------------------------------------"
-    printf "%-30s %-20s %-12s %-28s %-40s\n" "securecomm_${VERSION}_x86amd.deb" "x86-64" "amd64" "Native x86_64 ELF" "Your Dell Laptop, Intel/AMD PCs & servers"
-    printf "%-30s %-20s %-12s %-28s %-40s\n" "securecomm_${VERSION}_arm64.deb" "ARM64 (AArch64)" "arm64" "Cross-compiled AArch64 ELF" "Raspberry Pi 4, Raspberry Pi 5, Jetson, 64-bit ARM Linux"
-    printf "%-30s %-20s %-12s %-28s %-40s\n" "securecomm_${VERSION}_arm32.deb" "ARM32 (ARMv7)" "armhf" "ARM32 compatible launcher" "Raspberry Pi 2/3 running 32-bit Raspbian/Debian"
+    printf "%-25s %-22s %-14s %-25s %-40s\n" "nexqor-x86.deb" "nexqor-x86" "amd64" "nexqor / securecomm" "Dell Laptop, Intel/AMD PCs & servers"
+    printf "%-25s %-22s %-14s %-25s %-40s\n" "nexqor-arm64.deb" "nexqor-arm64" "arm64" "nexqor / securecomm" "Raspberry Pi 4, Raspberry Pi 5, Jetson (64-bit)"
+    printf "%-25s %-22s %-14s %-25s %-40s\n" "nexqor-arm32.deb" "nexqor-arm32" "armhf" "nexqor / securecomm" "Raspberry Pi 2/3 running 32-bit Raspbian/Debian"
     echo "=========================================================================================================================="
 elif [ "$TARGET_REQUEST" = "host" ]; then
     build_single_package "$HOST_TARGET"

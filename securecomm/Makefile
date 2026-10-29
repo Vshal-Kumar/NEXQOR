@@ -119,11 +119,12 @@ package-all:
 	@chmod +x packaging/debian/build_deb.sh
 	@./packaging/debian/build_deb.sh all
 
-package-x86amd:
+package-x86:
 	@chmod +x packaging/debian/build_deb.sh
-	@./packaging/debian/build_deb.sh x86amd
+	@./packaging/debian/build_deb.sh x86
 
-package-amd64: package-x86amd
+package-x86amd: package-x86
+package-amd64: package-x86
 
 package-arm64:
 	@chmod +x packaging/debian/build_deb.sh

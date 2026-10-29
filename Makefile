@@ -68,7 +68,8 @@ endif
         hybrid-arm64 hybrid-arm32 hybrid-x86_64 \
         pqc-arm64 pqc-arm32 pqc-x86_64 \
         bench bench_pqc benchpqc \
-        ui run-ui \
+        ui run-ui attack-ui run-attack-ui app \
+        package package-all package-x86 package-arm64 package-arm32 \
         detect info help banner
 
 all: banner classical hybrid pqc bench_pqc
@@ -219,6 +220,19 @@ run-attack-ui: attack-ui
 app:
 	./app.sh
 
+# ── Multi-Architecture Debian Packaging ──────────────────────────────
+package package-all:
+	$(MAKE) -C securecomm package
+
+package-x86:
+	$(MAKE) -C securecomm package-x86
+
+package-arm64:
+	$(MAKE) -C securecomm package-arm64
+
+package-arm32:
+	$(MAKE) -C securecomm package-arm32
+
 # ── Information & Help ───────────────────────────────────────────────
 detect info: banner
 	@echo ""
@@ -273,6 +287,13 @@ help:
 	@echo "  make run-ui         - Run pure C GTK 4 dashboard (or ./run_ui.sh)"
 	@echo "  make attack-ui      - Build pure C GTK 4 security & attack evaluation UI (security_lab/ui/attack_ui)"
 	@echo "  make run-attack-ui  - Run pure C GTK 4 security & attack evaluation UI"
+	@echo "  make app            - Launch both GTK 4 consoles side-by-side (or ./app.sh)"
+	@echo ""
+	@echo "Debian Packaging Targets (securecomm/):"
+	@echo "  make package        - Build all 3 Debian packages (x86, arm64, arm32)"
+	@echo "  make package-x86    - Build nexqor-x86.deb (amd64)"
+	@echo "  make package-arm64  - Build nexqor-arm64.deb (arm64)"
+	@echo "  make package-arm32  - Build nexqor-arm32.deb (armhf)"
 	@echo ""
 	@echo "Clean Targets (Device-Aware & Multi-Arch):"
 	@echo "  make clean          - Clean build artifacts for detected device architecture"
