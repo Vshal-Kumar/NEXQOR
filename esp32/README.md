@@ -57,13 +57,14 @@ When judges ask: *"Isn't Post-Quantum Cryptography too heavy for a $4 microcontr
 
 ### Step 2: Open and Configure Sketch
 1. Open `esp32/esp32_secure_node.ino`.
-2. Edit lines 14–17 with your network credentials:
+2. Edit lines 14–17 with your network credentials (the Server's dynamic Wi-Fi IP is displayed live on the GTK4 Server Dashboard header and empty client card):
    ```cpp
    const char* WIFI_SSID     = "Your_WiFi_Network";
    const char* WIFI_PASSWORD = "Your_WiFi_Password";
-   const char* SERVER_IP     = "100.113.83.56";  // Tailscale IP or Local Wi-Fi IP of Server
+   const char* SERVER_IP     = "10.58.4.191";  // Dynamic Wi-Fi or LAN IP shown on Dashboard
    const uint16_t SERVER_PORT= 9877;
    ```
+   > 💡 **Tip**: When you launch `./run_ui.sh`, the dashboard header and the empty client card automatically detect your laptop's current Wi-Fi IP (e.g. `10.58.4.191` or `192.168.1.X`) and format the exact C snippet to paste into `esp32_secure_node.ino`.
 3. Under **Tools**, configure:
    - **Board**: `ESP32 Dev Module`
    - **Upload Speed**: `921600` (or `115200`)

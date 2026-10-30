@@ -170,9 +170,9 @@ The server leverages Linux **`io_uring`** for asynchronous, zero-copy packet bat
 
 ---
 
-### C. Decoupled UNIX IPC Architecture
+### C. Decoupled UNIX IPC Architecture & GTK 4 Dashboard Integration
 
-The server process decouples network packet processing from console interaction using non-blocking UNIX domain sockets (`/tmp/pqc_rx.sock`, `/tmp/pqc_tx.sock`):
+The server process decouples network packet processing from console interaction and graphical monitoring using non-blocking UNIX domain sockets (`/tmp/pqc_rx.sock`, `/tmp/pqc_tx.sock`):
 
 ```text
                             +───────────────────────+
@@ -187,12 +187,19 @@ The server process decouples network packet processing from console interaction 
                                   │           │
            /tmp/pqc_rx.sock (IPC) │           │ /tmp/pqc_tx.sock (IPC)
                                   ▼           │
-                      +───────────────+   +───┴───────────+
-                      │   Receiver    │   │  Transmitter  │
-                      │ Display (CLI) │   │ Command (CLI) │
-                      │ (server_rx.c) │   │ (server_tx.c) │
-                      +───────────────+   +───────────────+
+                      +───────────────────────┴───+
+                      │   GTK 4 Pure C Dashboard  │
+                      │       (ui/qhack_ui)       │
+                      │  - Real-time Session Map  │
+                      │  - 10s Inactivity Watchdog│
+                      │  - Dynamic Wi-Fi Endpoint │
+                      │  - Upside Metrics & Crypto│
+                      +───────────────────────────+
 ```
+
+- **Session Inactivity Watchdog**: Cleans inactive sessions after 10 seconds of silence, immediately notifying the dashboard to transition the peer to `DISCONNECTED SESSIONS (RECENT)`.
+- **Instant `PKT_DISCONNECT` Handling**: When a client shuts down gracefully, `server.c` frees the session immediately and triggers an IPC update without waiting for a sweep timer.
+- **Dynamic Wi-Fi Auto-Discovery**: Discovers active Wi-Fi and VPN interfaces (`getifaddrs`) and publishes them dynamically to the dashboard header and connection guides.
 
 ---
 

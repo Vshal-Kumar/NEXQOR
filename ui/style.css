@@ -1,61 +1,78 @@
 /*
- * ui/style.css — Cyberpunk / Dark NOC Theme for QRYPTONEX Dashboard
+ * ui/style.css — Quantum NOC High-Visibility Cyberpunk Dark Theme for QRYPTONEX
+ * Tailored for optimal contrast, micro-glows, vibrant status indicators, and clean typography.
  */
 
 window {
-    background-color: #080c16;
+    background-color: #070b14;
     color: #e2e8f0;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 headerbar {
-    background-color: #0b0f1d;
+    background-color: #0d1424;
     border-bottom: 1px solid #1e293b;
     padding: 6px 12px;
 }
 
+/* ── Top Header Toolbar ──────────────────────────────────────────── */
 .top-bar {
-    background: linear-gradient(180deg, #10172a 0%, #080c16 100%);
-    border-bottom: 1px solid #1e293b;
+    background: linear-gradient(180deg, #0e172a 0%, #070b14 100%);
+    border-bottom: 1px solid #1e2d44;
     padding: 10px 18px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
 }
 
 .brand-title {
-    font-size: 18px;
-    font-weight: 800;
-    letter-spacing: 1.5px;
+    font-size: 19px;
+    font-weight: 900;
+    letter-spacing: 1.8px;
     color: #38bdf8;
-    text-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+    text-shadow: 0 0 16px rgba(56, 189, 248, 0.55), 0 0 30px rgba(56, 189, 248, 0.25);
 }
 
 .brand-subtitle {
     font-size: 11px;
     font-weight: 500;
     color: #94a3b8;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
 }
 
-/* Status Badges */
+/* ── Status Badges & Pills ───────────────────────────────────────── */
 .badge-online {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.18);
     border: 1px solid #10b981;
     color: #34d399;
     border-radius: 9999px;
-    padding: 4px 12px;
+    padding: 5px 14px;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: 0.6px;
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.35);
 }
 
 .badge-offline {
     background: rgba(239, 68, 68, 0.15);
-    border: 1px solid #ef4444;
+    border: 1px solid #dc2626;
     color: #f87171;
     border-radius: 9999px;
-    padding: 4px 12px;
+    padding: 5px 14px;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: 0.6px;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+.badge-restarting {
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid #f59e0b;
+    color: #fbbf24;
+    border-radius: 9999px;
+    padding: 5px 14px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
 }
 
 .badge-pill {
@@ -69,26 +86,43 @@ headerbar {
 }
 
 .badge-accent {
-    background: rgba(168, 85, 247, 0.15);
+    background: rgba(168, 85, 247, 0.18);
     border: 1px solid #a855f7;
     color: #c084fc;
     border-radius: 9999px;
-    padding: 4px 12px;
+    padding: 5px 14px;
     font-size: 11px;
     font-weight: 700;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
 }
 
 .badge-mode {
-    background: rgba(56, 189, 248, 0.12);
+    background: rgba(56, 189, 248, 0.14);
     border: 1px solid #0284c7;
     color: #38bdf8;
     border-radius: 9999px;
-    padding: 4px 14px;
+    padding: 5px 14px;
     font-size: 12px;
     font-weight: 700;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
 }
 
-/* Paned Separator */
+/* ── Suite Dropdown ──────────────────────────────────────────────── */
+dropdown {
+    background-color: #111827;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #f8fafc;
+    font-weight: 600;
+    padding: 4px 10px;
+}
+
+dropdown:hover {
+    border-color: #38bdf8;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+}
+
+/* ── Paned Separator ─────────────────────────────────────────────── */
 paned > separator {
     background-color: #1e293b;
     min-width: 4px;
@@ -97,52 +131,73 @@ paned > separator {
 
 paned > separator:hover {
     background-color: #38bdf8;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
 }
 
-/* Card Containers */
+/* ── Card Containers ─────────────────────────────────────────────── */
 .dashboard-card {
-    background-color: #0f172a;
+    background: linear-gradient(145deg, #0f172a 0%, #0a0f1d 100%);
     border: 1px solid #1e293b;
     border-radius: 10px;
     padding: 14px;
     margin: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .card-title {
     font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: #94a3b8;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #38bdf8;
     text-transform: uppercase;
     margin-bottom: 8px;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+    padding-bottom: 4px;
 }
 
-/* Client Item in List */
+/* ── Connected Clients List Box ──────────────────────────────────── */
 .client-row {
-    background-color: #162032;
-    border: 1px solid #24344d;
+    background: linear-gradient(135deg, #131e33 0%, #0d1524 100%);
+    border: 1px solid #1e3a5f;
+    border-left: 4px solid #10b981;
     border-radius: 8px;
     padding: 10px 14px;
     margin-bottom: 6px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
     transition: all 150ms ease;
 }
 
 .client-row:hover {
-    background-color: #1c2b42;
+    background: linear-gradient(135deg, #182845 0%, #101c30 100%);
     border-color: #38bdf8;
-    box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
 }
 
 .client-row:selected {
-    background-color: #1a3353;
+    background: linear-gradient(135deg, #1c3558 0%, #13243d 100%);
     border: 1px solid #38bdf8;
-    box-shadow: 0 0 14px rgba(56, 189, 248, 0.3);
+    border-left: 4px solid #38bdf8;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.45);
+}
+
+.client-row-disconnected {
+    background: linear-gradient(135deg, #1a1622 0%, #100d16 100%);
+    border: 1px dashed #475569;
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    opacity: 0.75;
+}
+
+.client-row-disconnected:hover {
+    opacity: 0.95;
+    border-color: #f59e0b;
 }
 
 .client-name {
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 800;
     color: #f8fafc;
 }
 
@@ -158,9 +213,9 @@ paned > separator:hover {
     color: #94a3b8;
 }
 
-/* Monospace Crypto Inspector */
+/* ── Monospace Cryptographic Labels & Values ─────────────────────── */
 .crypto-inspector {
-    background-color: #080c16;
+    background-color: #070b14;
     border: 1px solid #1e293b;
     border-radius: 8px;
     padding: 12px;
@@ -170,7 +225,8 @@ paned > separator:hover {
 }
 
 .crypto-key-label {
-    color: #718096;
+    color: #8da2be;
+    font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
     font-size: 12px;
     font-weight: 600;
 }
@@ -196,7 +252,7 @@ paned > separator:hover {
 
 /* ── Chat Messages (Left / Right Layout) ──────────────────────────── */
 .chat-window {
-    background-color: #070a13;
+    background-color: #060a14;
     border: 1px solid #1e293b;
     border-radius: 10px;
     padding: 12px;
@@ -212,33 +268,33 @@ paned > separator:hover {
 
 /* Received Message (Inbound from Client) — Left Side */
 .message-bubble-rx {
-    background: linear-gradient(135deg, #131d33 0%, #0c1424 100%);
+    background: linear-gradient(135deg, #111d33 0%, #0a1222 100%);
     border: 1px solid #1e3a5f;
     border-left: 4px solid #38bdf8;
     border-radius: 10px;
     padding: 10px 14px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* Sent Message (Outbound from Server/Operator) — Right Side */
 .message-bubble-tx {
-    background: linear-gradient(135deg, #1f1b3b 0%, #120f26 100%);
+    background: linear-gradient(135deg, #1d1838 0%, #110d24 100%);
     border: 1px solid #3c2d66;
     border-right: 4px solid #c084fc;
     border-radius: 10px;
     padding: 10px 14px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .msg-header-rx {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 800;
     color: #38bdf8;
 }
 
 .msg-header-tx {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 800;
     color: #c084fc;
 }
 
@@ -253,7 +309,7 @@ paned > separator:hover {
     font-size: 14px;
     color: #f8fafc;
     margin: 6px 0;
-    line-height: 1.4;
+    line-height: 1.45;
 }
 
 .msg-meta-rx {
@@ -261,7 +317,7 @@ paned > separator:hover {
     font-size: 11px;
     color: #34d399;
     background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    border: 1px solid rgba(16, 185, 129, 0.35);
     border-radius: 4px;
     padding: 4px 8px;
     margin-top: 4px;
@@ -272,7 +328,7 @@ paned > separator:hover {
     font-size: 11px;
     color: #c084fc;
     background: rgba(168, 85, 247, 0.12);
-    border: 1px solid rgba(168, 85, 247, 0.3);
+    border: 1px solid rgba(168, 85, 247, 0.35);
     border-radius: 4px;
     padding: 4px 8px;
 }
@@ -289,12 +345,12 @@ paned > separator:hover {
 }
 
 .msg-expand-btn:hover {
-    background-color: rgba(56, 189, 248, 0.1);
+    background-color: rgba(56, 189, 248, 0.12);
     color: #38bdf8;
 }
 
 .msg-details-box {
-    background-color: #050811;
+    background-color: #040710;
     border: 1px solid #1e293b;
     border-radius: 6px;
     padding: 8px 10px;
@@ -304,7 +360,7 @@ paned > separator:hover {
 .crypto-detail-label {
     font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
     font-size: 11px;
-    color: #64748b;
+    color: #718096;
     font-weight: 600;
 }
 
@@ -322,9 +378,9 @@ paned > separator:hover {
     font-weight: 700;
 }
 
-/* Message Entry Box */
+/* ── Message Entry Box & Controls ────────────────────────────────── */
 entry {
-    background-color: #0b0f19;
+    background-color: #0a0e1a;
     border: 1px solid #283548;
     border-radius: 8px;
     color: #f8fafc;
@@ -335,16 +391,16 @@ entry {
 
 entry:focus {
     border-color: #38bdf8;
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
 }
 
-/* Buttons */
+/* ── Buttons ─────────────────────────────────────────────────────── */
 button {
     background-color: #162032;
     border: 1px solid #283548;
     border-radius: 8px;
     color: #f8fafc;
-    font-weight: 600;
+    font-weight: 700;
     padding: 8px 16px;
     transition: all 150ms ease;
 }
@@ -370,26 +426,34 @@ button.btn-success {
     background: linear-gradient(135deg, #059669 0%, #047857 100%);
     border: 1px solid #10b981;
     color: #ffffff;
-    box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
 }
 
 button.btn-success:hover {
     background: linear-gradient(135deg, #047857 0%, #065f46 100%);
-    box-shadow: 0 0 16px rgba(16, 185, 129, 0.55);
+    box-shadow: 0 0 18px rgba(16, 185, 129, 0.65);
 }
 
 button.btn-danger {
-    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
     border: 1px solid #ef4444;
     color: #ffffff;
-    box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.45);
 }
 
 button.btn-danger:hover {
-    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+    background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.65);
 }
 
-/* Metrics Table Card */
+button.btn-warning {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    border: 1px solid #f59e0b;
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
+}
+
+/* ── Metrics Box ─────────────────────────────────────────────────── */
 .metrics-box {
     background-color: #060911;
     border: 1px solid #1a2638;

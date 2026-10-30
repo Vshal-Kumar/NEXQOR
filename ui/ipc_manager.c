@@ -13,6 +13,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 
 struct ipc_manager_s {
     crypto_suite_t suite;
@@ -398,9 +399,20 @@ crypto_suite_t ipc_manager_get_suite(ipc_manager_t *mgr) {
 }
 
 bool ipc_manager_start_server(ipc_manager_t *mgr, const char *workspace_root) {
-    if (mgr->server_pid > 0) {
+    if (mgr->server_pid > 0 && kill(mgr->server_pid, 0) == 0) {
         return true; /* Already running */
     }
+
+    /* Clean up any orphaned server processes on port 9877 or old IPC sockets */
+    (void)system("fuser -k 9877/udp 2>/dev/null; pkill -TERM -f 'securecomm server' 2>/dev/null");
+    usleep(80000); /* 80ms */
+
+    unlink(PQC_IPC_RX_PATH);
+    unlink(PQC_IPC_TX_PATH);
+    unlink(HYBRID_IPC_RX_PATH);
+    unlink(HYBRID_IPC_TX_PATH);
+    unlink(CLASSICAL_IPC_RX_PATH);
+    unlink(CLASSICAL_IPC_TX_PATH);
 
     char sec_bin[2048];
     snprintf(sec_bin, sizeof(sec_bin), "%s/securecomm/bin/securecomm", workspace_root);
@@ -411,6 +423,18 @@ bool ipc_manager_start_server(ipc_manager_t *mgr, const char *workspace_root) {
 
         pid_t pid = fork();
         if (pid == 0) {
+            /* Redirect child stdio to avoid terminal hijacking/pollution */
+            int log_fd = open("/tmp/qhack_server.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (log_fd >= 0) {
+                dup2(log_fd, STDOUT_FILENO);
+                dup2(log_fd, STDERR_FILENO);
+                close(log_fd);
+            }
+            int null_fd = open("/dev/null", O_RDONLY);
+            if (null_fd >= 0) {
+                dup2(null_fd, STDIN_FILENO);
+                close(null_fd);
+            }
             execl(sec_bin, sec_bin, "server", "start", "--mode", mode_str, NULL);
             _exit(1);
         } else if (pid > 0) {
@@ -434,13 +458,22 @@ bool ipc_manager_start_server(ipc_manager_t *mgr, const char *workspace_root) {
     pid_t pid = fork();
     if (pid == 0) {
         /* Child */
+        int log_fd = open("/tmp/qhack_server.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (log_fd >= 0) {
+            dup2(log_fd, STDOUT_FILENO);
+            dup2(log_fd, STDERR_FILENO);
+            close(log_fd);
+        }
+        int null_fd = open("/dev/null", O_RDONLY);
+        if (null_fd >= 0) {
+            dup2(null_fd, STDIN_FILENO);
+            close(null_fd);
+        }
         if (chdir(server_dir) != 0) {
-            perror("chdir server_dir");
-            exit(1);
+            _exit(1);
         }
         execl("./server", "./server", NULL);
-        perror("execl ./server");
-        exit(1);
+        _exit(1);
     } else if (pid > 0) {
         mgr->server_pid = pid;
         mgr->server_started_by_us = true;
@@ -452,17 +485,58 @@ bool ipc_manager_start_server(ipc_manager_t *mgr, const char *workspace_root) {
 
 void ipc_manager_stop_server(ipc_manager_t *mgr) {
     if (mgr->server_pid > 0) {
-        kill(mgr->server_pid, SIGINT);
+        kill(mgr->server_pid, SIGTERM);
+        usleep(80000);
         int status;
-        waitpid(mgr->server_pid, &status, 0);
+        if (waitpid(mgr->server_pid, &status, WNOHANG) == 0) {
+            kill(mgr->server_pid, SIGINT);
+            usleep(80000);
+            if (waitpid(mgr->server_pid, &status, WNOHANG) == 0) {
+                kill(mgr->server_pid, SIGKILL);
+                waitpid(mgr->server_pid, &status, 0);
+            }
+        }
         mgr->server_pid = -1;
         mgr->server_started_by_us = false;
-        trigger_status_update(mgr);
     }
+
+    /* Kill any other lingering server processes */
+    (void)system("pkill -TERM -f 'securecomm server' 2>/dev/null; fuser -k 9877/udp 2>/dev/null");
+    usleep(80000);
+
+    /* Disconnect sockets */
+    if (mgr->rx_fd >= 0) {
+        close(mgr->rx_fd);
+        mgr->rx_fd = -1;
+    }
+    pthread_mutex_lock(&mgr->tx_mu);
+    if (mgr->tx_fd >= 0) {
+        close(mgr->tx_fd);
+        mgr->tx_fd = -1;
+    }
+    pthread_mutex_unlock(&mgr->tx_mu);
+
+    /* Clean socket files */
+    unlink(PQC_IPC_RX_PATH);
+    unlink(PQC_IPC_TX_PATH);
+    unlink(HYBRID_IPC_RX_PATH);
+    unlink(HYBRID_IPC_TX_PATH);
+    unlink(CLASSICAL_IPC_RX_PATH);
+    unlink(CLASSICAL_IPC_TX_PATH);
+
+    trigger_status_update(mgr);
 }
 
 bool ipc_manager_is_server_running(ipc_manager_t *mgr) {
-    return (mgr->server_pid > 0 || mgr->rx_fd >= 0 || mgr->tx_fd >= 0);
+    if (mgr->server_pid > 0) {
+        if (kill(mgr->server_pid, 0) == 0) {
+            return true;
+        } else {
+            mgr->server_pid = -1;
+            mgr->server_started_by_us = false;
+        }
+    }
+    return (mgr->rx_fd >= 0 || mgr->tx_fd >= 0);
 }
 
 int ipc_manager_send_message(ipc_manager_t *mgr, uint16_t target_client_id,

@@ -21,10 +21,9 @@ const char* WIFI_SSID     = "Vivo T3x 5g";   // <-- Replace with your Wi-Fi SSID
 const char* WIFI_PASSWORD = "12345678";           // <-- Replace with your Wi-Fi Password
 
 // 2. Server IP Address:
-//    - If ESP32 and Laptop are on the SAME Wi-Fi / Mobile Hotspot: 
-//      Use your Laptop's Wi-Fi IP address (Check with 'ip -4 addr' -> 10.58.4.191 or 192.168.x.x)
+//    - The active Wi-Fi IP is displayed dynamically on the GTK4 Server Dashboard header & client card!
 //    - If routing over Tailscale: Use 100.113.83.56
-const char* SERVER_IP     = "192.168.137.168";             // Active Laptop Wi-Fi IP (Vivo T3x 5g hotspot)
+const char* SERVER_IP     = "10.58.4.191";             // Active Laptop Wi-Fi IP (Auto-discovered on dashboard)
 
 // 3. Server Port:
 const uint16_t SERVER_PORT= 9877;                          // Default QRYPTONEX UDP Port

@@ -161,10 +161,14 @@ If running the client inside a **VirtualBox Kali Linux VM**:
 ### 📊 Pure C GTK4 NOC Dashboard Features
 
 When the server is managed via the **GTK4 Dashboard (`./run_ui.sh`)**:
-- **CONNECTED CLIENTS (ACTIVE)**: Live list displaying Client ID, IPv4, UDP Port, Session ID, Handshake Setup Latency (typically 1.6–2.0 ms), and packet counters.
-- **DISCONNECTED SESSIONS (RECENT)**: When a client disconnects or times out, it moves to the bottom section marked with `○ Disconnected / Closed`, preserving historical audit metrics.
+- **Manual Start/Stop Server Lifecycle**: The server doesn't auto-run in the background; operators have full control with the `▶ Start Server` / `⏹ Stop Server` button in the top bar.
+- **Dynamic Local Wi-Fi & Network Discovery**: Dynamically resolves local Wi-Fi, Ethernet, and VPN addresses via `getifaddrs`, updates top badges, and generates live connection snippets for ESP32 and CLI clients. Auto-refreshes every second if your Wi-Fi changes.
+- **Upside Performance & Telemetry Layout**: Real-time traffic stats, wire handshake breakdown latency (KEM/DSA keygen, encapsulation, signing, verification), decryption overhead, jitter, and interarrival times are positioned right above the details.
+- **Downside Deep Cryptographic Session Inspector**: Full view of active session IDs, directional 256-bit encryption keys (`C2S` and `S2C`), wire fingerprints, and the RFC 6479 64-packet anti-replay window.
+- **10-Second Disconnect Watchdog**: Sessions silent for >10 seconds or issuing a graceful `PKT_DISCONNECT` are instantly freed and moved to `DISCONNECTED SESSIONS (RECENT)`.
 - **Zero-Latency Inbound Display**: Incoming client messages appear instantaneously in the live chat log using low-overhead UNIX socket IPC (`/tmp/pqc_rx.sock`).
 - **Direct & Broadcast Messaging**: Server operators can select "Broadcast to All Clients" or target a specific client from the recipient dropdown and send encrypted commands in real time.
+- **Seamless Suite Switching**: Switch effortlessly between Pure Post-Quantum, Hybrid, and Classical IoT modes with automatic port unbinding, socket cleanup, and backend restarting.
 
 ---
 

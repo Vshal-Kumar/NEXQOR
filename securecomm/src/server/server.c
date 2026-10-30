@@ -688,14 +688,19 @@ int securecomm_server_run(securecomm_server_t *server) {
 
         uint64_t now_sec = get_time_sec();
 
-        /* Clean expired sessions every 5s */
-        if (now_sec - last_clean_sec >= 5) {
+        /* Clean expired sessions every 2s (10s inactivity threshold for responsive disconnect detection) */
+        if (now_sec - last_clean_sec >= 2) {
+            bool any_expired = false;
             for (int i = 0; i < MAX_SESSIONS; i++) {
-                if (server->sessions[i].in_use && (now_sec - server->sessions[i].last_seen_sec > 60)) {
-                    SECURECOMM_LOG_INFO("Session %016lx expired due to inactivity",
+                if (server->sessions[i].in_use && (now_sec - server->sessions[i].last_seen_sec > 10)) {
+                    SECURECOMM_LOG_INFO("Session %016lx expired due to inactivity (>10s)",
                                         server->sessions[i].session_id);
                     free_session(server, &server->sessions[i]);
+                    any_expired = true;
                 }
+            }
+            if (any_expired) {
+                ipc_push_client_list(server);
             }
             securecomm_metrics_update_memory(&server->metrics);
             last_clean_sec = now_sec;
@@ -985,6 +990,7 @@ int securecomm_server_run(securecomm_server_t *server) {
         if (hdr.type == PKT_DISCONNECT) {
             SECURECOMM_LOG_INFO("Session %016lx disconnected gracefully by peer", s->session_id);
             free_session(server, s);
+            ipc_push_client_list(server);
             continue;
         }
     }

@@ -46,6 +46,18 @@ liboqs/build_x86_64/
 liboqs/build_arm64/
 liboqs/build_arm32/
 
+# ESP32 / Arduino / PlatformIO firmware build artifacts
+esp32/**/.pio/
+esp32/**/.vscode/
+esp32/**/build/
+*.bin
+*.elf
+*.hex
+
+# Debian packaging staging and intermediate objects
+securecomm/packaging/debian/obj_*/
+securecomm/packaging/debian/staging/
+
 # Cryptographic private keys and runtime artifacts
 *.key
 *.pub
@@ -75,16 +87,20 @@ security_lab/results/*.json
 security_lab/results/*.md
 !security_lab/results/.gitkeep
 
-# UNIX Domain IPC Sockets
+# UNIX Domain IPC Sockets & Runtime Temporary Files
 *.sock
 /tmp/*_rx.sock
 /tmp/*_tx.sock
+/tmp/qhack_*
+/tmp/securecomm_*
 
-# Editor and IDE artifacts
+# Editor, OS, and IDE artifacts
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
+Thumbs.db
+
 

@@ -1197,7 +1197,7 @@ static void sweep_timeouts(void) {
 
     uint64_t elapsed_ns = now - s->last_seen_ns;
     if (s->state == SESSION_ESTABLISHED) {
-      if (elapsed_ns > 600000000000ULL) { /* 600 seconds (10 mins) timeout */
+      if (elapsed_ns > 10000000000ULL) { /* 10 seconds timeout */
         char ip_str[16];
         inet_ntop(AF_INET, &s->ip, ip_str, sizeof(ip_str));
         char ts[16];
@@ -1624,7 +1624,14 @@ int main(void) {
           s->last_seen_ns = now_ns();
 
           if (hdr.type == PKT_DISCONNECT) {
+            int cid = s->client_registry_id;
             session_free(s_idx);
+            ipc_push_client_list();
+            pthread_mutex_lock(&g_ipc_tx_mu);
+            if (g_ipc_tx_fd >= 0) {
+              ipc_send_frame(g_ipc_tx_fd, IPC_CLIENT_DISCONNECT, (uint16_t)cid, NULL, 0);
+            }
+            pthread_mutex_unlock(&g_ipc_tx_mu);
           } else if (hdr.type == PKT_CLIENT_HELLO) {
             if (s->state == SESSION_WAIT_KEM_ENC) {
               server_send_ack(g_listen_sock, peer, hdr.seq, s->session_id_val);

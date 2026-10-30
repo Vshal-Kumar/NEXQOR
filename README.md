@@ -73,8 +73,10 @@ nexqor client connect --msg "Hello Quantum Server!"
 ```
 
 **Real-Time Two-Way Chat & Dashboard Synchronization:**
+- **Controlled Backend**: Click `▶ Start Server` in the top bar to launch the UDP backend on port `9877`.
+- **Dynamic IP Resolution**: The dashboard automatically detects your active Wi-Fi / LAN IP (e.g., `10.58.4.191`) and updates the connection instructions in real time.
 - **Client Terminal**: Incoming server commands display immediately (`[SERVER → YOU] <msg>`), while user input is logged with encryption details (`[YOU → SERVER] <msg> (Encrypted: X bytes)`).
-- **GTK4 Dashboard**: Displays `CONNECTED CLIENTS (ACTIVE)` with IP, port, session ID, and handshake latency in real time. When a client disconnects, it gracefully moves to `DISCONNECTED SESSIONS (RECENT)` at the bottom of the list.
+- **GTK4 Dashboard**: Displays `CONNECTED CLIENTS (ACTIVE)` with IP, port, session ID, and handshake latency. With the 10-second activity watchdog and instant `PKT_DISCONNECT` reflection, disconnecting clients gracefully move to `DISCONNECTED SESSIONS (RECENT)`.
 
 *Note on Key Permissions*: Cryptographic identity keys are automatically stored in `~/.config/securecomm/` with strict `0600` permissions for unprivileged users, completely preventing any "permission denied" errors.
 
@@ -578,11 +580,11 @@ Tests simultaneous handshake concurrency against an active server:
 
 ## Dual-Console GTK 4 Graphical Interface & app.sh
 
-QRYPTONEX features two native, pure-C **GTK 4 graphical consoles** (zero web wrappers or electron bloat) styled in a sleek, high-contrast **Cyber-Dark Theme**:
+QRYPTONEX features two native, pure-C **GTK 4 graphical consoles** (zero web wrappers or electron bloat) styled in a sleek, high-contrast **Cyber NOC Theme**:
 
 | Console Interface | Binary Path | Purpose & Visual Architecture |
 | :--- | :--- | :--- |
-| **Console 1: Server NOC Dashboard** | `ui/qhack_ui` | Real-time cryptographic server control, client session registry, bidirectional IPC terminal, and deep cryptographic parameter inspector (live KEM/DSA key fingerprints, shared secrets, wire handshake latency). |
+| **Console 1: Server NOC Dashboard** | `ui/qhack_ui` | High-visibility Cyber NOC dashboard featuring: <br>• **Manual Start/Stop Server Button**: Operator controls server launch (`▶ Start Server` / `⏹ Stop Server`) with PID and UDP port 9877 management.<br>• **Dynamic Multi-Interface IP Discovery**: Real-time auto-discovery of active Wi-Fi (`wl*`), Ethernet (`en*`/`eth*`), and VPN interfaces via `getifaddrs`, with dynamic connection snippets and 1-second auto-refresh.<br>• **Upside Performance & Telemetry**: Live CPU, RAM, cryptographic handshake timings (KEM/DSA keygen, encapsulation, signing, verification), transit jitter, and interarrival latency placed prominently above details.<br>• **Downside Cryptographic Inspector**: Deep session inspector showing active session IDs, directional 256-bit keys (`C2S`/`S2C`), wire fingerprints, and RFC 6479 64-packet replay window.<br>• **10-Second Disconnect Watchdog**: Real-time heartbeat tracking instantly moves timed-out or disconnected clients to `DISCONNECTED SESSIONS (RECENT)`.<br>• **Clean Suite Switching**: Effortlessly transition between Pure PQC, Hybrid, and Classical IoT suites with automatic port and socket cleanup. |
 | **Console 2: Security & Attack Lab** | `security_lab/ui/attack_ui` | Interactive threat injector featuring target IP/port inputs, crypto suite selector (Classical, Hybrid, PQC, or All), 15 threat scenarios with plain-English explanations, live matrix-green terminal console on pitch black (`#000000`), smooth independent scrolling, **Abort Attack** process cancellation, live PASS/FAIL resilience cards, and one-click **Executive PDF Report** viewer. |
 
 ### Running Both UIs Simultaneously (`app.sh`)

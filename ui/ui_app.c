@@ -34,6 +34,7 @@ struct ui_app_s {
     /* Left Panel (Scrollable): Clients & Deep Cryptographic Inspector */
     GtkWidget *left_scrolled;
     GtkWidget *client_list_box;
+    GtkWidget *empty_clients_label;
     GtkWidget *selected_client_label;
 
     /* Cryptographic Session Architecture & Key Parameters */
@@ -83,6 +84,7 @@ struct ui_app_s {
     int disconnected_client_count;
     int selected_client_id;
     uint64_t tx_seq_counter;
+    time_t client_last_rx[MAX_UI_CLIENTS];
 };
 
 /* Data structure for expandable message details */
@@ -181,6 +183,79 @@ static void get_active_endpoints_summary(char *buf, size_t max_len, uint16_t por
         strncpy(buf, tmp, max_len - 1);
         buf[max_len - 1] = '\0';
     }
+}
+
+/* Helper to determine the best single primary IPv4 address for clients to connect to:
+ * Priority: 1) Active Wi-Fi (interface name contains "wl")
+ *           2) Active Ethernet (interface name contains "en" or "eth")
+ *           3) VPN (interface name contains "tailscale" or "tun" or "wg")
+ *           4) Any other non-loopback IPv4
+ *           5) Fallback to 127.0.0.1
+ */
+static void get_primary_server_ip(char *buf, size_t max_len) {
+    if (!buf || max_len == 0) return;
+    buf[0] = '\0';
+
+    struct ifaddrs *ifaddr, *ifa;
+    if (getifaddrs(&ifaddr) == -1) {
+        snprintf(buf, max_len, "127.0.0.1");
+        return;
+    }
+
+    char wifi_ip[INET_ADDRSTRLEN] = {0};
+    char eth_ip[INET_ADDRSTRLEN]  = {0};
+    char vpn_ip[INET_ADDRSTRLEN]  = {0};
+    char other_ip[INET_ADDRSTRLEN] = {0};
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
+        struct sockaddr_in *p = (struct sockaddr_in *)ifa->ifa_addr;
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &p->sin_addr, ip, sizeof(ip));
+        if (strcmp(ip, "127.0.0.1") == 0) continue;
+
+        if (strstr(ifa->ifa_name, "wl") != NULL) {
+            if (wifi_ip[0] == '\0') snprintf(wifi_ip, sizeof(wifi_ip), "%s", ip);
+        } else if (strstr(ifa->ifa_name, "en") != NULL || strstr(ifa->ifa_name, "eth") != NULL) {
+            if (eth_ip[0] == '\0') snprintf(eth_ip, sizeof(eth_ip), "%s", ip);
+        } else if (strstr(ifa->ifa_name, "tailscale") != NULL || strstr(ifa->ifa_name, "tun") != NULL || strstr(ifa->ifa_name, "wg") != NULL) {
+            if (vpn_ip[0] == '\0') snprintf(vpn_ip, sizeof(vpn_ip), "%s", ip);
+        } else {
+            if (other_ip[0] == '\0') snprintf(other_ip, sizeof(other_ip), "%s", ip);
+        }
+    }
+    freeifaddrs(ifaddr);
+
+    if (wifi_ip[0] != '\0') {
+        snprintf(buf, max_len, "%s", wifi_ip);
+    } else if (eth_ip[0] != '\0') {
+        snprintf(buf, max_len, "%s", eth_ip);
+    } else if (vpn_ip[0] != '\0') {
+        snprintf(buf, max_len, "%s", vpn_ip);
+    } else if (other_ip[0] != '\0') {
+        snprintf(buf, max_len, "%s", other_ip);
+    } else {
+        snprintf(buf, max_len, "127.0.0.1");
+    }
+    buf[max_len - 1] = '\0';
+}
+
+/* Helper to generate dynamic instructions with real-time detected IP */
+static void get_empty_client_placeholder_text(char *out, size_t out_len) {
+    char ep_summary[256];
+    get_active_endpoints_summary(ep_summary, sizeof(ep_summary), 9877);
+
+    char primary_ip[64];
+    get_primary_server_ip(primary_ip, sizeof(primary_ip));
+
+    snprintf(out, out_len,
+             "No clients connected yet.\n"
+             "%s\n\n"
+             "ESP32 Node (esp32_secure_node.ino):\n"
+             "  const char* SERVER_IP = \"%s\";\n\n"
+             "Linux / Debian Client:\n"
+             "  nexqor client connect %s 9877",
+             ep_summary, primary_ip, primary_ip);
 }
 
 /* ── Chat Messages: Add Received Message (Left-Aligned) ───────────── */
@@ -611,6 +686,10 @@ static void on_ipc_rx_msg(const char *timestamp, uint16_t client_id,
     ui_app_t *ui = (ui_app_t *)user_data;
     (void)msg_len;
 
+    if (client_id < MAX_UI_CLIENTS) {
+        ui->client_last_rx[client_id] = time(NULL);
+    }
+
     /* Add chat bubble to the LEFT side */
     add_chat_bubble_rx(ui, timestamp, client_id, ip_str, port, session_id,
                        msg_text, decrypt_us, pkt_seq);
@@ -628,10 +707,26 @@ static void on_client_row_selected(GtkListBox *box, GtkListBoxRow *row, gpointer
     ui_app_t *ui = (ui_app_t *)user_data;
     if (!row) return;
 
-    int idx = gtk_list_box_row_get_index(row);
-    if (idx >= 0 && idx < ui->client_count) {
-        ui->selected_client_id = ui->clients[idx].client_id;
-        update_inspector_for_client(ui, &ui->clients[idx]);
+    GtkWidget *child = gtk_list_box_row_get_child(row);
+    if (!child) return;
+
+    gpointer p_cid = g_object_get_data(G_OBJECT(child), "client_id");
+    if (!p_cid) return;
+    int cid = GPOINTER_TO_INT(p_cid);
+
+    for (int i = 0; i < ui->client_count; i++) {
+        if (ui->clients[i].client_id == cid) {
+            ui->selected_client_id = cid;
+            update_inspector_for_client(ui, &ui->clients[i]);
+            return;
+        }
+    }
+    for (int d = 0; d < ui->disconnected_client_count; d++) {
+        if (ui->disconnected_clients[d].client_id == cid) {
+            ui->selected_client_id = cid;
+            update_inspector_for_client(ui, &ui->disconnected_clients[d]);
+            return;
+        }
     }
 }
 
@@ -677,6 +772,12 @@ static void on_ipc_client_list(int count, const ipc_client_entry_t *clients, voi
     ui->client_count = (count > MAX_UI_CLIENTS) ? MAX_UI_CLIENTS : count;
     if (ui->client_count > 0 && clients) {
         memcpy(ui->clients, clients, (size_t)ui->client_count * sizeof(ipc_client_entry_t));
+        for (int i = 0; i < ui->client_count; i++) {
+            uint16_t cid = ui->clients[i].client_id;
+            if (cid < MAX_UI_CLIENTS && ui->client_last_rx[cid] == 0) {
+                ui->client_last_rx[cid] = time(NULL);
+            }
+        }
     }
 
     /* Update Client count badge in header */
@@ -692,26 +793,23 @@ static void on_ipc_client_list(int count, const ipc_client_entry_t *clients, voi
         child = next;
     }
 
-    if (ui->client_count == 0 && ui->disconnected_client_count == 0) {
-        char ep_summary[256];
-        get_active_endpoints_summary(ep_summary, sizeof(ep_summary), 9877);
+    /* If no active clients, reset inspector back to Standby immediately */
+    if (ui->client_count == 0) {
+        ui->selected_client_id = 0;
+        update_inspector_for_client(ui, NULL);
+    }
 
+    if (ui->client_count == 0 && ui->disconnected_client_count == 0) {
         char empty_text[512];
-        snprintf(empty_text, sizeof(empty_text),
-                 "No clients connected yet.\n"
-                 "%s\n\n"
-                 "ESP32 Node (esp32_secure_node.ino):\n"
-                 "  const char* SERVER_IP = \"192.168.137.168\";\n\n"
-                 "Linux / Debian Client:\n"
-                 "  nexqor client connect 192.168.137.168 9877",
-                 ep_summary);
+        get_empty_client_placeholder_text(empty_text, sizeof(empty_text));
 
         GtkWidget *empty_label = gtk_label_new(empty_text);
         gtk_widget_add_css_class(empty_label, "card-title");
         gtk_label_set_xalign(GTK_LABEL(empty_label), 0.0);
         gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), empty_label);
-        update_inspector_for_client(ui, NULL);
+        ui->empty_clients_label = empty_label;
     } else {
+        ui->empty_clients_label = NULL;
         bool found_selected = false;
 
         /* 1. Active Connected Clients */
@@ -726,6 +824,7 @@ static void on_ipc_client_list(int count, const ipc_client_entry_t *clients, voi
 
                 GtkWidget *row_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
                 gtk_widget_add_css_class(row_box, "client-row");
+                g_object_set_data(G_OBJECT(row_box), "client_id", GINT_TO_POINTER((int)c->client_id));
 
                 char title[128];
                 snprintf(title, sizeof(title), "CLIENT-%02d  ● Active Secure Session", c->client_id);
@@ -770,8 +869,8 @@ static void on_ipc_client_list(int count, const ipc_client_entry_t *clients, voi
                 const ipc_client_entry_t *c = &ui->disconnected_clients[i];
 
                 GtkWidget *row_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
-                gtk_widget_add_css_class(row_box, "client-row");
-                gtk_widget_set_opacity(row_box, 0.65);
+                gtk_widget_add_css_class(row_box, "client-row-disconnected");
+                g_object_set_data(G_OBJECT(row_box), "client_id", GINT_TO_POINTER((int)c->client_id));
 
                 char title[128];
                 snprintf(title, sizeof(title), "CLIENT-%02d  ○ Disconnected / Closed", c->client_id);
@@ -843,25 +942,29 @@ static void on_ipc_status(bool server_running, bool rx_conn, bool tx_conn,
     if (server_running) {
         gtk_button_set_label(GTK_BUTTON(ui->server_btn), "⏹ Stop Server");
         gtk_widget_remove_css_class(ui->server_btn, "btn-success");
+        gtk_widget_remove_css_class(ui->server_btn, "btn-warning");
         gtk_widget_add_css_class(ui->server_btn, "btn-danger");
 
         char buf[128];
-        snprintf(buf, sizeof(buf), "● ONLINE (PID %d | %s%s)",
+        snprintf(buf, sizeof(buf), "● ONLINE (PID %d%s%s)",
                  server_pid > 0 ? (int)server_pid : 0,
-                 rx_conn ? "RX " : "",
-                 tx_conn ? "TX" : "");
+                 rx_conn ? " | RX" : "",
+                 tx_conn ? " TX" : "");
         gtk_label_set_text(GTK_LABEL(ui->server_status_badge), buf);
         gtk_widget_remove_css_class(ui->server_status_badge, "badge-offline");
+        gtk_widget_remove_css_class(ui->server_status_badge, "badge-restarting");
         gtk_widget_add_css_class(ui->server_status_badge, "badge-online");
 
         if (ui->server_start_time == 0) ui->server_start_time = time(NULL);
     } else {
         gtk_button_set_label(GTK_BUTTON(ui->server_btn), "▶ Start Server");
         gtk_widget_remove_css_class(ui->server_btn, "btn-danger");
+        gtk_widget_remove_css_class(ui->server_btn, "btn-warning");
         gtk_widget_add_css_class(ui->server_btn, "btn-success");
 
-        gtk_label_set_text(GTK_LABEL(ui->server_status_badge), "○ OFFLINE");
+        gtk_label_set_text(GTK_LABEL(ui->server_status_badge), "○ SERVER OFFLINE");
         gtk_widget_remove_css_class(ui->server_status_badge, "badge-online");
+        gtk_widget_remove_css_class(ui->server_status_badge, "badge-restarting");
         gtk_widget_add_css_class(ui->server_status_badge, "badge-offline");
 
         ui->server_start_time = 0;
@@ -907,13 +1010,23 @@ static void on_server_btn_clicked(GtkButton *btn, gpointer user_data) {
     ui_app_t *ui = (ui_app_t *)user_data;
 
     if (ipc_manager_is_server_running(ui->ipc_mgr)) {
+        gtk_button_set_label(GTK_BUTTON(ui->server_btn), "⏳ Stopping...");
         ipc_manager_stop_server(ui->ipc_mgr);
         ui->server_started_by_ui = false;
     } else {
+        gtk_button_set_label(GTK_BUTTON(ui->server_btn), "⏳ Starting...");
         if (ipc_manager_start_server(ui->ipc_mgr, ui->workspace_root)) {
             ui->server_started_by_ui = true;
         }
     }
+}
+
+static gboolean on_delayed_suite_restart(gpointer user_data) {
+    ui_app_t *ui = (ui_app_t *)user_data;
+    if (ipc_manager_start_server(ui->ipc_mgr, ui->workspace_root)) {
+        ui->server_started_by_ui = true;
+    }
+    return G_SOURCE_REMOVE;
 }
 
 static void on_suite_selected_changed(GObject *gobject, GParamSpec *pspec, gpointer user_data) {
@@ -931,12 +1044,6 @@ static void on_suite_selected_changed(GObject *gobject, GParamSpec *pspec, gpoin
     const char *names[] = { "Post-Quantum Security Suite", "Hybrid Quantum-Safe Suite", "Classical IoT Security Suite" };
     gtk_label_set_text(GTK_LABEL(ui->suite_badge), names[sel]);
 
-    /* If server was launched via Start Server button in UI, restart it for the newly selected suite */
-    if (ipc_manager_is_server_running(ui->ipc_mgr) && ui->server_started_by_ui) {
-        ipc_manager_stop_server(ui->ipc_mgr);
-        ipc_manager_start_server(ui->ipc_mgr, ui->workspace_root);
-    }
-
     /* Reset active clients when switching suite since ports and sockets differ */
     ui->client_count = 0;
     ui->selected_client_id = 0;
@@ -949,17 +1056,31 @@ static void on_suite_selected_changed(GObject *gobject, GParamSpec *pspec, gpoin
         gtk_list_box_remove(GTK_LIST_BOX(ui->client_list_box), child);
         child = next;
     }
-    const char *empty_msgs[] = {
-        "No Post-Quantum clients connected.\nRun: cd pqc && ./client <server_ip>",
-        "No Hybrid clients connected.\nRun: cd hybrid && ./client <server_ip>",
-        "No Classical IoT clients connected.\nRun: cd classical && ./client <server_ip>"
-    };
-    GtkWidget *empty_label = gtk_label_new(empty_msgs[sel]);
+
+    char empty_text[512];
+    get_empty_client_placeholder_text(empty_text, sizeof(empty_text));
+
+    GtkWidget *empty_label = gtk_label_new(empty_text);
     gtk_widget_add_css_class(empty_label, "card-title");
+    gtk_label_set_xalign(GTK_LABEL(empty_label), 0.0);
     gtk_list_box_append(GTK_LIST_BOX(ui->client_list_box), empty_label);
+    ui->empty_clients_label = empty_label;
 
     /* Refresh inspector immediately with new suite cryptographic parameters and benchmarks */
     update_inspector_for_client(ui, NULL);
+
+    /* If server was running, stop it and restart with new suite properly */
+    if (ipc_manager_is_server_running(ui->ipc_mgr)) {
+        gtk_button_set_label(GTK_BUTTON(ui->server_btn), "⏳ Restarting...");
+        gtk_label_set_text(GTK_LABEL(ui->server_status_badge), "⏳ RESTARTING SERVER...");
+        gtk_widget_remove_css_class(ui->server_status_badge, "badge-online");
+        gtk_widget_add_css_class(ui->server_status_badge, "badge-restarting");
+
+        ipc_manager_stop_server(ui->ipc_mgr);
+
+        /* Wait 300ms for OS port release, then start server for new suite */
+        g_timeout_add(300, on_delayed_suite_restart, ui);
+    }
 }
 
 static gboolean on_second_timer(gpointer user_data) {
@@ -975,10 +1096,50 @@ static gboolean on_second_timer(gpointer user_data) {
         gtk_label_set_text(GTK_LABEL(ui->uptime_label), buf);
     }
 
+    /* Client inactivity timeout check (10s threshold for instant disconnect reflection) */
+    time_t now = time(NULL);
+    if (ui->client_count > 0) {
+        ipc_client_entry_t remaining[MAX_UI_CLIENTS];
+        int rem_cnt = 0;
+        bool dropped = false;
+
+        for (int i = 0; i < ui->client_count; i++) {
+            uint16_t cid = ui->clients[i].client_id;
+            time_t last_rx = (cid < MAX_UI_CLIENTS) ? ui->client_last_rx[cid] : 0;
+            if (last_rx > 0 && (now - last_rx > 10)) {
+                /* Client timed out */
+                dropped = true;
+                bool already_in_disc = false;
+                for (int d = 0; d < ui->disconnected_client_count; d++) {
+                    if (ui->disconnected_clients[d].client_id == cid) {
+                        already_in_disc = true;
+                        break;
+                    }
+                }
+                if (!already_in_disc && ui->disconnected_client_count < MAX_UI_CLIENTS) {
+                    ui->disconnected_clients[ui->disconnected_client_count++] = ui->clients[i];
+                }
+            } else {
+                remaining[rem_cnt++] = ui->clients[i];
+            }
+        }
+
+        if (dropped) {
+            on_ipc_client_list(rem_cnt, remaining, ui);
+        }
+    }
+
     if (ui->network_endpoints_badge) {
         char ep_buf[256];
         get_active_endpoints_summary(ep_buf, sizeof(ep_buf), 9877);
         gtk_label_set_text(GTK_LABEL(ui->network_endpoints_badge), ep_buf);
+    }
+
+    /* Dynamically refresh empty placeholder connection instructions if network/Wi-Fi IP changes */
+    if (ui->client_count == 0 && ui->disconnected_client_count == 0 && ui->empty_clients_label != NULL) {
+        char empty_text[512];
+        get_empty_client_placeholder_text(empty_text, sizeof(empty_text));
+        gtk_label_set_text(GTK_LABEL(ui->empty_clients_label), empty_text);
     }
 
     return G_SOURCE_CONTINUE;
@@ -1061,17 +1222,16 @@ void ui_app_activate(GtkApplication *gtk_app, gpointer user_data) {
     gtk_widget_add_css_class(ui->suite_badge, "badge-mode");
     gtk_box_append(GTK_BOX(top_bar), ui->suite_badge);
 
+    /* Server Start/Stop Button (Prominently placed before status) */
+    ui->server_btn = gtk_button_new_with_label("▶ Start Server");
+    gtk_widget_add_css_class(ui->server_btn, "btn-success");
+    g_signal_connect(ui->server_btn, "clicked", G_CALLBACK(on_server_btn_clicked), ui);
+    gtk_box_append(GTK_BOX(top_bar), ui->server_btn);
+
     /* Server Status Badge */
-    ui->server_status_badge = gtk_label_new("○ OFFLINE");
+    ui->server_status_badge = gtk_label_new("○ SERVER OFFLINE");
     gtk_widget_add_css_class(ui->server_status_badge, "badge-offline");
     gtk_box_append(GTK_BOX(top_bar), ui->server_status_badge);
-
-    /* Dynamic Network Endpoints Badge */
-    char init_ep[256];
-    get_active_endpoints_summary(init_ep, sizeof(init_ep), 9877);
-    ui->network_endpoints_badge = gtk_label_new(init_ep);
-    gtk_widget_add_css_class(ui->network_endpoints_badge, "badge-pill");
-    gtk_box_append(GTK_BOX(top_bar), ui->network_endpoints_badge);
 
     /* Connected Clients Badge */
     ui->clients_badge = gtk_label_new("0 Clients Active");
@@ -1082,12 +1242,6 @@ void ui_app_activate(GtkApplication *gtk_app, gpointer user_data) {
     ui->uptime_label = gtk_label_new("Uptime: 00:00:00");
     gtk_widget_add_css_class(ui->uptime_label, "badge-pill");
     gtk_box_append(GTK_BOX(top_bar), ui->uptime_label);
-
-    /* Server Start/Stop Button */
-    ui->server_btn = gtk_button_new_with_label("▶ Start Server");
-    gtk_widget_add_css_class(ui->server_btn, "btn-success");
-    g_signal_connect(ui->server_btn, "clicked", G_CALLBACK(on_server_btn_clicked), ui);
-    gtk_box_append(GTK_BOX(top_bar), ui->server_btn);
 
     /* ── Main Horizontal Split Paned (50% Left / 50% Right) ────────── */
     GtkWidget *main_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
@@ -1125,20 +1279,20 @@ void ui_app_activate(GtkApplication *gtk_app, gpointer user_data) {
     g_signal_connect(ui->client_list_box, "row-selected", G_CALLBACK(on_client_row_selected), ui);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(clients_scroll), ui->client_list_box);
 
-    /* 2. Cryptographic Architecture & Complete Key Parameters Card */
-    GtkWidget *arch_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-    gtk_widget_add_css_class(arch_card, "dashboard-card");
-    gtk_box_append(GTK_BOX(left_content_box), arch_card);
+    /* 2. Real-time Performance Telemetry Card (UPSIDE METRICS) */
+    GtkWidget *perf_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_add_css_class(perf_card, "dashboard-card");
+    gtk_box_append(GTK_BOX(left_content_box), perf_card);
 
-    ui->selected_client_label = gtk_label_new("No Client Selected (Select a client from the list above)");
-    gtk_widget_add_css_class(ui->selected_client_label, "card-title");
-    gtk_label_set_xalign(GTK_LABEL(ui->selected_client_label), 0.0);
-    gtk_box_append(GTK_BOX(arch_card), ui->selected_client_label);
+    GtkWidget *perf_header = gtk_label_new("LIVE PERFORMANCE & TRAFFIC STATS");
+    gtk_widget_add_css_class(perf_header, "card-title");
+    gtk_label_set_xalign(GTK_LABEL(perf_header), 0.0);
+    gtk_box_append(GTK_BOX(perf_card), perf_header);
 
-    GtkWidget *arch_grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(arch_grid), 4);
-    gtk_grid_set_column_spacing(GTK_GRID(arch_grid), 10);
-    gtk_box_append(GTK_BOX(arch_card), arch_grid);
+    GtkWidget *perf_grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(perf_grid), 4);
+    gtk_grid_set_column_spacing(GTK_GRID(perf_grid), 10);
+    gtk_box_append(GTK_BOX(perf_card), perf_grid);
 
     int row = 0;
     #define ADD_GRID_ROW(grid, lbl_text, widget_var, default_val) do { \
@@ -1154,6 +1308,51 @@ void ui_app_activate(GtkApplication *gtk_app, gpointer user_data) {
         row++; \
     } while(0)
 
+    ADD_GRID_ROW(perf_grid, "Average Time to Decrypt Message :", ui->insp_decrypt_cost, "12.80 µs (Average time spent decrypting each message)");
+    ADD_GRID_ROW(perf_grid, "Average Time to Encrypt Message :", ui->insp_encrypt_cost, "14.20 µs (Average time spent encrypting each message)");
+    ADD_GRID_ROW(perf_grid, "Message Delivery Interval (Gap) :", ui->insp_interarrival, "1.710 ms (Average gap between incoming messages)");
+    ADD_GRID_ROW(perf_grid, "Network Delay Variation (Jitter):", ui->insp_jitter, "0.070 ms (Low latency variation across network packets)");
+    ADD_GRID_ROW(perf_grid, "Total Messages & Data Volume    :", ui->insp_traffic_vol, "0 messages | 0 KB Sent | 0 KB Received");
+
+    /* 3. Handshake Breakdown & Latencies Card (UPSIDE METRICS) */
+    GtkWidget *hs_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_add_css_class(hs_card, "dashboard-card");
+    gtk_box_append(GTK_BOX(left_content_box), hs_card);
+
+    GtkWidget *hs_header = gtk_label_new("CONNECTION SETUP & HANDSHAKE TIMINGS");
+    gtk_widget_add_css_class(hs_header, "card-title");
+    gtk_label_set_xalign(GTK_LABEL(hs_header), 0.0);
+    gtk_box_append(GTK_BOX(hs_card), hs_header);
+
+    GtkWidget *hs_grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(hs_grid), 4);
+    gtk_grid_set_column_spacing(GTK_GRID(hs_grid), 10);
+    gtk_box_append(GTK_BOX(hs_card), hs_grid);
+
+    row = 0;
+    ADD_GRID_ROW(hs_grid, "Total Connection Setup Time     :", ui->insp_handshake_total, "3.48 ms (Total time taken for full 4-way mutual handshake)");
+    ADD_GRID_ROW(hs_grid, "Key Exchange Setup Time         :", ui->insp_kem_keygen, "17.93 µs (Time taken to generate one-time key exchange pair)");
+    ADD_GRID_ROW(hs_grid, "Digital Signature Setup Time    :", ui->insp_dsa_keygen, "47.36 µs (Time taken to initialize digital identity key pair)");
+    ADD_GRID_ROW(hs_grid, "Shared Key Calculation Time     :", ui->insp_kem_encap, "36.17 µs (Time taken to encapsulate the shared secret)");
+    ADD_GRID_ROW(hs_grid, "Identity Proof Signature Time   :", ui->insp_dsa_sign, "141.98 µs (Time taken to digitally sign handshake message)");
+    ADD_GRID_ROW(hs_grid, "Identity Verification Time      :", ui->insp_dsa_verify, "86.65 µs (Time taken to verify digital signature from peer)");
+
+    /* 4. Cryptographic Session Architecture & Complete Key Parameters Card (DOWNSIDE DETAILS) */
+    GtkWidget *arch_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_add_css_class(arch_card, "dashboard-card");
+    gtk_box_append(GTK_BOX(left_content_box), arch_card);
+
+    ui->selected_client_label = gtk_label_new("No Client Selected (Select a client from the list above)");
+    gtk_widget_add_css_class(ui->selected_client_label, "card-title");
+    gtk_label_set_xalign(GTK_LABEL(ui->selected_client_label), 0.0);
+    gtk_box_append(GTK_BOX(arch_card), ui->selected_client_label);
+
+    GtkWidget *arch_grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(arch_grid), 4);
+    gtk_grid_set_column_spacing(GTK_GRID(arch_grid), 10);
+    gtk_box_append(GTK_BOX(arch_card), arch_grid);
+
+    row = 0;
     ADD_GRID_ROW(arch_grid, "Security Mode / Approach       :", ui->insp_suite_arch, "Post-Quantum Security Suite (NIST FIPS 203 ML-KEM / FIPS 204 ML-DSA)");
     ADD_GRID_ROW(arch_grid, "Client Network IP & Port        :", ui->insp_endpoint, "Standby — Awaiting Client Connection");
     ADD_GRID_ROW(arch_grid, "Unique Session Identifier       :", ui->insp_session_id, "Pending — Generated during Secure Handshake");
@@ -1171,51 +1370,6 @@ void ui_app_activate(GtkApplication *gtk_app, gpointer user_data) {
     ADD_GRID_ROW(arch_grid, "Client Session Key (Inbound)    :", ui->insp_c2s_key, "51:10:42:...:BA:09 (Client Session Key — Used by client to encrypt messages sent to server / 256-bit)");
     ADD_GRID_ROW(arch_grid, "Server Session Key (Outbound)   :", ui->insp_s2c_key, "07:26:6F:...:EF:33 (Server Session Key — Used by server to encrypt messages sent to client / 256-bit)");
     ADD_GRID_ROW(arch_grid, "Replay Attack Prevention        :", ui->insp_replay_window, "Active Sliding Window (Remembers last 64 packets to automatically detect and reject duplicate/replayed packets)");
-
-    /* 3. Handshake Breakdown & Latencies Card (Only Once!) */
-    GtkWidget *hs_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-    gtk_widget_add_css_class(hs_card, "dashboard-card");
-    gtk_box_append(GTK_BOX(left_content_box), hs_card);
-
-    GtkWidget *hs_header = gtk_label_new("CONNECTION SETUP & HANDSHAKE TIMINGS");
-    gtk_widget_add_css_class(hs_header, "card-title");
-    gtk_label_set_xalign(GTK_LABEL(hs_header), 0.0);
-    gtk_box_append(GTK_BOX(hs_card), hs_header);
-
-    GtkWidget *hs_grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(hs_grid), 4);
-    gtk_grid_set_column_spacing(GTK_GRID(hs_grid), 10);
-    gtk_box_append(GTK_BOX(hs_card), hs_grid);
-
-    row = 0;
-    ADD_GRID_ROW(hs_grid, "Key Exchange Setup Time         :", ui->insp_kem_keygen, "17.93 µs (Time taken to generate one-time key exchange pair)");
-    ADD_GRID_ROW(hs_grid, "Digital Signature Setup Time    :", ui->insp_dsa_keygen, "47.36 µs (Time taken to initialize digital identity key pair)");
-    ADD_GRID_ROW(hs_grid, "Shared Key Calculation Time     :", ui->insp_kem_encap, "36.17 µs (Time taken to encapsulate the shared secret)");
-    ADD_GRID_ROW(hs_grid, "Identity Proof Signature Time   :", ui->insp_dsa_sign, "141.98 µs (Time taken to digitally sign handshake message)");
-    ADD_GRID_ROW(hs_grid, "Identity Verification Time      :", ui->insp_dsa_verify, "86.65 µs (Time taken to verify digital signature from peer)");
-    ADD_GRID_ROW(hs_grid, "Total Connection Setup Time     :", ui->insp_handshake_total, "3.48 ms (Total time taken for full 4-way mutual handshake)");
-
-    /* 4. Real-time Performance Telemetry Card (Only Once!) */
-    GtkWidget *perf_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-    gtk_widget_add_css_class(perf_card, "dashboard-card");
-    gtk_box_append(GTK_BOX(left_content_box), perf_card);
-
-    GtkWidget *perf_header = gtk_label_new("LIVE PERFORMANCE & TRAFFIC STATS");
-    gtk_widget_add_css_class(perf_header, "card-title");
-    gtk_label_set_xalign(GTK_LABEL(perf_header), 0.0);
-    gtk_box_append(GTK_BOX(perf_card), perf_header);
-
-    GtkWidget *perf_grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(perf_grid), 4);
-    gtk_grid_set_column_spacing(GTK_GRID(perf_grid), 10);
-    gtk_box_append(GTK_BOX(perf_card), perf_grid);
-
-    row = 0;
-    ADD_GRID_ROW(perf_grid, "Average Time to Decrypt Message :", ui->insp_decrypt_cost, "12.80 µs (Average time spent decrypting each message)");
-    ADD_GRID_ROW(perf_grid, "Average Time to Encrypt Message :", ui->insp_encrypt_cost, "14.20 µs (Average time spent encrypting each message)");
-    ADD_GRID_ROW(perf_grid, "Message Delivery Interval (Gap) :", ui->insp_interarrival, "1.710 ms (Average gap between incoming messages)");
-    ADD_GRID_ROW(perf_grid, "Network Delay Variation (Jitter):", ui->insp_jitter, "0.070 ms (Low latency variation across network packets)");
-    ADD_GRID_ROW(perf_grid, "Total Messages & Data Volume    :", ui->insp_traffic_vol, "0 messages | 0 KB Sent | 0 KB Received");
 
     /* ============================================================== */
     /* RIGHT PANEL: Modern Chat Console (Left=RX, Right=TX)            */
@@ -1286,15 +1440,11 @@ void ui_app_activate(GtkApplication *gtk_app, gpointer user_data) {
                               on_ipc_status,
                               ui);
 
-    /* Start 1-second timer for uptime clock */
-    ui->timer_id = g_timeout_add_seconds(1, on_second_timer, ui);
+    /* Populate empty client state initially with active detected Wi-Fi/LAN IP */
+    on_ipc_client_list(0, NULL, ui);
 
-    /* Automatically start server on dashboard launch if not already listening */
-    if (!ipc_manager_is_server_running(ui->ipc_mgr)) {
-        if (ipc_manager_start_server(ui->ipc_mgr, ui->workspace_root)) {
-            ui->server_started_by_ui = true;
-        }
-    }
+    /* Start 1-second timer for uptime clock and active client watchdog */
+    ui->timer_id = g_timeout_add_seconds(1, on_second_timer, ui);
 
     gtk_window_present(GTK_WINDOW(ui->window));
 }
