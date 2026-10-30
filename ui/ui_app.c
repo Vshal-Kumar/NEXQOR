@@ -1446,5 +1446,10 @@ void ui_app_activate(GtkApplication *gtk_app, gpointer user_data) {
     /* Start 1-second timer for uptime clock and active client watchdog */
     ui->timer_id = g_timeout_add_seconds(1, on_second_timer, ui);
 
+    /* Automatically start securecomm server on launch so user does not have to click manually */
+    if (ipc_manager_start_server(ui->ipc_mgr, ui->workspace_root)) {
+        ui->server_started_by_ui = true;
+    }
+
     gtk_window_present(GTK_WINDOW(ui->window));
 }
