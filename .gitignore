@@ -103,4 +103,10 @@ security_lab/results/*.md
 .DS_Store
 Thumbs.db
 
+# Documentation, manuals, and PDFs (Local only - do not push to Git)
+documentation/
+*.pdf
+*.html
+
+
 
