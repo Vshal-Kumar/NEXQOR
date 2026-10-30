@@ -30,9 +30,9 @@ QRYPTONEX is engineered for a **heterogeneous computing hierarchy**, with explic
 
 | Target Architecture | Device Role | Target Devices | Package File | Direct Download Command | Local Install Command |
 | :--- | :---: | :--- | :---: | :---: | :--- |
-| **x86-64 / AMD64 (`x86`)** | **Server OR Client** | Intel/AMD PCs, Laptops, Kali Linux VMs | `nexqor-x86.deb` | `curl -L -o nexqor-x86.deb "https://drive.usercontent.google.com/download?id=1Kp-LRUkX2-ra9BqeGgGNoStBQC0gEe6c&export=download&confirm=t"` | `sudo dpkg -i nexqor-x86.deb` |
-| **ARM64 / AArch64 (`arm64`)** | **Client Only** | Raspberry Pi 4, Raspberry Pi 5, Jetson | `nexqor-arm64.deb` | `curl -L -o nexqor-arm64.deb "https://drive.usercontent.google.com/download?id=1mDMPsDRaBOvR4NARQBOwmLk8cvAospoa&export=download&confirm=t"` | `sudo dpkg -i nexqor-arm64.deb` |
-| **ARM32 / ARMv7 (`arm32`)** | **Client Only** | Raspberry Pi 2, Raspberry Pi 3 (32-bit OS) | `nexqor-arm32.deb` | `curl -L -o nexqor-arm32.deb "https://drive.usercontent.google.com/download?id=1xbI0-2Lw9pQnIAlgdcxGHfOql6hZIADS&export=download&confirm=t"` | `sudo dpkg -i nexqor-arm32.deb` |
+| **x86-64 / AMD64 (`x86`)** | **Server OR Client** | Intel/AMD PCs, Laptops, Kali Linux VMs | `nexqor-x86.deb` | `curl -L -o nexqor-x86.deb "https://drive.usercontent.google.com/download?id=1snKZ6yydaG8iU7GVZsoXroI6nH1V4cuL&export=download&confirm=t"` | `sudo dpkg -i nexqor-x86.deb` |
+| **ARM64 / AArch64 (`arm64`)** | **Client Only** | Raspberry Pi 4, Raspberry Pi 5, Jetson | `nexqor-arm64.deb` | `curl -L -o nexqor-arm64.deb "https://drive.usercontent.google.com/download?id=1N2FIVfjSGicVt-Zh1U25ApDIXfzMtMY3&export=download&confirm=t"` | `sudo dpkg -i nexqor-arm64.deb` |
+| **ARM32 / ARMv7 (`arm32`)** | **Client Only** | Raspberry Pi 2, Raspberry Pi 3 (32-bit OS) | `nexqor-arm32.deb` | `curl -L -o nexqor-arm32.deb "https://drive.usercontent.google.com/download?id=1rVeuwjDr8Sl_SfswEx12wvug2IG3f-ap&export=download&confirm=t"` | `sudo dpkg -i nexqor-arm32.deb` |
 | **ESP32 (Xtensa)** | **Client Only** | ESP32 DevKit, NodeMCU-32S, ESP32-WROOM | `esp32_secure_node.ino` | *Flash via Arduino IDE from `esp32/`* | *See [ESP32 Setup Guide](esp32/README.md)* |
 
 ---
@@ -45,7 +45,7 @@ An x86-64 machine can act as the **Central Server Relay** or as an **Interactive
 
 ```bash
 # Step 1: Download package:
-curl -L -o nexqor-x86.deb "https://drive.usercontent.google.com/download?id=1Kp-LRUkX2-ra9BqeGgGNoStBQC0gEe6c&export=download&confirm=t"
+curl -L -o nexqor-x86.deb "https://drive.usercontent.google.com/download?id=1snKZ6yydaG8iU7GVZsoXroI6nH1V4cuL&export=download&confirm=t"
 
 # Step 2: Install package:
 sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
@@ -89,7 +89,7 @@ Raspberry Pi 4 and 5 run the ARM64 NEON-vectorized client:
 cd ~/Desktop/Nexqor
 
 # Step 2: Download genuine ARM64 package:
-curl -L -o nexqor-arm64.deb "https://drive.usercontent.google.com/download?id=1mDMPsDRaBOvR4NARQBOwmLk8cvAospoa&export=download&confirm=t"
+curl -L -o nexqor-arm64.deb "https://drive.usercontent.google.com/download?id=1N2FIVfjSGicVt-Zh1U25ApDIXfzMtMY3&export=download&confirm=t"
 
 # Step 3: Install package:
 sudo dpkg -i nexqor-arm64.deb || sudo apt-get install -f -y
@@ -120,7 +120,7 @@ For Raspberry Pi 2, 3, or any single-board computer running 32-bit ARM Linux (`a
 cd ~/Desktop/Nexqor
 
 # Step 1: Download ARM32 package:
-curl -L -o nexqor-arm32.deb "https://drive.usercontent.google.com/download?id=1xbI0-2Lw9pQnIAlgdcxGHfOql6hZIADS&export=download&confirm=t"
+curl -L -o nexqor-arm32.deb "https://drive.usercontent.google.com/download?id=1rVeuwjDr8Sl_SfswEx12wvug2IG3f-ap&export=download&confirm=t"
 
 # Step 2: Install package:
 sudo dpkg -i nexqor-arm32.deb || sudo apt-get install -f -y
