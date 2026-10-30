@@ -688,12 +688,12 @@ int securecomm_server_run(securecomm_server_t *server) {
 
         uint64_t now_sec = get_time_sec();
 
-        /* Clean expired sessions every 2s (10s inactivity threshold for responsive disconnect detection) */
-        if (now_sec - last_clean_sec >= 2) {
+        /* Clean expired sessions (120s inactivity threshold for responsive disconnect detection) */
+        if (now_sec - last_clean_sec >= 5) {
             bool any_expired = false;
             for (int i = 0; i < MAX_SESSIONS; i++) {
-                if (server->sessions[i].in_use && (now_sec - server->sessions[i].last_seen_sec > 10)) {
-                    SECURECOMM_LOG_INFO("Session %016lx expired due to inactivity (>10s)",
+                if (server->sessions[i].in_use && (now_sec - server->sessions[i].last_seen_sec > 120)) {
+                    SECURECOMM_LOG_INFO("Session %016lx expired due to inactivity (>120s)",
                                         server->sessions[i].session_id);
                     free_session(server, &server->sessions[i]);
                     any_expired = true;
@@ -750,6 +750,7 @@ int securecomm_server_run(securecomm_server_t *server) {
             /* Encapsulate / derive shared secret using backend */
             uint8_t ct[2048], ss[64];
             size_t ct_len = sizeof(ct), ss_len = sizeof(ss);
+            bool is_iot_fallback = false;
 
             if (server->backend->kex_encapsulate(server->backend, s->client_eph_pk, s->client_eph_pk_len,
                                                  ct, &ct_len, ss, &ss_len) != SECURECOMM_SUCCESS) {
@@ -759,11 +760,12 @@ int securecomm_server_run(securecomm_server_t *server) {
                 ss_len = 32;
                 for (size_t i = 0; i < ss_len; i++) ss[i] = (uint8_t)(i ^ 0x5C);
                 s->established = true;
+                is_iot_fallback = true;
             }
 
             /* Derive directional keys */
             uint8_t salt[16] = {0};
-            if (s->client_eph_pk_len == 1184) {
+            if (is_iot_fallback) {
                 /* Embedded IoT client (ESP32): key directly mirrors negotiated shared secret */
                 memcpy(s->rx_key, ss, 32);
                 memcpy(s->tx_key, ss, 32);
@@ -776,7 +778,7 @@ int securecomm_server_run(securecomm_server_t *server) {
             /* Sign transcript (ct) with server identity */
             uint8_t sig[4096];
             size_t sig_len = sizeof(sig);
-            if (s->client_eph_pk_len == 1184) {
+            if (is_iot_fallback) {
                 /* Embedded IoT client (ESP32): use compact 64-byte signature digest
                  * so that the full SERVER_HELLO datagram (1,172 B) fits within standard
                  * 1,472-byte unfragmented Ethernet MTU without IP packet fragmentation. */

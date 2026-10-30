@@ -401,8 +401,8 @@ int securecomm_client_recv(securecomm_client_t *client, uint8_t *buf, size_t buf
     memcpy(&hdr, rx_buf, sizeof(wire_hdr_t));
     uint16_t plen = ntohs(hdr.len);
 
-    if (hdr.type == PKT_ACK) {
-        /* ACK received */
+    if (hdr.type == PKT_ACK || hdr.type == PKT_PONG) {
+        /* ACK or PONG received */
         *out_len = 0;
         return SECURECOMM_SUCCESS;
     }
@@ -452,12 +452,26 @@ int securecomm_client_run_interactive(securecomm_client_t *client) {
 
     char line[1024];
     uint8_t rx_buf[RX_BUF_SIZE];
+    double last_ping_ms = get_time_ms();
 
     while (client->connected) {
         int prc = poll(pfds, 2, 50);
         if (prc < 0) {
             if (errno == EINTR) continue;
             break;
+        }
+
+        /* Periodic heartbeat (every 3s) to maintain NAT hole punching & session liveness */
+        double now_ms = get_time_ms();
+        if (now_ms - last_ping_ms >= 3000.0) {
+            wire_hdr_t ping_hdr;
+            ping_hdr.seq = client->tx_seq++;
+            ping_hdr.type = PKT_PING;
+            ping_hdr.len = 0;
+            ping_hdr.session_id = client->session_id;
+            sendto(client->sock_fd, &ping_hdr, sizeof(wire_hdr_t), 0,
+                   (struct sockaddr *)&client->server_addr, sizeof(client->server_addr));
+            last_ping_ms = now_ms;
         }
 
         /* 1. Inbound messages from server */
@@ -516,6 +530,16 @@ int securecomm_client_run_interactive(securecomm_client_t *client) {
             fflush(stdout);
         }
     }
+
+    /* Send graceful DISCONNECT to server */
+    wire_hdr_t disc_hdr;
+    disc_hdr.seq = client->tx_seq++;
+    disc_hdr.type = PKT_DISCONNECT;
+    disc_hdr.len = 0;
+    disc_hdr.session_id = client->session_id;
+    sendto(client->sock_fd, &disc_hdr, sizeof(wire_hdr_t), 0,
+           (struct sockaddr *)&client->server_addr, sizeof(client->server_addr));
+    client->connected = false;
 
     return SECURECOMM_SUCCESS;
 }
