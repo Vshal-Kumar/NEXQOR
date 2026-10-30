@@ -17,70 +17,155 @@ Each implementation is decoupled with its own build systems, cryptographic state
 
 ---
 
-## 🚀 Standalone Releases & Debian Packages
+## 🚀 Architecture, Device Roles & Pre-Built Releases
 
-NEXQOR / SecureComm is distributed as pre-compiled standalone Debian (`.deb`) packages for Intel/AMD PCs, Raspberry Pi 4/5, and embedded ARM microcomputers, as well as a pure-C source tree buildable with standard GNU tools.
+QRYPTONEX is engineered for a **heterogeneous computing hierarchy**, with explicit device roles:
+- **x86-64 Computers (Intel/AMD Laptops, PCs, Linux/Kali VMs, Cloud Servers)**: Can operate as the **Central Server** (with the GTK4 Cyber NOC Dashboard or headless daemon) OR as an **Interactive Client**.
+- **ARM Edge Devices (Raspberry Pi 4/5, Raspberry Pi 2/3, Jetson)**: Operate as **Clients Only**, establishing quantum-resilient sessions and streaming encrypted telemetry.
+- **ESP32 Microcontrollers (Xtensa 32-bit)**: Operate as **Clients Only**, executing lightweight NIST FIPS 203 ML-KEM-768 encapsulation and streaming encrypted sensor telemetry.
 
-### 📦 Pre-Built Debian Packages (`.deb`)
+---
 
-For quick installation on any Debian or Ubuntu system without manual compilation:
+### 📦 Pre-Built Debian Packages & Download Links
 
-| Target Architecture | Debian Architecture | Target Devices | Package File | Direct Download Link | Local Install Command |
+| Target Architecture | Device Role | Target Devices | Package File | Direct Download Command | Local Install Command |
 | :--- | :---: | :--- | :---: | :---: | :--- |
-| **x86-64 / AMD64 (`x86`)** | `amd64` | Intel/AMD PCs, Laptops, Cloud Servers | `nexqor-x86.deb` | [📥 Download `nexqor-x86.deb`](https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT) | `sudo dpkg -i nexqor-x86.deb` |
-| **ARM64 / AArch64 (`arm64`)** | `arm64` | Raspberry Pi 4/5, Jetson, 64-bit ARM Linux | `nexqor-arm64.deb` | [📥 Download `nexqor-arm64.deb`](https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ) | `sudo dpkg -i nexqor-arm64.deb` |
-| **ARM32 / ARMv7 (`arm32`)** | `armhf` | Raspberry Pi 2/3, 32-bit Raspbian/Debian | `nexqor-arm32.deb` | [📥 Download `nexqor-arm32.deb`](https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb) | `sudo dpkg -i nexqor-arm32.deb` |
+| **x86-64 / AMD64 (`x86`)** | **Server OR Client** | Intel/AMD PCs, Laptops, Kali Linux VMs | `nexqor-x86.deb` | `curl -L -o nexqor-x86.deb "https://drive.usercontent.google.com/download?id=1Kp-LRUkX2-ra9BqeGgGNoStBQC0gEe6c&export=download&confirm=t"` | `sudo dpkg -i nexqor-x86.deb` |
+| **ARM64 / AArch64 (`arm64`)** | **Client Only** | Raspberry Pi 4, Raspberry Pi 5, Jetson | `nexqor-arm64.deb` | `curl -L -o nexqor-arm64.deb "https://drive.usercontent.google.com/download?id=1mDMPsDRaBOvR4NARQBOwmLk8cvAospoa&export=download&confirm=t"` | `sudo dpkg -i nexqor-arm64.deb` |
+| **ARM32 / ARMv7 (`arm32`)** | **Client Only** | Raspberry Pi 2, Raspberry Pi 3 (32-bit OS) | `nexqor-arm32.deb` | `curl -L -o nexqor-arm32.deb "https://drive.usercontent.google.com/download?id=1xbI0-2Lw9pQnIAlgdcxGHfOql6hZIADS&export=download&confirm=t"` | `sudo dpkg -i nexqor-arm32.deb` |
+| **ESP32 (Xtensa)** | **Client Only** | ESP32 DevKit, NodeMCU-32S, ESP32-WROOM | `esp32_secure_node.ino` | *Flash via Arduino IDE from `esp32/`* | *See [ESP32 Setup Guide](esp32/README.md)* |
 
-Each package installs:
-- Executable binaries: `/usr/bin/nexqor`, `/usr/bin/securecomm`, and `/usr/bin/nexqor-<arch>`
-- Hardened systemd services: `/usr/lib/systemd/system/nexqor.service` and `securecomm.service`
-- Default configuration template: `/etc/securecomm/securecomm.json`
-- Documentation & changelogs: `/usr/share/doc/nexqor-<arch>/`
+---
 
-#### Quickstart: Server & Client Setup (Default: `100.113.83.56:9877`)
+### 🛠️ Step-by-Step Setup Guides for All Device Types
 
-> **IMPORTANT REQUIREMENT**: After installing the `.deb` package or building from source, **run `nexqor setup` once** on each machine. The setup wizard benchmarks your CPU, generates your unique cryptographic keypair with `0600` permissions in `~/.config/securecomm/`, and registers trusted endpoints.
+#### 1. Device Tier 1: x86-64 Laptop / PC / Cloud Server (SERVER or CLIENT)
 
-**1. On Server Machine (`100.113.83.56`):**
+An x86-64 machine can act as the **Central Server Relay** or as an **Interactive Client**:
+
 ```bash
-# Install package:
+# Step 1: Download package:
+curl -L -o nexqor-x86.deb "https://drive.usercontent.google.com/download?id=1Kp-LRUkX2-ra9BqeGgGNoStBQC0gEe6c&export=download&confirm=t"
+
+# Step 2: Install package:
 sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
 
-# Run initial setup (select Role 1: Server, default port 9877):
+# Step 3: Run Setup Wizard once:
 nexqor setup
-
-# Start the server backend:
-nexqor server start
-
-# Or launch with the GTK4 Pure C NOC Dashboard:
-./run_ui.sh
 ```
 
-**2. On Client Machine (Second PC, Kali Linux, or Raspberry Pi):**
+- **If setting up as SERVER**:
+  1. Select **Role**: `1) Server`
+  2. Select **Crypto Mode**: `4) Adaptive` (or `3) PQC`)
+  3. Bind Address: `0.0.0.0` | Port: `9877`
+  4. Launch the server via CLI or GTK4 Cyber NOC Dashboard:
+     ```bash
+     # Option A: GTK4 Pure C Cyber NOC Dashboard (Recommended):
+     ./run_ui.sh
+     # Click '▶ Start Server' on the top bar!
+
+     # Option B: Headless background server:
+     nexqor server start
+     ```
+  5. The server/dashboard automatically detects and displays your active IP addresses (e.g., Wi-Fi: `10.58.4.191:9877`, Tailscale: `100.113.83.56:9877`).
+
+- **If setting up as CLIENT** (e.g. second laptop, Kali VM, or another terminal):
+  1. Select **Role**: `2) Client`
+  2. Target Server IP: Enter Server Wi-Fi IP (e.g. `10.58.4.191`) or Tailscale IP (`100.113.83.56`)
+  3. Target Port: `9877`
+  4. Connect in real-time interactive chat:
+     ```bash
+     nexqor client connect
+     ```
+
+---
+
+#### 2. Device Tier 2: Raspberry Pi 4 / 5 (ARM64 — CLIENT ONLY)
+
+Raspberry Pi 4 and 5 run the ARM64 NEON-vectorized client:
+
 ```bash
-# Install package for your architecture:
-sudo dpkg -i nexqor-x86.deb     # for Intel/AMD laptops & Kali VM
-sudo dpkg -i nexqor-arm64.deb   # for Raspberry Pi 4/5
+# Step 1: Navigate to workspace:
+cd ~/Desktop/Nexqor
 
-# Run initial setup (select Role 2: Client, target server 100.113.83.56:9877):
+# Step 2: Download genuine ARM64 package:
+curl -L -o nexqor-arm64.deb "https://drive.usercontent.google.com/download?id=1mDMPsDRaBOvR4NARQBOwmLk8cvAospoa&export=download&confirm=t"
+
+# Step 3: Install package:
+sudo dpkg -i nexqor-arm64.deb || sudo apt-get install -f -y
+
+# Step 4: Run initial setup (select Role 2: Client):
 nexqor setup
+```
+- In `nexqor setup`:
+  - **Role**: Select `2) Client`
+  - **Server IP**: Enter Server Wi-Fi IP (e.g. `10.58.4.191`) or Tailscale IP (`100.113.83.56`)
+  - **Port**: Press `[Enter]` (default `9877`)
 
-# Connect immediately in real-time interactive chat:
+```bash
+# Step 5: Connect to the Server:
 nexqor client connect
 
-# Or send a single message from terminal:
-nexqor client connect --msg "Hello Quantum Server!"
+# Or send automated non-interactive telemetry message:
+nexqor client connect --msg "Raspberry Pi 4 online with ML-KEM-768!"
 ```
 
-**Real-Time Two-Way Chat & Dashboard Synchronization:**
-- **Controlled Backend**: Click `▶ Start Server` in the top bar to launch the UDP backend on port `9877`.
-- **Dynamic IP Resolution**: The dashboard automatically detects your active Wi-Fi / LAN IP (e.g., `10.58.4.191`) and updates the connection instructions in real time.
-- **Client Terminal**: Incoming server commands display immediately (`[SERVER → YOU] <msg>`), while user input is logged with encryption details (`[YOU → SERVER] <msg> (Encrypted: X bytes)`).
-- **GTK4 Dashboard**: Displays `CONNECTED CLIENTS (ACTIVE)` with IP, port, session ID, and handshake latency. With the 10-second activity watchdog and instant `PKT_DISCONNECT` reflection, disconnecting clients gracefully move to `DISCONNECTED SESSIONS (RECENT)`.
+---
 
-*Note on Key Permissions*: Cryptographic identity keys are automatically stored in `~/.config/securecomm/` with strict `0600` permissions for unprivileged users, completely preventing any "permission denied" errors.
+#### 3. Device Tier 3: Raspberry Pi 2 / 3 (ARM32 — CLIENT ONLY)
 
-> For deep architectural specifications, configuration schemas, and operational instructions, see [securecomm/README.md](file:///home/vishal-kumar/Desktop/Events/QHack/securecomm/README.md).
+For Raspberry Pi 2, 3, or any single-board computer running 32-bit ARM Linux (`armhf`):
+
+```bash
+cd ~/Desktop/Nexqor
+
+# Step 1: Download ARM32 package:
+curl -L -o nexqor-arm32.deb "https://drive.usercontent.google.com/download?id=1xbI0-2Lw9pQnIAlgdcxGHfOql6hZIADS&export=download&confirm=t"
+
+# Step 2: Install package:
+sudo dpkg -i nexqor-arm32.deb || sudo apt-get install -f -y
+
+# Step 3: Configure as Client:
+nexqor setup   # Select Role: 2 Client, Target Server IP: 10.58.4.191
+
+# Step 4: Connect:
+nexqor client connect
+```
+
+---
+
+#### 4. Device Tier 4: ESP32 Microcontroller (CLIENT ONLY)
+
+The ESP32 runs lightweight pure post-quantum lattice key encapsulation (NIST FIPS 203 ML-KEM-768) and ChaCha20-Poly1305 symmetric AEAD, connecting directly to the x86 Server over UDP:
+
+1. Open Arduino IDE and install ESP32 Board Support:
+   ```text
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   ```
+2. Open `esp32/esp32_secure_node/esp32_secure_node.ino`.
+3. Configure your Wi-Fi credentials and the Server's dynamic Wi-Fi IP (shown in the GTK4 Server Dashboard header):
+   ```cpp
+   const char* WIFI_SSID     = "Your_WiFi_Name";
+   const char* WIFI_PASSWORD = "Your_WiFi_Password";
+   const char* SERVER_IP     = "10.58.4.191";  // Dynamic Server IP shown on Dashboard
+   const uint16_t SERVER_PORT= 9877;
+   ```
+4. Select Board **`ESP32 Dev Module`**, choose your serial port (`/dev/ttyUSB0`), and click **Upload**.
+5. Open Serial Monitor at **115200 baud**:
+   - The ESP32 connects to Wi-Fi, initiates the quantum-safe handshake with the Server, and streams encrypted sensor telemetry every 2 seconds.
+   - **Actuation Demo**: Type `LED_ON` or `LED_OFF` in the GTK4 Server Dashboard chat bar to toggle the ESP32's onboard blue LED (GPIO 2) in real time!
+   - Full details in [esp32/README.md](esp32/README.md).
+
+---
+
+### 🌐 Real-Time Chat & Dashboard Synchronization
+
+- **Server Dashboard (`./run_ui.sh`)**: Displays `CONNECTED CLIENTS (ACTIVE)` with Client ID, remote IP, UDP port, session ID, and handshake setup latency (typically 1.6–2.1 ms).
+- **Inactivity Watchdog**: If a client goes silent for >10 seconds or issues a graceful disconnect (`PKT_DISCONNECT`), it immediately transitions to `DISCONNECTED SESSIONS (RECENT)`.
+- **Dynamic Endpoint Auto-Refresh**: If your Wi-Fi IP changes, the dashboard top bar and connection instructions refresh automatically within 1 second.
+- **Strict Key Security**: Cryptographic identity keys are generated in `~/.config/securecomm/` with strict `0600` permissions.
+
+> For deep architectural specifications, configuration schemas, and operational instructions, see [securecomm/README.md](securecomm/README.md).
 
 ---
 

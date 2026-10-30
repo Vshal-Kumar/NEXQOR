@@ -337,9 +337,9 @@ SecureComm generates three distinct, architecture-specific `.deb` packages desig
 
 | Package Name (`.deb`) | Internal Package Name | Debian Arch (`dpkg`) | Target CPU & Hardware | Direct Download Link |
 | :--- | :--- | :---: | :--- | :---: |
-| **`nexqor-x86.deb`** | `nexqor-x86` | `amd64` | Intel/AMD PCs, laptops, and x86_64 cloud servers | [📥 Download `nexqor-x86.deb`](https://drive.google.com/uc?export=download&id=1wKZ5hrTjgId0uJUwz5kTT9iVX_G_KwtT) |
-| **`nexqor-arm64.deb`** | `nexqor-arm64` | `arm64` | Raspberry Pi 4, Raspberry Pi 5, Jetson, 64-bit ARM Linux | [📥 Download `nexqor-arm64.deb`](https://drive.google.com/uc?export=download&id=1kTHy9Kl_Ur6_HlXYya-e9ztAmg2Z94vJ) |
-| **`nexqor-arm32.deb`** | `nexqor-arm32` | `armhf` | Raspberry Pi 2/3 running 32-bit Raspbian/Debian | [📥 Download `nexqor-arm32.deb`](https://drive.google.com/uc?export=download&id=1lT-iFzbxwV6QLHamfSOMpTLUEq2velVb) |
+| **`nexqor-x86.deb`** | `nexqor-x86` | `amd64` | Intel/AMD PCs, laptops, and x86_64 cloud servers | [📥 Download `nexqor-x86.deb`](https://drive.usercontent.google.com/download?id=1Kp-LRUkX2-ra9BqeGgGNoStBQC0gEe6c&export=download&confirm=t) |
+| **`nexqor-arm64.deb`** | `nexqor-arm64` | `arm64` | Raspberry Pi 4, Raspberry Pi 5, Jetson, 64-bit ARM Linux | [📥 Download `nexqor-arm64.deb`](https://drive.usercontent.google.com/download?id=1mDMPsDRaBOvR4NARQBOwmLk8cvAospoa&export=download&confirm=t) |
+| **`nexqor-arm32.deb`** | `nexqor-arm32` | `armhf` | Raspberry Pi 2/3 running 32-bit Raspbian/Debian | [📥 Download `nexqor-arm32.deb`](https://drive.usercontent.google.com/download?id=1xbI0-2Lw9pQnIAlgdcxGHfOql6hZIADS&export=download&confirm=t) |
 
 ---
 
@@ -347,19 +347,22 @@ SecureComm generates three distinct, architecture-specific `.deb` packages desig
 
 #### 1. For x86-64 PC, Laptop & Cloud Servers (`nexqor-x86`):
 ```bash
-# Direct local package installation:
+# Download and install:
+curl -L -o nexqor-x86.deb "https://drive.usercontent.google.com/download?id=1Kp-LRUkX2-ra9BqeGgGNoStBQC0gEe6c&export=download&confirm=t"
 sudo dpkg -i nexqor-x86.deb || sudo apt-get install -f -y
 ```
 
 #### 2. For Raspberry Pi 4 / 5, Jetson, 64-bit ARM (`nexqor-arm64`):
 ```bash
-# Direct local package installation:
+# Download and install:
+curl -L -o nexqor-arm64.deb "https://drive.usercontent.google.com/download?id=1mDMPsDRaBOvR4NARQBOwmLk8cvAospoa&export=download&confirm=t"
 sudo dpkg -i nexqor-arm64.deb || sudo apt-get install -f -y
 ```
 
 #### 3. For Raspberry Pi 2 / 3, 32-bit ARM OS (`nexqor-arm32`):
 ```bash
-# Direct local package installation:
+# Download and install:
+curl -L -o nexqor-arm32.deb "https://drive.usercontent.google.com/download?id=1xbI0-2Lw9pQnIAlgdcxGHfOql6hZIADS&export=download&confirm=t"
 sudo dpkg -i nexqor-arm32.deb || sudo apt-get install -f -y
 ```
 
