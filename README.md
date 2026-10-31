@@ -1,4 +1,4 @@
-# QRYPTONEX (NEXQOR) — Multi-Suite Cryptographic Communication Framework
+# NEXQOR — Multi-Suite Cryptographic Communication Framework
 
 [![Build & Test Status](https://img.shields.io/badge/Build%20%26%20Test-Passing%20(All%20Suites)-success.svg)](#build-testing-and-validation)
 [![Cryptographic Suites](https://img.shields.io/badge/Suites-Classical%20%7C%20Hybrid%20%7C%20PQC-blue.svg)](#cryptographic-specification-comparison)
@@ -6,7 +6,7 @@
 [![Formal Verification](https://img.shields.io/badge/Verification-ProVerif%202.05%20Verified-blueviolet.svg)](#formal-security-verification)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**QRYPTONEX** is an ultra-high-performance, modular secure network protocol and cryptographic communication framework engineered for Linux x86-64 servers and embedded ARM IoT platforms (such as Raspberry Pi 4 and 5). 
+**NEXQOR** is an ultra-high-performance, modular secure network protocol and cryptographic communication framework engineered for Linux x86-64 servers and embedded ARM IoT platforms (such as Raspberry Pi 4 and 5). 
 
 The repository provides three completely **independent, self-contained, and production-grade implementations**:
 1. **Classical IoT Suite (`classical/`)**: Optimized for resource-constrained IoT microcontrollers and legacy environments using RFC 7748 X25519, RFC 8032 Ed25519, and AES-128-CCM.
@@ -19,7 +19,7 @@ Each implementation is decoupled with its own build systems, cryptographic state
 
 ## 🚀 Architecture, Device Roles & Pre-Built Releases
 
-QRYPTONEX is engineered for a **heterogeneous computing hierarchy**, with explicit device roles:
+NEXQOR is engineered for a **heterogeneous computing hierarchy**, with explicit device roles:
 - **x86-64 Computers (Intel/AMD Laptops, PCs, Linux/Kali VMs, Cloud Servers)**: Can operate as the **Central Server** (with the GTK4 Cyber NOC Dashboard or headless daemon) OR as an **Interactive Client**.
 - **ARM Edge Devices (Raspberry Pi 4/5, Raspberry Pi 2/3, Jetson)**: Operate as **Clients Only**, establishing quantum-resilient sessions and streaming encrypted telemetry.
 - **ESP32 Microcontrollers (Xtensa 32-bit)**: Operate as **Clients Only**, executing lightweight NIST FIPS 203 ML-KEM-768 encapsulation and streaming encrypted sensor telemetry.
@@ -195,7 +195,7 @@ The ESP32 runs lightweight pure post-quantum lattice key encapsulation (NIST FIP
 The repository strictly enforces modular separation. Shared external dependencies (`liboqs`, `liburing_local`) are maintained at the root without redundant in-tree copies:
 
 ```
-QRYPTONEX/
+NEXQOR/
 ├── Makefile                     # Global dispatcher (build, test, clean, UI targets)
 ├── README.md                    # Global architectural & operational documentation
 ├── app.sh                       # Unified single-command launcher for both GTK 4 UIs
@@ -488,7 +488,7 @@ cd pqc && ./server
 Upon startup, servers dynamically publish IP endpoints, scan hardware sensors, and display initial thermal/memory state:
 ```
 ╔══════════════════════════════════════════════════════════╗
-║   QRYPTONEX Secure Server Core ─ Classical IoT Suite     ║
+║   NEXQOR Secure Server Core ─ Classical IoT Suite        ║
 ║   Architecture: Linux io_uring + Multi-Worker Pool       ║
 ║   Suite: X25519 + Ed25519 + AES-128-CCM + SHA-256        ║
 ╚══════════════════════════════════════════════════════════╝
@@ -569,7 +569,7 @@ Microbenchmarks measure cryptographic operations, system memory, CPU utilization
 #### Sample Benchmark Output
 ```
 ╔══════════════════════════════════════════════════════════════════════════════════╗
-║ QRYPTONEX CLASSICAL IOT SUITE: N-RUN BENCHMARK (X25519 + Ed25519 + AES-128-CCM) ║
+║ NEXQOR CLASSICAL IOT SUITE: N-RUN BENCHMARK (X25519 + Ed25519 + AES-128-CCM)    ║
 ╚══════════════════════════════════════════════════════════════════════════════════╝
   Benchmark Setup: 100 rounds per run across 5 completed runs
   Hardware Sensor: /sys/class/thermal/thermal_zone0/temp (acpitz) — Initial Temp: 58.00 °C
@@ -665,7 +665,7 @@ Tests simultaneous handshake concurrency against an active server:
 
 ## Dual-Console GTK 4 Graphical Interface & app.sh
 
-QRYPTONEX features two native, pure-C **GTK 4 graphical consoles** (zero web wrappers or electron bloat) styled in a sleek, high-contrast **Cyber NOC Theme**:
+NEXQOR features two native, pure-C **GTK 4 graphical consoles** (zero web wrappers or electron bloat) styled in a sleek, high-contrast **Cyber NOC Theme**:
 
 | Console Interface | Binary Path | Purpose & Visual Architecture |
 | :--- | :--- | :--- |
