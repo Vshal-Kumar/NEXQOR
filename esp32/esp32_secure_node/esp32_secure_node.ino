@@ -23,7 +23,7 @@ const char* WIFI_PASSWORD = "12345678";           // <-- Replace with your Wi-Fi
 // 2. Server IP Address:
 //    - The active Wi-Fi IP is displayed dynamically on the GTK4 Server Dashboard header & client card!
 //    - If routing over Tailscale: Use 100.113.83.56
-const char* SERVER_IP     = "10.58.4.191";             // Active Laptop Wi-Fi IP (Auto-discovered on dashboard)
+const char* SERVER_IP     = "192.168.137.168";             // Active Laptop Wi-Fi IP (Auto-discovered on dashboard)
 
 // 3. Server Port:
 const uint16_t SERVER_PORT= 9877;                          // Default QRYPTONEX UDP Port

@@ -1,4 +1,4 @@
-# QRYPTONEX (Classical IoT Suite) — Secure High-Concurrency IoT Networking Engine
+# NEXQOR (Classical IoT Suite) — Secure High-Concurrency IoT Networking Engine
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?logo=c&logoColor=white)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![Architecture: Multi-Arch](https://img.shields.io/badge/Architecture-x86__64%20%7C%20ARM64%20%7C%20ARM32-blue.svg)](https://arm.com)
@@ -13,9 +13,9 @@
 
 ## 1. Project Overview & Architecture
 
-**QRYPTONEX Classical IoT Suite** is a high-performance, low-latency, memory-efficient secure networking framework and multi-client relay engine implemented in **C11** for resource-constrained IoT endpoints, embedded microcontrollers, and Linux edge gateways (including Raspberry Pi 4/5, ARM Cortex-A/Cortex-M edge devices, and x86_64 servers).
+**NEXQOR Classical IoT Suite** is a high-performance, low-latency, memory-efficient secure networking framework and multi-client relay engine implemented in **C11** for resource-constrained IoT endpoints, embedded microcontrollers, and Linux edge gateways (including Raspberry Pi 4/5, ARM Cortex-A/Cortex-M edge devices, and x86_64 servers).
 
-This implementation reproduces the complete functionality, architecture, asynchronous `io_uring` event loop, worker thread pool, UNIX domain socket IPC, zero-config dynamic discovery, and multi-client session registry of the original QRYPTONEX framework, while substituting the post-quantum cryptographic suite with standard **classical IoT cryptography**:
+This implementation reproduces the complete functionality, architecture, asynchronous `io_uring` event loop, worker thread pool, UNIX domain socket IPC, zero-config dynamic discovery, and multi-client session registry of the original NEXQOR framework, while substituting the post-quantum cryptographic suite with standard **classical IoT cryptography**:
 - **Key Agreement**: ECDH over Curve25519 (**X25519**, RFC 7748)
 - **Digital Signatures**: **Ed25519** (RFC 8032 / FIPS 186-5)
 - **Authenticated Encryption**: **AES-128-CCM** with 15-byte wire header AAD (NIST SP 800-38C / RFC 3610)
@@ -367,6 +367,6 @@ Modeled in Applied Pi-Calculus under the Dolev-Yao attacker model (`verification
 ## 10. Security Limitations
 
 > [!WARNING]
-> - **Classical vs Post-Quantum**: The classical suite relies on X25519 and Ed25519, which are susceptible to Shor's algorithm on a Cryptographically Relevant Quantum Computer (CRQC). For post-quantum protection against "Store-Now-Decrypt-Later" (SNDL) attacks, deploy the root QRYPTONEX codebase (ML-KEM-768 + ML-DSA-65) or the hybrid suite (`hybrid/`, X25519 + ML-KEM-768 + Ed25519 + ML-DSA-65).
+> - **Classical vs Post-Quantum**: The classical suite relies on X25519 and Ed25519, which are susceptible to Shor's algorithm on a Cryptographically Relevant Quantum Computer (CRQC). For post-quantum protection against "Store-Now-Decrypt-Later" (SNDL) attacks, deploy the root NEXQOR codebase (ML-KEM-768 + ML-DSA-65) or the hybrid suite (`hybrid/`, X25519 + ML-KEM-768 + Ed25519 + ML-DSA-65).
 > - **Filesystem Permissions**: The server private key `server_identity.key` is generated with `0600` permissions. Ensure the hosting environment protects key files from unauthorized local read access.
 > - **UDP Loss**: UDP is an unreliable datagram protocol. High packet-loss links depend on transport-layer retry timeouts (`RETX_MAX`).

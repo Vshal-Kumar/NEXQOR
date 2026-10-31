@@ -1,7 +1,7 @@
-# SecureComm: Production Operations & Architectural Manual
+# NEXQOR: Production Operations & Architectural Manual
 ## Lightweight, Adaptive, Cross-Platform Secure Communication Framework
 
-SecureComm is a production-grade, standard C11 secure communication framework designed for embedded IoT systems, edge gateways, and Linux servers. It provides a unified command-line application (`securecomm` or `nexqor`) supporting **Classical**, **Pure Post-Quantum (PQC)**, **Hybrid**, and **Adaptive** operating modes over high-throughput, low-latency UDP transport.
+NEXQOR is a production-grade, standard C11 secure communication framework designed for embedded IoT systems, edge gateways, and Linux servers. It provides a unified command-line application (`securecomm` or `nexqor`) supporting **Classical**, **Pure Post-Quantum (PQC)**, **Hybrid**, and **Adaptive** operating modes over high-throughput, low-latency UDP transport.
 
 ---
 
@@ -114,21 +114,21 @@ nexqor client connect
 ║ Commands: /status, /metrics, /ping, /quit                     ║
 ╚═══════════════════════════════════════════════════════════════╝
 
-securecomm> Hello from Kali Client!
+nexqor> Hello from Kali Client!
 [YOU → SERVER] Hello from Kali Client!  (Encrypted: 47 bytes)
 
-[SERVER → YOU] Welcome to QRYPTONEX Server. Command acknowledged.
-securecomm> /ping
+[SERVER → YOU] Welcome to NEXQOR Server. Command acknowledged.
+nexqor> /ping
 [Sent PING to server]
-securecomm> /metrics
+nexqor> /metrics
 =========================================================
-               SECURECOMM METRICS & HEALTH               
+               NEXQOR METRICS & HEALTH               
 =========================================================
  Packets Transmitted (TX)   : 4 packets (4480 bytes)
  Packets Received (RX)      : 3 packets (2240 bytes)
  Handshake Latency          : 1.84 ms
 =========================================================
-securecomm> /quit
+nexqor> /quit
 [INFO] Disconnected from server
 ```
 
@@ -190,11 +190,11 @@ When the server is managed via the **GTK4 Dashboard (`./run_ui.sh`)**:
 
 ## 1. Architectural Overview & Cryptographic Primitives
 
-SecureComm delivers post-quantum cryptographic security while maintaining backward compatibility with classical infrastructure:
+NEXQOR delivers post-quantum cryptographic security while maintaining backward compatibility with classical infrastructure:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           SECURECOMM CLI INTERFACE                              │
+│                           NEXQOR CLI INTERFACE                              │
 │  setup | detect | profiles | adaptive | config | server | client | benchmark    │
 └──────────────────────────────────────┬──────────────────────────────────────────┘
                                        │
@@ -333,7 +333,7 @@ make clean
 
 ### 📦 Standalone Debian Packages (`.deb`)
 
-SecureComm generates three distinct, architecture-specific `.deb` packages designed for direct installation and offline/air-gapped environments:
+NEXQOR generates three distinct, architecture-specific `.deb` packages designed for direct installation and offline/air-gapped environments:
 
 | Package Name (`.deb`) | Internal Package Name | Debian Arch (`dpkg`) | Target CPU & Hardware | Direct Download Link |
 | :--- | :--- | :---: | :--- | :---: |
@@ -414,7 +414,7 @@ sudo dpkg -i packaging/debian/nexqor-arm32.deb
 # 1. Reload systemd daemon
 sudo systemctl daemon-reload
 
-# 2. Enable and start SecureComm daemon at boot
+# 2. Enable and start NEXQOR daemon at boot
 sudo systemctl enable --now securecomm.service
 
 # 3. Check service health and active profile
@@ -538,7 +538,7 @@ securecomm server start --config /etc/securecomm/securecomm.json
 ```
 Output:
 ```
-[2026-10-29 15:45:00] [INFO ] [CORE] SecureComm Server listening on 0.0.0.0:9877 [mode: adaptive]
+[2026-10-29 15:45:00] [INFO ] [CORE] NEXQOR Server listening on 0.0.0.0:9877 [mode: adaptive]
 [2026-10-29 15:45:00] [INFO ] [CORE] Target Host: 100.113.83.56:9877
 [2026-10-29 15:45:00] [INFO ] [CORE] Adaptive mode selected profile: NIST FIPS 203/204 Pure Post-Quantum (ML-KEM-768 + ML-DSA-65) (pqc)
 ```
@@ -554,18 +554,18 @@ nexqor client connect 100.113.83.56 9877
 Once connected, an interactive encrypted shell opens:
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║             SECURECOMM INTERACTIVE SECURE CHAT                ║
+║             NEXQOR INTERACTIVE SECURE CHAT                ║
 ║ Type messages to send encrypted over UDP. Type /quit to exit.  ║
 ║ Commands: /status, /metrics, /ping, /quit                     ║
 ╚═══════════════════════════════════════════════════════════════╝
 
-securecomm> Hello server, reporting quantum-safe status.
+nexqor> Hello server, reporting quantum-safe status.
 [Sent 46 bytes encrypted]
-securecomm> /ping
+nexqor> /ping
 [Sent PING to server]
-securecomm> /metrics
+nexqor> /metrics
 ======================================================================
-                     SECURECOMM METRICS REPORT                        
+                     NEXQOR METRICS REPORT                        
 ======================================================================
   Uptime                  : 42 seconds
   Handshakes Completed    : 1 (Avg Latency: 1.84 ms, Min: 1.84 ms, Max: 1.84 ms)
@@ -574,7 +574,7 @@ securecomm> /metrics
   Packets Dropped / Replay: 0 dropped, 0 replayed
   Peak Process Memory(RSS): 4.88 MB
 ======================================================================
-securecomm> /quit
+nexqor> /quit
 [INFO] Disconnected from server
 ```
 
@@ -587,7 +587,7 @@ securecomm client connect --config /etc/securecomm/securecomm.json --server 127.
 
 ## 9. Adaptive Policy Engine & Explainability
 
-When operating in **Adaptive Mode**, SecureComm runs a deterministic, 5-stage selection funnel:
+When operating in **Adaptive Mode**, NEXQOR runs a deterministic, 5-stage selection funnel:
 
 1. **Stage A (Capability Filtering)**: Verifies hardware architecture, SIMD extensions, and compiled cryptographic backends.
 2. **Stage B (Security Policy Filtering)**: Excludes classical profiles if `require_quantum_resistance` is set; strictly forbids silent fallback if `allow_classical_fallback == false`.
@@ -595,15 +595,15 @@ When operating in **Adaptive Mode**, SecureComm runs a deterministic, 5-stage se
 4. **Stage D (Peer Compatibility)**: Matches peer-advertised profile lists against locally permitted profiles.
 5. **Stage E (Multi-Objective Ranking)**: Selects candidate based on policy preference (`high_security`, `low_latency`, `low_memory`, or `balanced`).
 
-### Auditing Adaptive Decisions (`securecomm adaptive explain`):
+### Auditing Adaptive Decisions (`nexqor adaptive explain`):
 
 ```bash
-securecomm adaptive explain
+nexqor adaptive explain
 ```
 Output:
 ```
 ╔══════════════════════════════════════════════════════════════════════════╗
-║             SecureComm Adaptive Profile Selection Analysis               ║
+║             NEXQOR Adaptive Profile Selection Analysis               ║
 ╚══════════════════════════════════════════════════════════════════════════╝
   • Host Platform    : x86_64 (AMD Ryzen 5 5500U with Radeon Graphics, 12 cores, 6335 MB RAM available)
   • Security Policy  : Quantum-Safe KEX: REQUIRED | Quantum-Safe Auth: Optional
@@ -633,12 +633,12 @@ Output:
 ### Platform Diagnostics
 Verify CPU features, SIMD capabilities, memory, and UDP socket availability:
 ```bash
-securecomm diagnostics
+nexqor diagnostics
 ```
 Output:
 ```
 =================================================================================
-                      SECURECOMM PLATFORM DIAGNOSTICS                            
+                       NEXQOR PLATFORM DIAGNOSTICS                            
 =================================================================================
  [✓] CPU Architecture : x86_64 (AMD Ryzen 5, 12 cores)
  [✓] SIMD Acceleration: AVX2=YES, AES-NI=YES, NEON=NO
@@ -656,12 +656,12 @@ Output:
 ### Cryptographic Microbenchmarks
 Measure real operations/sec and latency on your specific device hardware:
 ```bash
-securecomm benchmark
+nexqor benchmark
 ```
 Output:
 ```
 =================================================================================
-               SECURECOMM CRYPTOGRAPHIC BENCHMARK (hybrid)                           
+               NEXQOR CRYPTOGRAPHIC BENCHMARK (hybrid)                           
                Iterations: 100 | Profile: Hybrid Quantum-Safe
 =================================================================================
  1. KEX Keygen              :    0.083 ms/op ( 12061.8 ops/sec)

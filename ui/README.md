@@ -1,11 +1,11 @@
-# QRYPTONEX — GTK 4 Pure C Server NOC & Cryptographic Inspector
+# NEXQOR — GTK 4 Pure C Server NOC & Cryptographic Inspector
 
 [![UI Toolkit: GTK 4](https://img.shields.io/badge/GUI-GTK%204.0%20(Pure%20C)-00599C.svg?logo=gtk&logoColor=white)](https://www.gtk.org/)
 [![Language: C11](https://img.shields.io/badge/Language-C11-blue.svg)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![IPC: UNIX Domain Sockets](https://img.shields.io/badge/IPC-UNIX%20Domain%20Datagrams-orange.svg)](#ipc-architecture)
 [![Theme: Cyber NOC Dark](https://img.shields.io/badge/Theme-Cyber%20NOC%20Dark-success.svg)](#design--aesthetic-system)
 
-The **QRYPTONEX Server NOC Console** (`ui/qhack_ui`) is a high-performance, native **GTK 4 graphical user interface written entirely in pure C11** (zero Electron bloat, zero web wrappers, sub-millisecond redraw latency). It provides network engineers and security researchers with real-time control, live telemetry, dynamic IP discovery, and deep cryptographic session inspection for running **Pure Post-Quantum**, **Hybrid**, and **Classical IoT** servers.
+The **NEXQOR Server NOC Console** (`ui/qhack_ui`) is a high-performance, native **GTK 4 graphical user interface written entirely in pure C11** (zero Electron bloat, zero web wrappers, sub-millisecond redraw latency). It provides network engineers and security researchers with real-time control, live telemetry, dynamic IP discovery, and deep cryptographic session inspection for running **Pure Post-Quantum**, **Hybrid**, and **Classical IoT** servers.
 
 ---
 
@@ -68,7 +68,7 @@ The GTK 4 dashboard communicates with the running backend server via high-speed 
 
 ```
 ┌─────────────────────────────────┐           ┌──────────────────────────────────┐
-│      GTK 4 Dashboard UI         │           │    QRYPTONEX Backend Server      │
+│      GTK 4 Dashboard UI         │           │    NEXQOR Backend Server      │
 │          (qhack_ui)             │           │  (PQC, Hybrid, or Classical)     │
 └──────────────┬──────────────────┘           └──────────────────┬───────────────┘
                │                                                 │

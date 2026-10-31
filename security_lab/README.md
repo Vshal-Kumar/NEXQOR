@@ -1,4 +1,4 @@
-# QRYPTONEX Security Evaluation & Resilience Testing Framework (`security_lab`)
+# NEXQOR Security Evaluation & Resilience Testing Framework (`security_lab`)
 
 A unified, pure-C security evaluation engine for Linux designed to test and benchmark secure UDP communication stacks under real network conditions.
 

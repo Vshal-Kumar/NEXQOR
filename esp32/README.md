@@ -1,4 +1,4 @@
-# QRYPTONEX Embedded: ESP32 Post-Quantum Client Node
+# NEXQOR Embedded: ESP32 Post-Quantum Client Node
 ## NIST FIPS 203 (ML-KEM-768) + ChaCha20-Poly1305 on 32-bit Microcontrollers
 
 [![Hardware: ESP32](https://img.shields.io/badge/Hardware-ESP32%20(Xtensa%20LX6%20240MHz)-red.svg?logo=espressif)](https://www.espressif.com/)
@@ -13,7 +13,7 @@ This module implements an autonomous, lightweight **Post-Quantum Cryptographic I
 
 ## 🏗️ Architecture & Operating Role
 
-- **Operating Role**: **Client Only** (connects to the x86 QRYPTONEX Server over UDP port `9877`).
+- **Operating Role**: **Client Only** (connects to the x86 NEXQOR Server over UDP port `9877`).
 - **Cryptographic Protocol**:
   1. **Key Encapsulation (KEX)**: NIST FIPS 203 (ML-KEM-768 / Kyber-768) key generation and decapsulation.
   2. **Session Encryption (AEAD)**: RFC 8439 ChaCha20-Poly1305 with 256-bit directional keys.
@@ -83,7 +83,7 @@ const char* WIFI_PASSWORD = "Your_WiFi_Password";   // <-- Replace with your Wi-
 const char* SERVER_IP     = "10.58.4.191";          // <-- Laptop Wi-Fi IP shown on Dashboard
 
 // 3. Server UDP Port:
-const uint16_t SERVER_PORT= 9877;                   // Default QRYPTONEX UDP Port
+const uint16_t SERVER_PORT= 9877;                   // Default NEXQOR UDP Port
 ```
 
 > 💡 **Where to find the Server IP**:
@@ -111,7 +111,7 @@ const uint16_t SERVER_PORT= 9877;                   // Default QRYPTONEX UDP Por
 
 ```text
 ╔═══════════════════════════════════════════════════════════════╗
-║        QRYPTONEX ESP32 PURE POST-QUANTUM NODE                 ║
+║        NEXQOR ESP32 PURE POST-QUANTUM NODE                 ║
 ║   NIST FIPS 203 (ML-KEM-768) + ChaCha20-Poly1305             ║
 ╚═══════════════════════════════════════════════════════════════╝
 Hardware Architecture : ESP32 Xtensa Dual-Core @ 240 MHz

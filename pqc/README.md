@@ -1,4 +1,4 @@
-# QRYPTONEX (NEXQOR) — Enterprise Post-Quantum Cryptographic Network & High-Concurrency Multi-Client Engine
+# NEXQOR — Enterprise Post-Quantum Cryptographic Network & High-Concurrency Multi-Client Engine
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?logo=c&logoColor=white)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![Architecture: Heterogeneous](https://img.shields.io/badge/Architecture-x86__64%20%7C%20ARM64%20%7C%20ARM32-blue.svg)](https://arm.com)
@@ -13,11 +13,11 @@
 
 ## 📖 Executive Overview
 
-**QRYPTONEX** (identified in engine sources as **NEXQOR**) is a production-grade, SIMD-vectorized **Post-Quantum Cryptographic (PQC) networking framework**, high-concurrency multi-client relay engine, and formal verification suite written in **C11**.
+**NEXQOR** is a production-grade, SIMD-vectorized **Post-Quantum Cryptographic (PQC) networking framework**, high-concurrency multi-client relay engine, and formal verification suite written in **C11**.
 
 Modern public-key cryptography (RSA, ECDH, ECDSA) relies on mathematical problems (integer factorization and discrete logarithms) that will be completely broken by polynomial-time quantum algorithms (**Shor's algorithm**) once cryptographically relevant quantum computers (CRQCs) emerge. Furthermore, adversaries are executing **"Store-Now-Decrypt-Later" (SNDL)** campaigns—intercepting and storing encrypted traffic today to retroactively decrypt it when quantum hardware becomes available.
 
-QRYPTONEX addresses this paradigm shift by establishing a secure communication channel between high-throughput **x86_64 servers** (accelerated via **AVX2 / BMI2**) and resource-constrained **ARM edge devices** (Raspberry Pi 4/5 via **ARM64 NEON** and Raspberry Pi 2/3 via **ARM32 NEON / VFPv4**). The framework combines NIST-standardized lattice cryptography (**ML-KEM-768**, **ML-DSA-65**), authenticated symmetric encryption (**ChaCha20-Poly1305**), and directional session key derivation (**SHAKE256**) over an asynchronous Linux **`io_uring`** engine with application-level reliability and dynamic zero-configuration network discovery.
+NEXQOR addresses this paradigm shift by establishing a secure communication channel between high-throughput **x86_64 servers** (accelerated via **AVX2 / BMI2**) and resource-constrained **ARM edge devices** (Raspberry Pi 4/5 via **ARM64 NEON** and Raspberry Pi 2/3 via **ARM32 NEON / VFPv4**). The framework combines NIST-standardized lattice cryptography (**ML-KEM-768**, **ML-DSA-65**), authenticated symmetric encryption (**ChaCha20-Poly1305**), and directional session key derivation (**SHAKE256**) over an asynchronous Linux **`io_uring`** engine with application-level reliability and dynamic zero-configuration network discovery.
 
 > [!NOTE]
 > **Heterogeneous Cryptographic Implementations & Tooling Available in this Repository**:
@@ -526,7 +526,7 @@ For connecting across different networks (e.g., Server at home/office, Client on
 
 **Startup Banner:**
 ```text
-[18:31:18] QRYPTONEX — Post-Quantum Secure Server
+[18:31:18] NEXQOR — Post-Quantum Secure Server
   Protocol : ML-KEM-768 + ML-DSA-65 + ChaCha20-Poly1305
   Address  : 0.0.0.0:9877  |  Max clients: 4096
   Active Endpoints (Auto-Discovered & Published):
@@ -786,7 +786,7 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 ```bibtex
 @misc{pqc_cross_platform_evaluation_2026,
   author = {Vishal Kumar},
-  title = {QRYPTONEX: Cross-Platform Evaluation of Scalable Post-Quantum Secure Communication},
+  title = {NEXQOR: Cross-Platform Evaluation of Scalable Post-Quantum Secure Communication},
   year = {2026},
   publisher = {GitHub},
   howpublished = {\url{https://github.com/Vshal-Kumar/QRYPTONEX}}

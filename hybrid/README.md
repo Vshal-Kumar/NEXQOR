@@ -1,4 +1,4 @@
-# QRYPTONEX (Hybrid Suite) — Post-Quantum & Classical Hybrid Cryptographic Networking Engine
+# NEXQOR (Hybrid Suite) — Post-Quantum & Classical Hybrid Cryptographic Networking Engine
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?logo=c&logoColor=white)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![Architecture: Multi-Arch](https://img.shields.io/badge/Architecture-x86__64%20%7C%20ARM64%20%7C%20ARM32-blue.svg)](https://arm.com)
@@ -14,11 +14,11 @@
 
 ## 1. Executive Overview
 
-**QRYPTONEX Hybrid Cryptographic Suite** (`QRYPTONEX-HYBRID-X25519-MLKEM768-ED25519-MLDSA65`, Protocol Version `0x0100`) is a production-grade, SIMD-accelerated **dual-layer cryptographic networking framework** and multi-client relay engine implemented in **C11**.
+**NEXQOR Hybrid Cryptographic Suite** (`QRYPTONEX-HYBRID-X25519-MLKEM768-ED25519-MLDSA65`, Protocol Version `0x0100`) is a production-grade, SIMD-accelerated **dual-layer cryptographic networking framework** and multi-client relay engine implemented in **C11**.
 
 Modern public-key cryptography (RSA, ECDH, ECDSA) is vulnerable to polynomial-time quantum attacks (**Shor's algorithm**), and adversaries are actively executing **"Harvest-Now-Decrypt-Later" (HNDL)** attacks by intercepting encrypted network streams to retroactively decrypt them once cryptanalytically relevant quantum computers (CRQCs) become operational. Concurrently, migrating entirely to new post-quantum algorithms carries risks if unforeseen mathematical or implementation vulnerabilities are uncovered in lattice cryptography.
 
-The QRYPTONEX Hybrid Suite solves both challenges through a **dual-security hybrid design**:
+The NEXQOR Hybrid Suite solves both challenges through a **dual-security hybrid design**:
 1. **Confidentiality Dual Guarantee**: Traffic secrecy is guaranteed as long as **either** X25519 or ML-KEM-768 remains unbroken.
 2. **Authenticity Dual Guarantee**: Dual digital signatures guarantee non-repudiation and identity authenticity as long as **either** Ed25519 or ML-DSA-65 remains secure.
 3. **Strict Fail-Closed Architecture**: No single-primitive fallback is ever permitted. Both the classical and post-quantum handshakes and signatures must verify cleanly; any tampered or missing component results in immediate connection abortion.
@@ -332,7 +332,7 @@ Simulate an autonomous embedded edge device streaming real-time telemetry (tempe
 **Live Streaming Output Example:**
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║   QRYPTONEX — Hybrid IoT Telemetry Broadcaster                           ║
+║   NEXQOR — Hybrid IoT Telemetry Broadcaster                           ║
 ║   Suite: X25519 + ML-KEM-768 + Ed25519 + ML-DSA-65 + ChaCha20-Poly1305    ║
 ╚══════════════════════════════════════════════════════════════════════════╝
   • Server Target   : 127.0.0.1:9879

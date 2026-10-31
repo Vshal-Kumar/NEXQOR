@@ -1,6 +1,6 @@
-# Formal Verification of the QRYPTONEX Classical IoT Protocol
+# Formal Verification of the NEXQOR Classical IoT Protocol
 
-This directory contains the formal protocol verification model for the **QRYPTONEX Classical IoT Cryptographic Protocol** using [ProVerif](https://bblanche.gitlabpages.inria.fr/proverif/), an automated cryptographic protocol verifier based on the Applied Pi-Calculus and Dolev-Yao attacker model.
+This directory contains the formal protocol verification model for the **NEXQOR Classical IoT Cryptographic Protocol** using [ProVerif](https://bblanche.gitlabpages.inria.fr/proverif/), an automated cryptographic protocol verifier based on the Applied Pi-Calculus and Dolev-Yao attacker model.
 
 ---
 

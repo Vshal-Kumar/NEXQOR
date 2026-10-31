@@ -1,7 +1,7 @@
-# SecureComm
+# NEXQOR
 ## Lightweight, Adaptive, Cross-Platform Secure Communication Framework
 
-SecureComm is a production-grade, C-based secure communication application designed for embedded IoT systems, edge gateways, and Linux servers. It provides a unified command-line application (`securecomm`) supporting **Classical**, **Pure Post-Quantum (PQC)**, **Hybrid**, and **Adaptive** operating modes over low-latency UDP transport.
+NEXQOR is a production-grade, C-based secure communication application designed for embedded IoT systems, edge gateways, and Linux servers. It provides a unified command-line application (`securecomm` or `nexqor`) supporting **Classical**, **Pure Post-Quantum (PQC)**, **Hybrid**, and **Adaptive** operating modes over low-latency UDP transport.
 
 ---
 
@@ -113,7 +113,7 @@ Core Commands:
   adaptive explain          Explain deterministic 5-stage profile selection
   config validate           Validate syntax, permissions, and settings of config
   config show               Display configuration with secret redaction
-  server start              Launch SecureComm UDP server
+  server start              Launch NEXQOR UDP server
   client connect            Initiate secure connection to remote server
   status                    Inspect running service status and health
   diagnostics               Execute comprehensive platform security diagnostics

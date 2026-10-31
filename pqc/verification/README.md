@@ -4,7 +4,7 @@ opam exec -- proverif verification/protocol.pv
 
 # Formal Security Verification using ProVerif
 
-This directory contains the formal security model of the **PQC Chat 4-Way Handshake Protocol** written in Applied Pi-Calculus for **ProVerif**, a state-of-the-art automatic cryptographic protocol verifier.
+This directory contains the formal security model of the **NEXQOR PQC 4-Way Handshake Protocol** written in Applied Pi-Calculus for **ProVerif**, a state-of-the-art automatic cryptographic protocol verifier.
 
 Formal verification mathematically proves that the protocol design guarantees security properties like **Secrecy**, **Mutual Authentication**, and **Perfect Forward Secrecy (PFS)** against an active Dolev-Yao attacker who has full control over the network.
 
